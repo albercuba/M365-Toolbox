@@ -110,8 +110,7 @@ const checkMfaStatusScript = {
   summary: "Review MFA registration coverage and registered authentication methods.",
   description:
     "Runs the approved MFA status report across the tenant and can export the results as a CSV into the toolbox output folder.",
-  scriptRelativePath: "Check-MFAStatus.ps1",
-  scriptMountRootEnv: "ADDITIONAL_SCRIPT_MOUNT_ROOT",
+  scriptRelativePath: "M365 - Check-MFAStatus/Check-MFAStatus.ps1",
   outputs:
     "Writes an MFA status CSV export to the configured output directory when export is enabled.",
   fields: [

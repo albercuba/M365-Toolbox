@@ -8,12 +8,10 @@ services:
       PORT: 3001
       OUTPUT_DIR: /app/output
       SCRIPT_MOUNT_ROOT: /workspace-scripts
-      ADDITIONAL_SCRIPT_MOUNT_ROOT: /additional-scripts
       FRONTEND_ORIGIN: http://localhost:5173
     volumes:
       - ./output:/app/output
       - ../Powershell:/workspace-scripts:ro
-      - "C:/Users/AlbertoValdesGonzale/OneDrive - RegITs Regionales IT-Servicecenter GmbH/Dokumente/PowerShell Scripts:/additional-scripts:ro"
     ports:
       - "3001:3001"
 
