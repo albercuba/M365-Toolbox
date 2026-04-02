@@ -103,5 +103,37 @@ const compromisedAccountScript = {
   ]
 };
 
-export const scripts = [compromisedAccountScript];
+const checkMfaStatusScript = {
+  id: "m365-check-mfa-status",
+  name: "Check MFA Status",
+  category: "Identity",
+  summary: "Review MFA registration coverage and registered authentication methods.",
+  description:
+    "Runs the approved MFA status report across the tenant and can export the results as a CSV into the toolbox output folder.",
+  scriptRelativePath: "Check-MFAStatus.ps1",
+  scriptMountRootEnv: "ADDITIONAL_SCRIPT_MOUNT_ROOT",
+  outputs:
+    "Writes an MFA status CSV export to the configured output directory when export is enabled.",
+  fields: [
+    {
+      id: "includeGuests",
+      label: "Include guest users",
+      type: "checkbox",
+      defaultValue: false
+    },
+    {
+      id: "skipDisabled",
+      label: "Skip disabled users",
+      type: "checkbox",
+      defaultValue: true
+    },
+    {
+      id: "exportCsv",
+      label: "Export CSV",
+      type: "checkbox",
+      defaultValue: true
+    }
+  ]
+};
 
+export const scripts = [compromisedAccountScript, checkMfaStatusScript];

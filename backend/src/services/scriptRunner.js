@@ -30,9 +30,16 @@ function resolveScript(scriptId) {
   return script;
 }
 
-function buildArgs(script, payload) {
-  const scriptPath = path.posix.join(SCRIPT_MOUNT_ROOT.replace(/\\/g, "/"), script.scriptRelativePath.replace(/\\/g, "/"));
-  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-OutputPath", OUTPUT_DIR];
+function getScriptMountRoot(script) {
+  if (script.scriptMountRootEnv && process.env[script.scriptMountRootEnv]) {
+    return process.env[script.scriptMountRootEnv];
+  }
+
+  return SCRIPT_MOUNT_ROOT;
+}
+
+function buildCompromisedAccountArgs(script, payload) {
+  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.scriptPath, "-OutputPath", OUTPUT_DIR];
 
   const upns = normalizeListValue(payload.userPrincipalName);
   if (upns.length > 0) {
@@ -74,6 +81,45 @@ function buildArgs(script, payload) {
 
   if (payload.whatIf) {
     args.push("-WhatIf");
+  }
+
+  return args;
+}
+
+function buildMfaStatusArgs(script, payload) {
+  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.scriptPath];
+  const timestamp = new Date().toISOString().replace(/[:]/g, "-");
+
+  if (payload.includeGuests) {
+    args.push("-IncludeGuests");
+  }
+
+  if (payload.skipDisabled) {
+    args.push("-SkipDisabled");
+  }
+
+  if (payload.exportCsv !== false) {
+    args.push("-ExportCsv", path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `mfa-status-${timestamp}.csv`));
+  }
+
+  return args;
+}
+
+function buildArgs(script, payload) {
+  const scriptMountRoot = getScriptMountRoot(script);
+  const scriptPath = path.posix.join(scriptMountRoot.replace(/\\/g, "/"), script.scriptRelativePath.replace(/\\/g, "/"));
+  const runtimeScript = { ...script, scriptPath };
+  let args;
+
+  switch (script.id) {
+    case "m365-compromised-account-remediation":
+      args = buildCompromisedAccountArgs(runtimeScript, payload);
+      break;
+    case "m365-check-mfa-status":
+      args = buildMfaStatusArgs(runtimeScript, payload);
+      break;
+    default:
+      throw new Error(`No runner is defined for script '${script.id}'.`);
   }
 
   return { scriptPath, args };
@@ -145,4 +191,3 @@ export function startRun(scriptId, payload = {}) {
 
   return run;
 }
-
