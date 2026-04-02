@@ -10,10 +10,42 @@ const allowedOrigins = frontendOrigin
   ? frontendOrigin.split(",").map((origin) => origin.trim()).filter(Boolean)
   : [];
 
+function isAllowedToolboxOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return false;
+    }
+
+    const host = url.hostname.toLowerCase();
+    const isLocalHost =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1";
+
+    const isPrivateIpv4 =
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+
+    return isLocalHost || isPrivateIpv4;
+  } catch {
+    return false;
+  }
+}
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      if (isAllowedToolboxOrigin(origin)) {
         callback(null, true);
         return;
       }
