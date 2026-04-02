@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: m365-toolbox-backend
+    environment:
+      PORT: 3001
+      OUTPUT_DIR: /app/output
+      SCRIPT_MOUNT_ROOT: /workspace-scripts
+      FRONTEND_ORIGIN: http://localhost:5173
+    volumes:
+      - ./output:/app/output
+      - ../Powershell:/workspace-scripts:ro
+    ports:
+      - "3001:3001"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: m365-toolbox-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+

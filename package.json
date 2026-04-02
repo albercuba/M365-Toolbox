@@ -1,0 +1,21 @@
+{
+  "name": "m365-toolbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "M365 Toolbox - Web-based PowerShell operations for Microsoft 365",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w frontend",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
+
