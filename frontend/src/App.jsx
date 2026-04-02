@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const apiBase = window.location.hostname === "localhost" ? "http://localhost:3001/api" : "/api";
+const apiBase = "/api";
 
 function normalizeDefaults(fields) {
   return fields.reduce((acc, field) => {
@@ -284,10 +284,10 @@ export function App() {
         ) : (
           <section className="panel">
             <h2>Loading Toolbox...</h2>
+            {error ? <div className="error-box">{error}</div> : <p>Waiting for the script catalog from the backend.</p>}
           </section>
         )}
       </main>
     </div>
   );
 }
-
