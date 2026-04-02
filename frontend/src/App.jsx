@@ -172,122 +172,219 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-block">
-          <div className="brand-kicker">M365 Toolbox</div>
-          <h1>M365 Toolbox</h1>
-          <p>Web-based PowerShell operations for Microsoft 365</p>
+      <header className="topbar">
+        <div className="topbar-logo">M365 Toolbox</div>
+        <div className="topbar-title">Web-based PowerShell operations for Microsoft 365</div>
+        <div className="topbar-right">
+          <div className="topbar-count">{scripts.length} script{scripts.length === 1 ? "" : "s"}</div>
+          <div className="topbar-count">{runs.length} run{runs.length === 1 ? "" : "s"}</div>
         </div>
+      </header>
 
-        <div className="panel">
-          <h2>Script Catalog</h2>
-          <div className="catalog-list">
+      <div className="layout">
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <div className="sidebar-label">Script Catalog</div>
+          </div>
+          <div className="tenant-list">
             {scripts.map((script) => (
-              <button
+              <div
                 key={script.id}
-                type="button"
-                className={selectedScript?.id === script.id ? "catalog-item active" : "catalog-item"}
+                className={selectedScript?.id === script.id ? "tenant-item active" : "tenant-item"}
                 onClick={() => handleScriptSelect(script)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    handleScriptSelect(script);
+                  }
+                }}
               >
-                <strong>{script.name}</strong>
-                <span>{script.category}</span>
-              </button>
+                <div className="tenant-avatar">{script.name.slice(0, 2).toUpperCase()}</div>
+                <div className="tenant-info">
+                  <div className="tenant-name">{script.name}</div>
+                  <div className="tenant-meta">{script.category}</div>
+                </div>
+              </div>
             ))}
           </div>
-        </div>
 
-        <div className="panel">
-          <h2>Recent Runs</h2>
-          <div className="run-list">
-            {runs.length === 0 ? <p>No runs yet.</p> : null}
-            {runs.map((run) => (
-              <button key={run.id} type="button" className="run-item" onClick={() => setActiveRun(run)}>
-                <strong>{run.scriptName}</strong>
-                <span>{run.status}</span>
-                <small>{formatDate(run.startedAt)}</small>
-              </button>
-            ))}
+          <div className="sidebar-footer">
+            {runs.length === 0 ? "No runs yet." : `${runs.length} tracked run${runs.length === 1 ? "" : "s"}`}
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      <main className="content">
-        {selectedScript ? (
-          <>
-            <section className="hero-card">
-              <div>
-                <p className="hero-category">{selectedScript.category}</p>
-                <h2>{selectedScript.name}</h2>
-                <p>{selectedScript.summary}</p>
-              </div>
-              <div className="hero-note">
-                <strong>Designed for growth</strong>
-                <p>This toolbox uses a script registry so additional M365 runbooks can be added later without changing the UI shape.</p>
-              </div>
-            </section>
+        <main className="main">
+          {error ? (
+            <div className="flash-wrap">
+              <div className="flash flash-error">{error}</div>
+            </div>
+          ) : null}
 
-            <section className="grid">
-              <form className="panel form-panel" onSubmit={handleSubmit}>
-                <div className="panel-header">
-                  <h2>Run Script</h2>
-                  <span>{selectedScript.id}</span>
+          {selectedScript ? (
+            <>
+              <div className="dash-topstrip">
+                <div className="strip-item">
+                  <div className="strip-label">Toolbox</div>
+                  <div className="strip-value">M365 Toolbox</div>
                 </div>
-                <p className="description">{selectedScript.description}</p>
-                {selectedScript.fields.map((field) => (
-                  <Field key={field.id} field={field} value={formValues[field.id]} onChange={handleChange} />
-                ))}
-                {error ? <div className="error-box">{error}</div> : null}
-                <button className="primary-button" type="submit" disabled={submitting}>
-                  {submitting ? "Starting..." : "Run in Toolbox"}
-                </button>
-              </form>
-
-              <section className="panel result-panel">
-                <div className="panel-header">
-                  <h2>Run Details</h2>
-                  <span>{activeRun ? activeRun.status : "idle"}</span>
+                <div className="strip-item">
+                  <div className="strip-label">Script</div>
+                  <div className="strip-value">{selectedScript.name}</div>
                 </div>
-                {!activeRun ? <p>Select a run or start one to inspect the output.</p> : null}
-                {activeRun ? (
-                  <>
-                    <div className="meta-grid">
-                      <div>
-                        <span>Started</span>
-                        <strong>{formatDate(activeRun.startedAt)}</strong>
+                <div className="strip-item">
+                  <div className="strip-label">Category</div>
+                  <div className="strip-value">{selectedScript.category}</div>
+                </div>
+                <div className="strip-item">
+                  <div className="strip-label">Recent Runs</div>
+                  <div className="strip-value">{runs.length}</div>
+                </div>
+              </div>
+
+              <div className="dash-page">
+                <div className="sections">
+                  <div className="card">
+                    <div className="card-header">
+                      <span className="card-title">Script Overview</span>
+                      <span className="card-badge badge-neutral">{selectedScript.id}</span>
+                    </div>
+                    <div className="card-body">
+                      <div className="method-grid">
+                        <div className="method-item method-item-selected">
+                          <div className="method-info">
+                            <div className="method-label">Summary</div>
+                            <div className="method-count">{selectedScript.summary}</div>
+                          </div>
+                        </div>
+                        <div className="method-item">
+                          <div className="method-info">
+                            <div className="method-label">Growth Model</div>
+                            <div className="method-count">Registry-based script catalog for future M365 tools</div>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <span>Finished</span>
-                        <strong>{formatDate(activeRun.finishedAt)}</strong>
+                      <div className="empty-row" style={{ marginTop: "0.85rem" }}>{selectedScript.description}</div>
+                    </div>
+                  </div>
+
+                  <div className="manage-workspace">
+                    <div className="card">
+                      <div className="card-header">
+                        <span className="card-title">Run Script</span>
+                        <span className="card-badge badge-ok">{submitting ? "Starting" : "Ready"}</span>
                       </div>
-                      <div>
-                        <span>Exit Code</span>
-                        <strong>{activeRun.exitCode ?? "Running"}</strong>
+                      <div className="card-body">
+                        <form className="settings-row" onSubmit={handleSubmit}>
+                          {selectedScript.fields.map((field) => (
+                            <Field key={field.id} field={field} value={formValues[field.id]} onChange={handleChange} />
+                          ))}
+                          <button className="add-btn" type="submit" disabled={submitting}>
+                            {submitting ? "Starting..." : "Run in Toolbox"}
+                          </button>
+                        </form>
                       </div>
                     </div>
-                    <div className="output-block">
-                      <h3>Command</h3>
-                      <pre>{activeRun.command}</pre>
+
+                    <div className="sections">
+                      <div className="card">
+                        <div className="card-header">
+                          <span className="card-title">Run Details</span>
+                          <span className={`card-badge ${activeRun ? (activeRun.status === "completed" ? "badge-ok" : activeRun.status === "failed" ? "badge-crit" : "badge-warn") : "badge-neutral"}`}>
+                            {activeRun ? activeRun.status : "idle"}
+                          </span>
+                        </div>
+                        <div className="card-body">
+                          {!activeRun ? <div className="empty-row">Select a recent run or start a new one to inspect the output.</div> : null}
+                          {activeRun ? (
+                            <>
+                              <div className="quick-summary-grid">
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Started</div>
+                                  <div className="method-count">{formatDate(activeRun.startedAt)}</div>
+                                </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Finished</div>
+                                  <div className="method-count">{formatDate(activeRun.finishedAt)}</div>
+                                </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Exit Code</div>
+                                  <div className="method-count">{activeRun.exitCode ?? "Running"}</div>
+                                </div>
+                              </div>
+                              <div className="manage-form-panel" style={{ marginTop: "1rem" }}>
+                                <h4>Command</h4>
+                                <pre className="manage-response">{activeRun.command}</pre>
+                              </div>
+                              <div className="manage-form-panel">
+                                <h4>Stdout</h4>
+                                <pre className="manage-response">{activeRun.stdout || "No stdout yet."}</pre>
+                              </div>
+                              <div className="manage-form-panel">
+                                <h4>Stderr</h4>
+                                <pre className="manage-response">{activeRun.stderr || "No stderr."}</pre>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="card">
+                        <div className="card-header">
+                          <span className="card-title">Recent Runs</span>
+                          <span className="card-badge badge-neutral">{runs.length}</span>
+                        </div>
+                        <div className="card-body">
+                          {runs.length === 0 ? (
+                            <div className="empty-row">No runs yet.</div>
+                          ) : (
+                            <div className="table-scroll">
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>Script</th>
+                                    <th>Status</th>
+                                    <th>Started</th>
+                                    <th>Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {runs.map((run) => (
+                                    <tr key={run.id}>
+                                      <td>{run.scriptName}</td>
+                                      <td>
+                                        <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" ? "badge-crit" : "badge-warn"}`}>
+                                          {run.status}
+                                        </span>
+                                      </td>
+                                      <td>{formatDate(run.startedAt)}</td>
+                                      <td className="table-actions">
+                                        <button type="button" className="filter-btn active-all" onClick={() => setActiveRun(run)}>
+                                          Open
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="output-block">
-                      <h3>Stdout</h3>
-                      <pre>{activeRun.stdout || "No stdout yet."}</pre>
-                    </div>
-                    <div className="output-block">
-                      <h3>Stderr</h3>
-                      <pre>{activeRun.stderr || "No stderr."}</pre>
-                    </div>
-                  </>
-                ) : null}
-              </section>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <section className="empty-state">
+              <div className="empty-icon">M365</div>
+              <div className="empty-title">Loading Toolbox...</div>
+              <div className="empty-sub">{error || "Waiting for the script catalog from the backend."}</div>
             </section>
-          </>
-        ) : (
-          <section className="panel">
-            <h2>Loading Toolbox...</h2>
-            {error ? <div className="error-box">{error}</div> : <p>Waiting for the script catalog from the backend.</p>}
-          </section>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
