@@ -6,6 +6,7 @@ import { scripts } from "../data/scripts.js";
 
 const OUTPUT_DIR = process.env.OUTPUT_DIR || path.resolve(process.cwd(), "../output");
 const SCRIPT_MOUNT_ROOT = process.env.SCRIPT_MOUNT_ROOT || "C:/VSCode/Powershell";
+const TOOLBOX_SCRIPT_MOUNT_ROOT = process.env.TOOLBOX_SCRIPT_MOUNT_ROOT || path.resolve(process.cwd(), "../scripts");
 const runStore = new Map();
 
 function ensureOutputDir() {
@@ -80,7 +81,7 @@ function resolveScriptPath(script) {
 }
 
 function buildCompromisedAccountArgs(script, payload) {
-  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.scriptPath, "-OutputPath", OUTPUT_DIR];
+  const args = ["-OutputPath", OUTPUT_DIR];
 
   const upns = normalizeListValue(payload.userPrincipalName);
   if (upns.length > 0) {
@@ -128,7 +129,7 @@ function buildCompromisedAccountArgs(script, payload) {
 }
 
 function buildMfaStatusArgs(script, payload) {
-  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.scriptPath];
+  const args = [];
   const timestamp = new Date().toISOString().replace(/[:]/g, "-");
 
   if (payload.includeGuests) {
@@ -148,6 +149,7 @@ function buildMfaStatusArgs(script, payload) {
 
 function buildArgs(script, payload) {
   const scriptPath = resolveScriptPath(script);
+  const wrapperPath = path.posix.join(TOOLBOX_SCRIPT_MOUNT_ROOT.replace(/\\/g, "/"), "Invoke-ToolboxScript.ps1");
   const runtimeScript = { ...script, scriptPath };
   let args;
 
@@ -162,7 +164,20 @@ function buildArgs(script, payload) {
       throw new Error(`No runner is defined for script '${script.id}'.`);
   }
 
-  return { scriptPath, args };
+  return {
+    scriptPath,
+    args: [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      wrapperPath,
+      "-ScriptPath",
+      scriptPath,
+      "-ScriptArgumentList",
+      ...args
+    ]
+  };
 }
 
 export function listScripts() {
