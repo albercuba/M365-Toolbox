@@ -35,6 +35,15 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api", scriptsRouter);
 
+app.use("/api", (_req, res) => {
+  res.status(404).json({ message: "API route not found." });
+});
+
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  res.status(500).json({ message: error.message || "Unexpected server error." });
+});
+
 app.listen(port, () => {
   console.log(`M365 Toolbox API listening on port ${port}`);
 });

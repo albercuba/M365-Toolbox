@@ -2,6 +2,20 @@ import { useEffect, useState } from "react";
 
 const apiBase = "/api";
 
+async function parseApiResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  const compactText = text.replace(/\s+/g, " ").trim();
+  throw new Error(
+    `API returned ${response.status} ${response.statusText}: ${compactText.slice(0, 180) || "Empty response"}`
+  );
+}
+
 function normalizeDefaults(fields) {
   return fields.reduce((acc, field) => {
     acc[field.id] = field.defaultValue ?? (field.type === "checkbox" ? false : "");
@@ -101,8 +115,8 @@ export function App() {
         fetch(`${apiBase}/runs`)
       ]);
 
-      const scriptsData = await scriptsResponse.json();
-      const runsData = await runsResponse.json();
+      const scriptsData = await parseApiResponse(scriptsResponse);
+      const runsData = await parseApiResponse(runsResponse);
       setScripts(scriptsData);
       setRuns(runsData);
 
@@ -122,10 +136,10 @@ export function App() {
 
     const timer = window.setInterval(async () => {
       const response = await fetch(`${apiBase}/runs/${activeRun.id}`);
-      const data = await response.json();
+      const data = await parseApiResponse(response);
       setActiveRun(data);
       const runsResponse = await fetch(`${apiBase}/runs`);
-      setRuns(await runsResponse.json());
+      setRuns(await parseApiResponse(runsResponse));
     }, 2000);
 
     return () => window.clearInterval(timer);
@@ -155,14 +169,14 @@ export function App() {
         body: JSON.stringify(formValues)
       });
 
-      const data = await response.json();
+      const data = await parseApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to start run.");
       }
 
       setActiveRun(data);
       const runsResponse = await fetch(`${apiBase}/runs`);
-      setRuns(await runsResponse.json());
+      setRuns(await parseApiResponse(runsResponse));
     } catch (submitError) {
       setError(submitError.message);
     } finally {
