@@ -38,6 +38,47 @@ function getScriptMountRoot(script) {
   return SCRIPT_MOUNT_ROOT;
 }
 
+function findScriptByFileName(rootPath, fileName) {
+  if (!fs.existsSync(rootPath)) {
+    return null;
+  }
+
+  const entries = fs.readdirSync(rootPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const entryPath = path.posix.join(rootPath.replace(/\\/g, "/"), entry.name);
+
+    if (entry.isFile() && entry.name === fileName) {
+      return entryPath;
+    }
+
+    if (entry.isDirectory()) {
+      const nestedMatch = findScriptByFileName(entryPath, fileName);
+      if (nestedMatch) {
+        return nestedMatch;
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolveScriptPath(script) {
+  const scriptMountRoot = getScriptMountRoot(script).replace(/\\/g, "/");
+  const configuredPath = path.posix.join(scriptMountRoot, script.scriptRelativePath.replace(/\\/g, "/"));
+
+  if (fs.existsSync(configuredPath)) {
+    return configuredPath;
+  }
+
+  const fallbackPath = findScriptByFileName(scriptMountRoot, path.posix.basename(script.scriptRelativePath));
+  if (fallbackPath) {
+    return fallbackPath;
+  }
+
+  throw new Error(`Script file not found in container. Expected '${configuredPath}'.`);
+}
+
 function buildCompromisedAccountArgs(script, payload) {
   const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.scriptPath, "-OutputPath", OUTPUT_DIR];
 
@@ -106,8 +147,7 @@ function buildMfaStatusArgs(script, payload) {
 }
 
 function buildArgs(script, payload) {
-  const scriptMountRoot = getScriptMountRoot(script);
-  const scriptPath = path.posix.join(scriptMountRoot.replace(/\\/g, "/"), script.scriptRelativePath.replace(/\\/g, "/"));
+  const scriptPath = resolveScriptPath(script);
   const runtimeScript = { ...script, scriptPath };
   let args;
 
