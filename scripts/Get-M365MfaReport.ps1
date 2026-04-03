@@ -114,11 +114,11 @@ function Invoke-InternalExecution {
         "-InternalExecution"
     )
 
-    if ($ExportXlsx) {
+    if (-not [string]::IsNullOrWhiteSpace($ExportXlsx)) {
         $relaunchArgs += @("-ExportXlsx", $ExportXlsx)
     }
 
-    if ($ExportHtml) {
+    if (-not [string]::IsNullOrWhiteSpace($ExportHtml)) {
         $relaunchArgs += @("-ExportHtml", $ExportHtml)
     }
 
