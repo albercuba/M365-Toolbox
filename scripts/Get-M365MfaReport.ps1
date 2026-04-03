@@ -134,6 +134,39 @@ function Get-HttpErrorDetails {
     return $message
 }
 
+function Invoke-OAuthFormRequest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Body,
+
+        [int]$TimeoutSec = 30
+    )
+
+    $response = Invoke-WebRequest -Method Post -Uri $Uri -Body $Body `
+        -ContentType "application/x-www-form-urlencoded" -TimeoutSec $TimeoutSec `
+        -SkipHttpErrorCheck -ErrorAction Stop
+
+    $statusCode = [int]$response.StatusCode
+    $content = [string]$response.Content
+    $json = $null
+
+    if ($content) {
+        try {
+            $json = $content | ConvertFrom-Json -ErrorAction Stop
+        }
+        catch {}
+    }
+
+    return [PSCustomObject]@{
+        StatusCode = $statusCode
+        Content    = $content
+        Json       = $json
+    }
+}
+
 # ─────────────────────────────────────────────
 # PREREQUISITES: Module check / install
 # ─────────────────────────────────────────────
@@ -188,7 +221,12 @@ function Assert-RequiredModules {
                 $WarningPreference = "SilentlyContinue"
             }
 
-            Import-Module $mod.Name -Force -WarningAction SilentlyContinue
+            if ($mod.Name -eq "ImportExcel") {
+                & { Import-Module $mod.Name -Force -WarningAction SilentlyContinue } 6>$null
+            }
+            else {
+                Import-Module $mod.Name -Force -WarningAction SilentlyContinue
+            }
             if ($mod.Name -eq "ImportExcel") { $xlAvailable = $true }
         }
         catch { Write-Warning "  [!] Could not import '$($mod.Name)': $_" }
@@ -217,7 +255,7 @@ function Connect-ToGraph {
         "Organization.Read.All"
     )
     $deviceCodeScopes = @(
-        ($scopes | ForEach-Object { "https://graph.microsoft.com/$_" }),
+        $scopes,
         "offline_access",
         "openid",
         "profile"
@@ -238,16 +276,30 @@ function Connect-ToGraph {
         Write-Output "[*] Requesting device code from Microsoft Entra ID..."
 
         try {
-            $deviceCodeResponse = Invoke-RestMethod -Method Post -Uri $deviceCodeUri -Body @{
+            $deviceCodeResult = Invoke-OAuthFormRequest -Uri $deviceCodeUri -Body @{
                 client_id = $script:GraphPowerShellClientId
                 scope     = $deviceCodeScope
-            } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
+            } -TimeoutSec 30
         }
         catch {
             throw "Failed to request a device code from Microsoft Entra ID.`n$(Get-HttpErrorDetails -ErrorRecord $_)"
         }
 
+        if ($deviceCodeResult.StatusCode -lt 200 -or $deviceCodeResult.StatusCode -ge 300) {
+            $deviceCodeError = if ($deviceCodeResult.Content) { $deviceCodeResult.Content } else { "No response body returned." }
+            throw "Failed to request a device code from Microsoft Entra ID. HTTP $($deviceCodeResult.StatusCode).`n$deviceCodeError"
+        }
+
+        $deviceCodeResponse = $deviceCodeResult.Json
+        if (-not $deviceCodeResponse) {
+            throw "Failed to parse the device code response from Microsoft Entra ID.`n$($deviceCodeResult.Content)"
+        }
+
         Write-Output ""
+        if ($deviceCodeResponse.message) {
+            Write-Output $deviceCodeResponse.message
+            Write-Output ""
+        }
         Write-Output "Sign in with your admin account using the device code flow:"
         Write-Output "1. Open: $($deviceCodeResponse.verification_uri)"
         if ($deviceCodeResponse.verification_uri_complete) {
@@ -265,44 +317,47 @@ function Connect-ToGraph {
             Start-Sleep -Seconds $pollIntervalSeconds
 
             try {
-                $tokenResponse = Invoke-RestMethod -Method Post -Uri $tokenUri -Body @{
+                $tokenResult = Invoke-OAuthFormRequest -Uri $tokenUri -Body @{
                     grant_type  = "urn:ietf:params:oauth:grant-type:device_code"
                     client_id   = $script:GraphPowerShellClientId
                     device_code = $deviceCodeResponse.device_code
-                } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
-
-                $accessToken = $tokenResponse.access_token
-                break
+                } -TimeoutSec 30
             }
             catch {
                 $errorDetails = Get-HttpErrorDetails -ErrorRecord $_
-                $oauthError = $null
+                throw "Device code token polling failed.`n$errorDetails"
+            }
 
-                try {
-                    $oauthError = ($errorDetails -split "`n" | Select-Object -Last 1) | ConvertFrom-Json -ErrorAction Stop
+            if ($tokenResult.StatusCode -ge 200 -and $tokenResult.StatusCode -lt 300) {
+                if (-not $tokenResult.Json) {
+                    throw "Failed to parse the token response from Microsoft Entra ID.`n$($tokenResult.Content)"
                 }
-                catch {}
 
-                if ($oauthError) {
-                    switch ($oauthError.error) {
-                        "authorization_pending" { continue }
-                        "slow_down" {
-                            $pollIntervalSeconds += 5
-                            continue
-                        }
-                        "authorization_declined" { throw "Device code sign-in was declined." }
-                        "expired_token" { throw "Device code expired before sign-in completed." }
-                        "bad_verification_code" { throw "Invalid device code returned by the authorization server." }
-                        default {
-                            if ($oauthError.error_description) {
-                                throw $oauthError.error_description
-                            }
+                $accessToken = $tokenResult.Json.access_token
+                break
+            }
+
+            $oauthError = $tokenResult.Json
+            if ($oauthError) {
+                switch ($oauthError.error) {
+                    "authorization_pending" { continue }
+                    "slow_down" {
+                        $pollIntervalSeconds += 5
+                        continue
+                    }
+                    "authorization_declined" { throw "Device code sign-in was declined." }
+                    "expired_token" { throw "Device code expired before sign-in completed." }
+                    "bad_verification_code" { throw "Invalid device code returned by the authorization server." }
+                    default {
+                        if ($oauthError.error_description) {
+                            throw $oauthError.error_description
                         }
                     }
                 }
-
-                throw "Device code token polling failed.`n$errorDetails"
             }
+
+            $tokenError = if ($tokenResult.Content) { $tokenResult.Content } else { "No response body returned." }
+            throw "Device code token polling failed with HTTP $($tokenResult.StatusCode).`n$tokenError"
         }
 
         if (-not $accessToken) {
