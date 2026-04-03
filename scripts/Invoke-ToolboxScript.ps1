@@ -76,7 +76,26 @@ try {
     $requiredModules = Get-RequiredModuleNames -Path $ScriptPath
     Install-MissingModules -ModuleNames $requiredModules
 
-    & $ScriptPath @ScriptArgumentList
+    $InformationPreference = "Continue"
+
+    & $ScriptPath @ScriptArgumentList 3>&1 4>&1 5>&1 6>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.InformationRecord]) {
+            Write-Output $_.MessageData
+        }
+        elseif ($_ -is [System.Management.Automation.WarningRecord]) {
+            Write-Output $_.Message
+        }
+        elseif ($_ -is [System.Management.Automation.VerboseRecord]) {
+            Write-Output $_.Message
+        }
+        elseif ($_ -is [System.Management.Automation.DebugRecord]) {
+            Write-Output $_.Message
+        }
+        else {
+            Write-Output $_
+        }
+    }
+
     if ($LASTEXITCODE) {
         exit $LASTEXITCODE
     }
