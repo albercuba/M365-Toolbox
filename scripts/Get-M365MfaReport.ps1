@@ -67,7 +67,7 @@ param (
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$script:GraphDeviceCodeClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+$script:GraphPowerShellClientId = "615e6e7c-aa11-4402-91a1-6234967405d5"
 $script:ImportExcelAutoSizeSupported = $IsWindows
 
 # ─────────────────────────────────────────────
@@ -277,7 +277,7 @@ function Connect-ToGraph {
 
         try {
             $deviceCodeResult = Invoke-OAuthFormRequest -Uri $deviceCodeUri -Body @{
-                client_id = $script:GraphDeviceCodeClientId
+                client_id = $script:GraphPowerShellClientId
                 scope     = $deviceCodeScope
             } -TimeoutSec 30
         }
@@ -323,7 +323,7 @@ function Connect-ToGraph {
             try {
                 $tokenResult = Invoke-OAuthFormRequest -Uri $tokenUri -Body @{
                     grant_type  = "urn:ietf:params:oauth:grant-type:device_code"
-                    client_id   = $script:GraphDeviceCodeClientId
+                    client_id   = $script:GraphPowerShellClientId
                     device_code = $deviceCodeResponse.device_code
                 } -TimeoutSec 30
             }
