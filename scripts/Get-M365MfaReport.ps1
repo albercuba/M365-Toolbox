@@ -68,7 +68,7 @@ param (
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$script:GraphPowerShellClientId = "615e6e7c-aa11-4402-91a1-6234967405d5"
+$script:GraphDeviceCodeClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
 $script:ImportExcelAutoSizeSupported = $IsWindows
 
 # ─────────────────────────────────────────────
@@ -268,17 +268,17 @@ function Connect-ToGraph {
         $deviceCodeScope = ($deviceCodeScopes | Select-Object -Unique) -join " "
 
         if ($TenantId) {
-            Write-Output "[*] Requested tenant: $TenantId"
-            Write-Output "[*] Using the organizations sign-in endpoint and validating the tenant after authentication."
+            Write-Host "[*] Requested tenant: $TenantId" -ForegroundColor Cyan
+            Write-Host "[*] Using the organizations sign-in endpoint and validating the tenant after authentication." -ForegroundColor DarkCyan
         }
 
-        Write-Output "[*] Starting device code sign-in for Microsoft Graph..."
-        Write-Output "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports."
-        Write-Output "[*] Requesting device code from Microsoft Entra ID..."
+        Write-Host "[*] Starting device code sign-in for Microsoft Graph..." -ForegroundColor Cyan
+        Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor DarkCyan
+        Write-Host "[*] Requesting device code from Microsoft Entra ID..." -ForegroundColor Cyan
 
         try {
             $deviceCodeResult = Invoke-OAuthFormRequest -Uri $deviceCodeUri -Body @{
-                client_id = $script:GraphPowerShellClientId
+                client_id = $script:GraphDeviceCodeClientId
                 scope     = $deviceCodeScope
             } -TimeoutSec 30
         }
@@ -296,19 +296,19 @@ function Connect-ToGraph {
             throw "Failed to parse the device code response from Microsoft Entra ID.`n$($deviceCodeResult.Content)"
         }
 
-        Write-Output ""
+        Write-Host ""
         if ($deviceCodeResponse.message) {
-            Write-Output $deviceCodeResponse.message
-            Write-Output ""
+            Write-Host $deviceCodeResponse.message -ForegroundColor Yellow
+            Write-Host ""
         }
-        Write-Output "Sign in with your admin account using the device code flow:"
-        Write-Output "1. Open: $($deviceCodeResponse.verification_uri)"
+        Write-Host "Sign in with your admin account using the device code flow:" -ForegroundColor Yellow
+        Write-Host "1. Open: $($deviceCodeResponse.verification_uri)" -ForegroundColor Yellow
         if ($deviceCodeResponse.verification_uri_complete) {
-            Write-Output "   Direct link: $($deviceCodeResponse.verification_uri_complete)"
+            Write-Host "   Direct link: $($deviceCodeResponse.verification_uri_complete)" -ForegroundColor Yellow
         }
-        Write-Output "2. Enter code: $($deviceCodeResponse.user_code)"
-        Write-Output "3. Complete the sign-in and consent prompt for the tenant you want to review."
-        Write-Output ""
+        Write-Host "2. Enter code: $($deviceCodeResponse.user_code)" -ForegroundColor Yellow
+        Write-Host "3. Complete the sign-in and consent prompt for the tenant you want to review." -ForegroundColor Yellow
+        Write-Host ""
 
         $pollIntervalSeconds = [int]$deviceCodeResponse.interval
         $deadline = (Get-Date).AddSeconds([int]$deviceCodeResponse.expires_in)
@@ -320,7 +320,7 @@ function Connect-ToGraph {
             try {
                 $tokenResult = Invoke-OAuthFormRequest -Uri $tokenUri -Body @{
                     grant_type  = "urn:ietf:params:oauth:grant-type:device_code"
-                    client_id   = $script:GraphPowerShellClientId
+                    client_id   = $script:GraphDeviceCodeClientId
                     device_code = $deviceCodeResponse.device_code
                 } -TimeoutSec 30
             }
@@ -366,7 +366,7 @@ function Connect-ToGraph {
         }
 
         $secureAccessToken = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
-        Write-Output "[*] Device code authentication completed. Connecting the Graph PowerShell session..."
+        Write-Host "[*] Device code authentication completed. Connecting the Graph PowerShell session..." -ForegroundColor Cyan
         Connect-MgGraph -AccessToken $secureAccessToken -NoWelcome -ContextScope Process -ErrorAction Stop
         $ctx = Get-MgContext
         Write-Host "[+] Connected account: $($ctx.Account)" -ForegroundColor Green
