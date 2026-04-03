@@ -50,6 +50,7 @@ param (
     [string]   $ExportHtml,
     [switch]   $IncludeGuests    = $false,
     [string]   $TenantId         = $(if ($env:M365_TENANT_ID) { $env:M365_TENANT_ID } elseif ($env:AZURE_TENANT_ID) { $env:AZURE_TENANT_ID } else { $null }),
+    [switch]   $InternalExecution,
     [string[]] $AdminRoles       = @(
         "Global Administrator",
         "Privileged Role Administrator",
@@ -101,6 +102,41 @@ function Write-SectionHeader {
     $pad = [math]::Floor((50 - $Title.Length) / 2)
     Write-Host (" " * $pad + $Title) -ForegroundColor Cyan
     Write-Host "$line" -ForegroundColor Cyan
+}
+
+function Invoke-InternalExecution {
+    $relaunchArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        $PSCommandPath,
+        "-InternalExecution"
+    )
+
+    if ($ExportXlsx) {
+        $relaunchArgs += @("-ExportXlsx", $ExportXlsx)
+    }
+
+    if ($ExportHtml) {
+        $relaunchArgs += @("-ExportHtml", $ExportHtml)
+    }
+
+    if ($IncludeGuests) {
+        $relaunchArgs += "-IncludeGuests"
+    }
+
+    if ($TenantId) {
+        $relaunchArgs += @("-TenantId", $TenantId)
+    }
+
+    if ($AdminRoles -and $AdminRoles.Count -gt 0) {
+        $relaunchArgs += "-AdminRoles"
+        $relaunchArgs += $AdminRoles
+    }
+
+    & pwsh @relaunchArgs
+    exit $LASTEXITCODE
 }
 
 # ─────────────────────────────────────────────
@@ -202,7 +238,7 @@ function Connect-ToGraph {
 
         Write-Output "[*] Starting device code sign-in for Microsoft Graph..."
         Write-Output "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports."
-        Write-Output "[*] Waiting for Microsoft Graph PowerShell to provide the device login link and code..."
+        Write-Output "[*] The next lines should show the Microsoft device login URL and code."
         Connect-MgGraph @connectParams
         $ctx = Get-MgContext
         Write-Host "[+] Connected account: $($ctx.Account)" -ForegroundColor Green
@@ -1032,6 +1068,10 @@ render();
 # ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
+
+if (-not $InternalExecution) {
+    Invoke-InternalExecution
+}
 
 Write-Host "`n====================================================" -ForegroundColor Cyan
 Write-Host "       M365 MFA AUTHENTICATION REPORT" -ForegroundColor Cyan
