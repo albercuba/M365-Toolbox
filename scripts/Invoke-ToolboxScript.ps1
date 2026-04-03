@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ScriptPath,
 
+    [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ScriptArgumentList = @()
 )
 
