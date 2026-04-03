@@ -344,11 +344,15 @@ function Connect-ToGraph {
 
             $oauthError = $tokenResult.Json
             if ($oauthError) {
-                switch ($oauthError.error) {
-                    "authorization_pending" { continue }
+                $continuePolling = $false
+
+                switch ([string]$oauthError.error) {
+                    "authorization_pending" {
+                        $continuePolling = $true
+                    }
                     "slow_down" {
                         $pollIntervalSeconds += 5
-                        continue
+                        $continuePolling = $true
                     }
                     "authorization_declined" { throw "Device code sign-in was declined." }
                     "expired_token" { throw "Device code expired before sign-in completed." }
@@ -358,6 +362,10 @@ function Connect-ToGraph {
                             throw $oauthError.error_description
                         }
                     }
+                }
+
+                if ($continuePolling) {
+                    continue
                 }
             }
 
