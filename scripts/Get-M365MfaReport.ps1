@@ -270,6 +270,7 @@ function Connect-ToGraph {
             ContextScope            = "Process"
             UseDeviceAuthentication = $true
             ErrorAction             = "Stop"
+            InformationAction       = "Continue"
         }
 
         if ($TenantId) {
@@ -1138,7 +1139,7 @@ Write-Host "       $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor C
 Write-Host "====================================================`n" -ForegroundColor Cyan
 
 $xlAvailable = Assert-RequiredModules -NeedExcelExport ([bool]$ExportXlsx)
-Connect-ToGraph | Out-Null
+$null = Connect-ToGraph
 
 $adminIds   = Get-AdminUserIds -RoleNames $AdminRoles
 $mfaReport  = Get-MfaReport -IncludeGuests $IncludeGuests.IsPresent -AdminIds $adminIds
