@@ -222,7 +222,7 @@ function Assert-RequiredModules {
             }
 
             if ($mod.Name -eq "ImportExcel") {
-                & { Import-Module $mod.Name -Force -WarningAction SilentlyContinue } 6>$null
+                & { Import-Module $mod.Name -Force -WarningAction SilentlyContinue } 3>$null 6>$null
             }
             else {
                 Import-Module $mod.Name -Force -WarningAction SilentlyContinue

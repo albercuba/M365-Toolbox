@@ -127,6 +127,40 @@ function Convert-ToolboxOutputRecord {
     }
 }
 
+function Split-ScriptInvocationArguments {
+    param(
+        [string[]]$ArgumentList
+    )
+
+    $namedArguments = @{}
+    $positionalArguments = [System.Collections.Generic.List[string]]::new()
+
+    for ($index = 0; $index -lt $ArgumentList.Count; $index++) {
+        $argument = $ArgumentList[$index]
+
+        if ($argument -match '^-{1,2}([^=]+)$') {
+            $name = $Matches[1]
+
+            if (($index + 1) -lt $ArgumentList.Count -and $ArgumentList[$index + 1] -notmatch '^-{1,2}[^\\/].*') {
+                $namedArguments[$name] = $ArgumentList[$index + 1]
+                $index++
+            }
+            else {
+                $namedArguments[$name] = $true
+            }
+
+            continue
+        }
+
+        $positionalArguments.Add($argument)
+    }
+
+    return [PSCustomObject]@{
+        Named      = $namedArguments
+        Positional = @($positionalArguments)
+    }
+}
+
 try {
     if (-not (Test-Path -LiteralPath $ScriptPath)) {
         throw "Script file not found: $ScriptPath"
@@ -136,8 +170,11 @@ try {
     Install-MissingModules -ModuleNames $requiredModules
 
     $InformationPreference = "Continue"
+    $invocationArguments = Split-ScriptInvocationArguments -ArgumentList $ScriptArgumentList
+    $namedArguments = $invocationArguments.Named
+    $positionalArguments = $invocationArguments.Positional
 
-    & $ScriptPath @ScriptArgumentList 3>&1 4>&1 5>&1 6>&1 | Convert-ToolboxOutputRecord
+    & $ScriptPath @namedArguments @positionalArguments 3>&1 4>&1 5>&1 6>&1 | Convert-ToolboxOutputRecord
 
     if ($LASTEXITCODE) {
         exit $LASTEXITCODE
