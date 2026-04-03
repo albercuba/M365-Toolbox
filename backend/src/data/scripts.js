@@ -6,7 +6,7 @@ const compromisedAccountScript = {
   description:
     "Runs the approved M365 compromised-account workflow against one or more target users. The runner only exposes allowlisted parameters so the web UI can stay safe and predictable.",
   scriptRelativePath:
-    "M365 - CompromisedAccountRemediation/M365-CompromisedAccountRemediation.ps1",
+    "M365-CompromisedAccountRemediation.ps1",
   outputs:
     "Writes status CSVs, error logs, unified audit exports, sign-in exports, and message trace reports to the configured output directory.",
   fields: [
