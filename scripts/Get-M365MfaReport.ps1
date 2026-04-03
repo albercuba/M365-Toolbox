@@ -67,8 +67,8 @@ param (
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$script:GraphPowerShellClientId = "615e6e7c-aa11-4402-91a1-6234967405d5"
 $ProgressPreference = "SilentlyContinue"
+$script:ImportExcelAutoSizeSupported = $IsWindows
 
 # ─────────────────────────────────────────────
 # HELPER: Timestamp + filename builder
@@ -172,93 +172,22 @@ function Connect-ToGraph {
     )
 
     try {
-        $tenantSegment = if ($TenantId) { $TenantId } else { "organizations" }
+        $connectParams = @{
+            Scopes                  = $scopes
+            UseDeviceAuthentication = $true
+            NoWelcome               = $true
+            ErrorAction             = "Stop"
+        }
 
         if ($TenantId) {
+            $connectParams["TenantId"] = $TenantId
             Write-Output "[*] Using tenant: $TenantId"
         }
 
         Write-Output "[*] Starting device code sign-in for Microsoft Graph..."
         Write-Output "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports."
-        Write-Output "[*] Requesting device code from Microsoft Entra ID..."
-        $deviceCodeUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/devicecode"
-        $tokenUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/token"
-        $scopeValue = (($scopes + @("offline_access", "openid", "profile")) | Select-Object -Unique) -join " "
-
-        $deviceCodeResponse = Invoke-RestMethod -Method Post -Uri $deviceCodeUri -Body @{
-            client_id = $script:GraphPowerShellClientId
-            scope     = $scopeValue
-        } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
-
-        Write-Output ""
-        Write-Output "Sign in with your admin account using the device code flow:"
-        Write-Output "1. Open: $($deviceCodeResponse.verification_uri)"
-        if ($deviceCodeResponse.verification_uri_complete) {
-            Write-Output "   Direct link: $($deviceCodeResponse.verification_uri_complete)"
-        }
-        Write-Output "2. Enter code: $($deviceCodeResponse.user_code)"
-        Write-Output "3. Complete the sign-in and consent prompt for the tenant you want to review."
-        Write-Output ""
-
-        $pollIntervalSeconds = [int]$deviceCodeResponse.interval
-        $accessToken = $null
-        $deadline = (Get-Date).AddSeconds([int]$deviceCodeResponse.expires_in)
-
-        while ((Get-Date) -lt $deadline) {
-            Start-Sleep -Seconds $pollIntervalSeconds
-
-            try {
-                $tokenResponse = Invoke-RestMethod -Method Post -Uri $tokenUri -Body @{
-                    grant_type  = "urn:ietf:params:oauth:grant-type:device_code"
-                    client_id   = $script:GraphPowerShellClientId
-                    device_code = $deviceCodeResponse.device_code
-                } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
-
-                $accessToken = $tokenResponse.access_token
-                break
-            }
-            catch {
-                if (-not $_.Exception.Response) {
-                    throw "Device code token polling failed: $($_.Exception.Message)"
-                }
-
-                $responseStream = $_.Exception.Response.GetResponseStream()
-                $reader = [System.IO.StreamReader]::new($responseStream)
-                $errorBody = $reader.ReadToEnd()
-                $reader.Dispose()
-
-                $oauthError = $null
-                try {
-                    $oauthError = $errorBody | ConvertFrom-Json -ErrorAction Stop
-                }
-                catch {}
-
-                switch ($oauthError.error) {
-                    "authorization_pending" { continue }
-                    "slow_down" {
-                        $pollIntervalSeconds += 5
-                        continue
-                    }
-                    "authorization_declined" { throw "Device code sign-in was declined." }
-                    "expired_token" { throw "Device code expired before sign-in completed." }
-                    "bad_verification_code" { throw "Invalid device code returned by the authorization server." }
-                    default {
-                        if ($oauthError.error_description) {
-                            throw $oauthError.error_description
-                        }
-
-                        throw
-                    }
-                }
-            }
-        }
-
-        if (-not $accessToken) {
-            throw "Timed out waiting for device code sign-in to complete."
-        }
-
-        $secureAccessToken = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
-        Connect-MgGraph -AccessToken $secureAccessToken -NoWelcome -ErrorAction Stop
+        Write-Output "[*] Follow the device authentication prompt shown by Microsoft Graph PowerShell."
+        Connect-MgGraph @connectParams
         $ctx = Get-MgContext
         Write-Host "[+] Connected account: $($ctx.Account)" -ForegroundColor Green
         Write-Host "[+] Tenant ID        : $($ctx.TenantId)" -ForegroundColor Green
@@ -546,7 +475,17 @@ function Export-MfaXlsx {
     $admins     = @($Report | Where-Object { $_.IsAdmin }).Count
     $adminNoMfa = @($Report | Where-Object { $_.IsAdmin -and -not $_.MfaRegistered }).Count
 
-    $xl = @{ Path = $Path; AutoSize = $true; FreezeTopRow = $true; BoldTopRow = $true; Append = $true }
+    if (-not $script:ImportExcelAutoSizeSupported) {
+        Write-Host "[*] ImportExcel autosize disabled on this platform. Exporting workbook without column autosizing." -ForegroundColor Yellow
+    }
+
+    $xl = @{
+        Path         = $Path
+        AutoSize     = $script:ImportExcelAutoSizeSupported
+        FreezeTopRow = $true
+        BoldTopRow   = $true
+        Append       = $true
+    }
 
     @(
         [PSCustomObject]@{ Category = "Report Generated";     Value = $ReportDate }
