@@ -62,6 +62,7 @@ param (
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $script:GraphPowerShellClientId = "615e6e7c-aa11-4402-91a1-6234967405d5"
+$ProgressPreference = "SilentlyContinue"
 
 # ─────────────────────────────────────────────
 # HELPER: Timestamp + filename builder
@@ -167,6 +168,7 @@ function Connect-ToGraph {
     try {
         Write-Host "[*] Starting device code sign-in for Microsoft Graph..." -ForegroundColor Cyan
         Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor Yellow
+        Write-Host "[*] Requesting device code from Microsoft Entra ID..." -ForegroundColor Cyan
         $deviceCodeUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode"
         $tokenUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"
         $scopeValue = (($scopes + @("offline_access", "openid", "profile")) | Select-Object -Unique) -join " "
@@ -174,7 +176,7 @@ function Connect-ToGraph {
         $deviceCodeResponse = Invoke-RestMethod -Method Post -Uri $deviceCodeUri -Body @{
             client_id = $script:GraphPowerShellClientId
             scope     = $scopeValue
-        } -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+        } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
 
         Write-Host ""
         Write-Host "Sign in with your admin account using the device code flow:" -ForegroundColor Cyan
@@ -198,12 +200,16 @@ function Connect-ToGraph {
                     grant_type  = "urn:ietf:params:oauth:grant-type:device_code"
                     client_id   = $script:GraphPowerShellClientId
                     device_code = $deviceCodeResponse.device_code
-                } -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+                } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
 
                 $accessToken = $tokenResponse.access_token
                 break
             }
             catch {
+                if (-not $_.Exception.Response) {
+                    throw "Device code token polling failed: $($_.Exception.Message)"
+                }
+
                 $responseStream = $_.Exception.Response.GetResponseStream()
                 $reader = [System.IO.StreamReader]::new($responseStream)
                 $errorBody = $reader.ReadToEnd()

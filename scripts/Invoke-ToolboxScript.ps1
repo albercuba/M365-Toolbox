@@ -85,7 +85,7 @@ try {
         elseif ($null -ne $_ -and $_.PSObject.Properties.Match('MessageData').Count -gt 0) {
             Write-Output ([string]$_.MessageData)
         }
-        if ($_ -is [System.Management.Automation.InformationRecord]) {
+        elseif ($_ -is [System.Management.Automation.InformationRecord]) {
             Write-Output $_.MessageData
         }
         elseif ($_ -is [System.Management.Automation.WarningRecord]) {
