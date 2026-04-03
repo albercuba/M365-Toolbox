@@ -123,6 +123,14 @@ const checkMfaStatusScript = {
       helpText: "After the run starts, use the device code shown in the output to sign in with an admin account."
     },
     {
+      id: "tenantId",
+      label: "Tenant ID or Domain",
+      type: "text",
+      required: false,
+      placeholder: "contoso.onmicrosoft.com",
+      helpText: "Recommended when Microsoft Graph cannot infer the tenant automatically."
+    },
+    {
       id: "exportHtml",
       label: "Export HTML dashboard",
       type: "checkbox",

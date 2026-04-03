@@ -137,6 +137,10 @@ function buildMfaStatusArgs(script, payload) {
     args.push("-IncludeGuests");
   }
 
+  if (payload.tenantId) {
+    args.push("-TenantId", String(payload.tenantId));
+  }
+
   if (payload.exportHtml !== false) {
     args.push("-ExportHtml", `${outputBase}.html`);
   }

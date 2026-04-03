@@ -28,6 +28,11 @@
 .PARAMETER IncludeGuests
     Include guest/external users in the report. Default: $false
 
+.PARAMETER TenantId
+    Optional Microsoft Entra tenant ID or primary tenant domain
+    (for example: contoso.onmicrosoft.com). Recommended when the
+    sign-in flow cannot infer the tenant automatically.
+
 .PARAMETER AdminRoles
     List of role display-names to flag as privileged.
     Default covers the most critical built-in roles.
@@ -44,6 +49,7 @@ param (
     [string]   $ExportXlsx,
     [string]   $ExportHtml,
     [switch]   $IncludeGuests    = $false,
+    [string]   $TenantId         = $(if ($env:M365_TENANT_ID) { $env:M365_TENANT_ID } elseif ($env:AZURE_TENANT_ID) { $env:AZURE_TENANT_ID } else { $null }),
     [string[]] $AdminRoles       = @(
         "Global Administrator",
         "Privileged Role Administrator",
@@ -166,11 +172,17 @@ function Connect-ToGraph {
     )
 
     try {
+        $tenantSegment = if ($TenantId) { $TenantId } else { "organizations" }
+
+        if ($TenantId) {
+            Write-Output "[*] Using tenant: $TenantId"
+        }
+
         Write-Output "[*] Starting device code sign-in for Microsoft Graph..."
         Write-Output "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports."
         Write-Output "[*] Requesting device code from Microsoft Entra ID..."
-        $deviceCodeUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode"
-        $tokenUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"
+        $deviceCodeUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/devicecode"
+        $tokenUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/token"
         $scopeValue = (($scopes + @("offline_access", "openid", "profile")) | Select-Object -Unique) -join " "
 
         $deviceCodeResponse = Invoke-RestMethod -Method Post -Uri $deviceCodeUri -Body @{
@@ -265,7 +277,22 @@ function Connect-ToGraph {
         return $ctx
     }
     catch {
-        Write-Error "Failed to connect to Microsoft Graph: $_"
+        $errorText = $_.Exception.Message
+
+        if ($errorText -match "AADSTS50059") {
+            $suggestion = if ($TenantId) {
+                "The provided tenant value '$TenantId' could not be resolved. Verify that it is a valid tenant GUID or domain such as 'contoso.onmicrosoft.com'."
+            }
+            else {
+                "No tenant-identifying information was supplied. Re-run the report with a Tenant ID or set the environment variable M365_TENANT_ID."
+            }
+
+            Write-Error "Failed to connect to Microsoft Graph: $suggestion`nOriginal error: $errorText"
+        }
+        else {
+            Write-Error "Failed to connect to Microsoft Graph: $errorText"
+        }
+
         exit 1
     }
 }
