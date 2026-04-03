@@ -68,7 +68,7 @@ param (
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$script:GraphDeviceCodeClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+$script:GraphDeviceCodeClientId = "615e6e7c-aa11-4402-91a1-6234967405d5"
 $script:ImportExcelAutoSizeSupported = $IsWindows
 
 # ─────────────────────────────────────────────
