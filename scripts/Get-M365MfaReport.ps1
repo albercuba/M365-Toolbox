@@ -108,13 +108,20 @@ function Write-SectionHeader {
 # ─────────────────────────────────────────────
 
 function Assert-RequiredModules {
+    param(
+        [bool]$NeedExcelExport = $true
+    )
+
     $required = @(
         @{ Name = "Microsoft.Graph.Authentication";   MinVersion = "2.0.0" }
         @{ Name = "Microsoft.Graph.Users";            MinVersion = "2.0.0" }
         @{ Name = "Microsoft.Graph.Identity.SignIns"; MinVersion = "2.0.0" }
         @{ Name = "Microsoft.Graph.DirectoryObjects"; MinVersion = "2.0.0" }
-        @{ Name = "ImportExcel";                      MinVersion = "7.0.0" }
     )
+
+    if ($NeedExcelExport) {
+        $required += @{ Name = "ImportExcel"; MinVersion = "7.0.0" }
+    }
 
     Write-Host "`n[*] Checking required PowerShell modules..." -ForegroundColor Cyan
     $xlAvailable = $false
@@ -145,10 +152,18 @@ function Assert-RequiredModules {
         }
 
         try {
+            $originalWarningPreference = $WarningPreference
+            if ($mod.Name -eq "ImportExcel") {
+                $WarningPreference = "SilentlyContinue"
+            }
+
             Import-Module $mod.Name -Force -WarningAction SilentlyContinue
             if ($mod.Name -eq "ImportExcel") { $xlAvailable = $true }
         }
         catch { Write-Warning "  [!] Could not import '$($mod.Name)': $_" }
+        finally {
+            $WarningPreference = $originalWarningPreference
+        }
     }
 
     return $xlAvailable
@@ -1022,7 +1037,7 @@ Write-Host "       M365 MFA AUTHENTICATION REPORT" -ForegroundColor Cyan
 Write-Host "       $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Cyan
 Write-Host "====================================================`n" -ForegroundColor Cyan
 
-$xlAvailable = Assert-RequiredModules
+$xlAvailable = Assert-RequiredModules -NeedExcelExport ([bool]$ExportXlsx)
 Connect-ToGraph | Out-Null
 
 $adminIds   = Get-AdminUserIds -RoleNames $AdminRoles
