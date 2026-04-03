@@ -68,6 +68,64 @@ function Install-MissingModules {
     }
 }
 
+function Convert-ToolboxOutputRecord {
+    param(
+        [Parameter(ValueFromPipeline = $true)]
+        $Record
+    )
+
+    process {
+        if ($null -eq $Record) {
+            return
+        }
+
+        if ($Record -is [System.Management.Automation.InformationRecord]) {
+            $messageData = $Record.MessageData
+            if ($null -ne $messageData -and $messageData.PSObject.Properties.Match("Message").Count -gt 0) {
+                Write-Output ([string]$messageData.Message)
+                return
+            }
+
+            Write-Output ([string]$messageData)
+            return
+        }
+
+        if ($Record -is [System.Management.Automation.WarningRecord]) {
+            Write-Output ([string]$Record.Message)
+            return
+        }
+
+        if ($Record -is [System.Management.Automation.VerboseRecord]) {
+            Write-Output ([string]$Record.Message)
+            return
+        }
+
+        if ($Record -is [System.Management.Automation.DebugRecord]) {
+            Write-Output ([string]$Record.Message)
+            return
+        }
+
+        if ($Record.PSObject.Properties.Match("Message").Count -gt 0 -and
+            $Record.PSObject.Properties.Match("ForegroundColor").Count -gt 0) {
+            Write-Output ([string]$Record.Message)
+            return
+        }
+
+        if ($Record.PSObject.Properties.Match("MessageData").Count -gt 0) {
+            $messageData = $Record.MessageData
+            if ($null -ne $messageData -and $messageData.PSObject.Properties.Match("Message").Count -gt 0) {
+                Write-Output ([string]$messageData.Message)
+                return
+            }
+
+            Write-Output ([string]$messageData)
+            return
+        }
+
+        Write-Output $Record
+    }
+}
+
 try {
     if (-not (Test-Path -LiteralPath $ScriptPath)) {
         throw "Script file not found: $ScriptPath"
@@ -78,29 +136,7 @@ try {
 
     $InformationPreference = "Continue"
 
-    & $ScriptPath @ScriptArgumentList 3>&1 4>&1 5>&1 6>&1 | ForEach-Object {
-        if ($null -ne $_ -and $_.PSObject.Properties.Match('Message').Count -gt 0) {
-            Write-Output ([string]$_.Message)
-        }
-        elseif ($null -ne $_ -and $_.PSObject.Properties.Match('MessageData').Count -gt 0) {
-            Write-Output ([string]$_.MessageData)
-        }
-        elseif ($_ -is [System.Management.Automation.InformationRecord]) {
-            Write-Output $_.MessageData
-        }
-        elseif ($_ -is [System.Management.Automation.WarningRecord]) {
-            Write-Output $_.Message
-        }
-        elseif ($_ -is [System.Management.Automation.VerboseRecord]) {
-            Write-Output $_.Message
-        }
-        elseif ($_ -is [System.Management.Automation.DebugRecord]) {
-            Write-Output $_.Message
-        }
-        else {
-            Write-Output $_
-        }
-    }
+    & $ScriptPath @ScriptArgumentList 3>&1 4>&1 5>&1 6>&1 | Convert-ToolboxOutputRecord
 
     if ($LASTEXITCODE) {
         exit $LASTEXITCODE

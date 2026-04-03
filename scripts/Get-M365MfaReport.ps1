@@ -166,9 +166,9 @@ function Connect-ToGraph {
     )
 
     try {
-        Write-Host "[*] Starting device code sign-in for Microsoft Graph..." -ForegroundColor Cyan
-        Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor Yellow
-        Write-Host "[*] Requesting device code from Microsoft Entra ID..." -ForegroundColor Cyan
+        Write-Output "[*] Starting device code sign-in for Microsoft Graph..."
+        Write-Output "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports."
+        Write-Output "[*] Requesting device code from Microsoft Entra ID..."
         $deviceCodeUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode"
         $tokenUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"
         $scopeValue = (($scopes + @("offline_access", "openid", "profile")) | Select-Object -Unique) -join " "
@@ -178,15 +178,15 @@ function Connect-ToGraph {
             scope     = $scopeValue
         } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
 
-        Write-Host ""
-        Write-Host "Sign in with your admin account using the device code flow:" -ForegroundColor Cyan
-        Write-Host "1. Open: $($deviceCodeResponse.verification_uri)" -ForegroundColor Green
+        Write-Output ""
+        Write-Output "Sign in with your admin account using the device code flow:"
+        Write-Output "1. Open: $($deviceCodeResponse.verification_uri)"
         if ($deviceCodeResponse.verification_uri_complete) {
-            Write-Host "   Direct link: $($deviceCodeResponse.verification_uri_complete)" -ForegroundColor Green
+            Write-Output "   Direct link: $($deviceCodeResponse.verification_uri_complete)"
         }
-        Write-Host "2. Enter code: $($deviceCodeResponse.user_code)" -ForegroundColor Yellow
-        Write-Host "3. Complete the sign-in and consent prompt for the tenant you want to review." -ForegroundColor Cyan
-        Write-Host ""
+        Write-Output "2. Enter code: $($deviceCodeResponse.user_code)"
+        Write-Output "3. Complete the sign-in and consent prompt for the tenant you want to review."
+        Write-Output ""
 
         $pollIntervalSeconds = [int]$deviceCodeResponse.interval
         $accessToken = $null
