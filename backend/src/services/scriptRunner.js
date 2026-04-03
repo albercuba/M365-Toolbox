@@ -175,8 +175,7 @@ function buildArgs(script, payload) {
       wrapperPath,
       "-ScriptPath",
       scriptPath,
-      "-ScriptArgumentList",
-      ...args
+      ...(args.length > 0 ? ["-ScriptArgumentList", ...args] : [])
     ]
   };
 }
