@@ -303,8 +303,12 @@ function Connect-ToGraph {
         }
         Write-Host "Sign in with your admin account using the device code flow:" -ForegroundColor Yellow
         Write-Host "1. Open: $($deviceCodeResponse.verification_uri)" -ForegroundColor Yellow
-        if ($deviceCodeResponse.verification_uri_complete) {
-            Write-Host "   Direct link: $($deviceCodeResponse.verification_uri_complete)" -ForegroundColor Yellow
+        $verificationUriComplete = $null
+        if ($deviceCodeResponse.PSObject.Properties.Match("verification_uri_complete").Count -gt 0) {
+            $verificationUriComplete = [string]$deviceCodeResponse.verification_uri_complete
+        }
+        if ($verificationUriComplete) {
+            Write-Host "   Direct link: $verificationUriComplete" -ForegroundColor Yellow
         }
         Write-Host "2. Enter code: $($deviceCodeResponse.user_code)" -ForegroundColor Yellow
         Write-Host "3. Complete the sign-in and consent prompt for the tenant you want to review." -ForegroundColor Yellow
