@@ -216,13 +216,12 @@ function Connect-ToGraph {
         "Reports.Read.All",
         "Organization.Read.All"
     )
+    $deviceCodeScope = "https://graph.microsoft.com/.default"
 
     try {
         $tenantSegment = if ($TenantId) { $TenantId } else { "organizations" }
         $deviceCodeUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/devicecode"
         $tokenUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/token"
-        $scopeValue = ($scopes | Select-Object -Unique) -join " "
-
         if ($TenantId) {
             Write-Output "[*] Using tenant: $TenantId"
         }
@@ -234,7 +233,7 @@ function Connect-ToGraph {
         try {
             $deviceCodeResponse = Invoke-RestMethod -Method Post -Uri $deviceCodeUri -Body @{
                 client_id = $script:GraphPowerShellClientId
-                scope     = $scopeValue
+                scope     = $deviceCodeScope
             } -ContentType "application/x-www-form-urlencoded" -TimeoutSec 30 -ErrorAction Stop
         }
         catch {
@@ -304,6 +303,7 @@ function Connect-ToGraph {
         }
 
         $secureAccessToken = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
+        Write-Output "[*] Device code authentication completed. Connecting the Graph PowerShell session..."
         Connect-MgGraph -AccessToken $secureAccessToken -NoWelcome -ContextScope Process -ErrorAction Stop
         $ctx = Get-MgContext
         Write-Host "[+] Connected account: $($ctx.Account)" -ForegroundColor Green
