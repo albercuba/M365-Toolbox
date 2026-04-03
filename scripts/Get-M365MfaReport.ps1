@@ -254,132 +254,29 @@ function Connect-ToGraph {
         "Reports.Read.All",
         "Organization.Read.All"
     )
-    $deviceCodeScopes = @(
-        $scopes,
-        "offline_access",
-        "openid",
-        "profile"
-    )
-
     try {
-        $tenantSegment = "organizations"
-        $deviceCodeUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/devicecode"
-        $tokenUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/token"
-        $deviceCodeScope = ($deviceCodeScopes | Select-Object -Unique) -join " "
-
         if ($TenantId) {
             Write-Host "[*] Requested tenant: $TenantId" -ForegroundColor Cyan
-            Write-Host "[*] Using the organizations sign-in endpoint and validating the tenant after authentication." -ForegroundColor DarkCyan
+            Write-Host "[*] Using tenant-scoped device authentication through Microsoft Graph PowerShell." -ForegroundColor DarkCyan
         }
 
         Write-Host "[*] Starting device code sign-in for Microsoft Graph..." -ForegroundColor Cyan
         Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor DarkCyan
-        Write-Host "[*] Requesting device code from Microsoft Entra ID..." -ForegroundColor Cyan
+        Write-Host "[*] When prompted, open the Microsoft device login page and enter the displayed code." -ForegroundColor Yellow
 
-        try {
-            $deviceCodeResult = Invoke-OAuthFormRequest -Uri $deviceCodeUri -Body @{
-                client_id = $script:GraphDeviceCodeClientId
-                scope     = $deviceCodeScope
-            } -TimeoutSec 30
-        }
-        catch {
-            throw "Failed to request a device code from Microsoft Entra ID.`n$(Get-HttpErrorDetails -ErrorRecord $_)"
+        $connectParams = @{
+            Scopes                  = $scopes
+            NoWelcome               = $true
+            ContextScope            = "Process"
+            UseDeviceAuthentication = $true
+            ErrorAction             = "Stop"
         }
 
-        if ($deviceCodeResult.StatusCode -lt 200 -or $deviceCodeResult.StatusCode -ge 300) {
-            $deviceCodeError = if ($deviceCodeResult.Content) { $deviceCodeResult.Content } else { "No response body returned." }
-            throw "Failed to request a device code from Microsoft Entra ID. HTTP $($deviceCodeResult.StatusCode).`n$deviceCodeError"
+        if ($TenantId) {
+            $connectParams["TenantId"] = $TenantId
         }
 
-        $deviceCodeResponse = $deviceCodeResult.Json
-        if (-not $deviceCodeResponse) {
-            throw "Failed to parse the device code response from Microsoft Entra ID.`n$($deviceCodeResult.Content)"
-        }
-
-        Write-Host ""
-        if ($deviceCodeResponse.message) {
-            Write-Host $deviceCodeResponse.message -ForegroundColor Yellow
-            Write-Host ""
-        }
-        Write-Host "Sign in with your admin account using the device code flow:" -ForegroundColor Yellow
-        Write-Host "1. Open: $($deviceCodeResponse.verification_uri)" -ForegroundColor Yellow
-        $verificationUriComplete = $null
-        if ($deviceCodeResponse.PSObject.Properties.Match("verification_uri_complete").Count -gt 0) {
-            $verificationUriComplete = [string]$deviceCodeResponse.verification_uri_complete
-        }
-        if ($verificationUriComplete) {
-            Write-Host "   Direct link: $verificationUriComplete" -ForegroundColor Yellow
-        }
-        Write-Host "2. Enter code: $($deviceCodeResponse.user_code)" -ForegroundColor Yellow
-        Write-Host "3. Complete the sign-in and consent prompt for the tenant you want to review." -ForegroundColor Yellow
-        Write-Host ""
-
-        $pollIntervalSeconds = [int]$deviceCodeResponse.interval
-        $deadline = (Get-Date).AddSeconds([int]$deviceCodeResponse.expires_in)
-        $accessToken = $null
-
-        while ((Get-Date) -lt $deadline) {
-            Start-Sleep -Seconds $pollIntervalSeconds
-
-            try {
-                $tokenResult = Invoke-OAuthFormRequest -Uri $tokenUri -Body @{
-                    grant_type  = "urn:ietf:params:oauth:grant-type:device_code"
-                    client_id   = $script:GraphDeviceCodeClientId
-                    device_code = $deviceCodeResponse.device_code
-                } -TimeoutSec 30
-            }
-            catch {
-                $errorDetails = Get-HttpErrorDetails -ErrorRecord $_
-                throw "Device code token polling failed.`n$errorDetails"
-            }
-
-            if ($tokenResult.StatusCode -ge 200 -and $tokenResult.StatusCode -lt 300) {
-                if (-not $tokenResult.Json) {
-                    throw "Failed to parse the token response from Microsoft Entra ID.`n$($tokenResult.Content)"
-                }
-
-                $accessToken = $tokenResult.Json.access_token
-                break
-            }
-
-            $oauthError = $tokenResult.Json
-            if ($oauthError) {
-                $continuePolling = $false
-
-                switch ([string]$oauthError.error) {
-                    "authorization_pending" {
-                        $continuePolling = $true
-                    }
-                    "slow_down" {
-                        $pollIntervalSeconds += 5
-                        $continuePolling = $true
-                    }
-                    "authorization_declined" { throw "Device code sign-in was declined." }
-                    "expired_token" { throw "Device code expired before sign-in completed." }
-                    "bad_verification_code" { throw "Invalid device code returned by the authorization server." }
-                    default {
-                        if ($oauthError.error_description) {
-                            throw $oauthError.error_description
-                        }
-                    }
-                }
-
-                if ($continuePolling) {
-                    continue
-                }
-            }
-
-            $tokenError = if ($tokenResult.Content) { $tokenResult.Content } else { "No response body returned." }
-            throw "Device code token polling failed with HTTP $($tokenResult.StatusCode).`n$tokenError"
-        }
-
-        if (-not $accessToken) {
-            throw "Timed out waiting for device code sign-in to complete."
-        }
-
-        $secureAccessToken = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
-        Write-Host "[*] Device code authentication completed. Connecting the Graph PowerShell session..." -ForegroundColor Cyan
-        Connect-MgGraph -AccessToken $secureAccessToken -NoWelcome -ContextScope Process -ErrorAction Stop
+        Connect-MgGraph @connectParams
         $ctx = Get-MgContext
         Write-Host "[+] Connected account: $($ctx.Account)" -ForegroundColor Green
         Write-Host "[+] Tenant ID        : $($ctx.TenantId)" -ForegroundColor Green
