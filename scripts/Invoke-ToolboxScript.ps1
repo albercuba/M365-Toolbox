@@ -79,6 +79,12 @@ try {
     $InformationPreference = "Continue"
 
     & $ScriptPath @ScriptArgumentList 3>&1 4>&1 5>&1 6>&1 | ForEach-Object {
+        if ($null -ne $_ -and $_.PSObject.Properties.Match('Message').Count -gt 0) {
+            Write-Output ([string]$_.Message)
+        }
+        elseif ($null -ne $_ -and $_.PSObject.Properties.Match('MessageData').Count -gt 0) {
+            Write-Output ([string]$_.MessageData)
+        }
         if ($_ -is [System.Management.Automation.InformationRecord]) {
             Write-Output $_.MessageData
         }

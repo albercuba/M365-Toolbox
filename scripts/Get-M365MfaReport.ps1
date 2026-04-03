@@ -61,6 +61,7 @@ param (
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$script:GraphPowerShellClientId = "615e6e7c-aa11-4402-91a1-6234967405d5"
 
 # ─────────────────────────────────────────────
 # HELPER: Timestamp + filename builder
@@ -166,7 +167,80 @@ function Connect-ToGraph {
     try {
         Write-Host "[*] Starting device code sign-in for Microsoft Graph..." -ForegroundColor Cyan
         Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor Yellow
-        Connect-MgGraph -Scopes $scopes -UseDeviceCode -NoWelcome -ErrorAction Stop
+        $deviceCodeUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/devicecode"
+        $tokenUri = "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"
+        $scopeValue = (($scopes + @("offline_access", "openid", "profile")) | Select-Object -Unique) -join " "
+
+        $deviceCodeResponse = Invoke-RestMethod -Method Post -Uri $deviceCodeUri -Body @{
+            client_id = $script:GraphPowerShellClientId
+            scope     = $scopeValue
+        } -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+
+        Write-Host ""
+        Write-Host "Sign in with your admin account using the device code flow:" -ForegroundColor Cyan
+        Write-Host "1. Open: $($deviceCodeResponse.verification_uri)" -ForegroundColor Green
+        if ($deviceCodeResponse.verification_uri_complete) {
+            Write-Host "   Direct link: $($deviceCodeResponse.verification_uri_complete)" -ForegroundColor Green
+        }
+        Write-Host "2. Enter code: $($deviceCodeResponse.user_code)" -ForegroundColor Yellow
+        Write-Host "3. Complete the sign-in and consent prompt for the tenant you want to review." -ForegroundColor Cyan
+        Write-Host ""
+
+        $pollIntervalSeconds = [int]$deviceCodeResponse.interval
+        $accessToken = $null
+        $deadline = (Get-Date).AddSeconds([int]$deviceCodeResponse.expires_in)
+
+        while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds $pollIntervalSeconds
+
+            try {
+                $tokenResponse = Invoke-RestMethod -Method Post -Uri $tokenUri -Body @{
+                    grant_type  = "urn:ietf:params:oauth:grant-type:device_code"
+                    client_id   = $script:GraphPowerShellClientId
+                    device_code = $deviceCodeResponse.device_code
+                } -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+
+                $accessToken = $tokenResponse.access_token
+                break
+            }
+            catch {
+                $responseStream = $_.Exception.Response.GetResponseStream()
+                $reader = [System.IO.StreamReader]::new($responseStream)
+                $errorBody = $reader.ReadToEnd()
+                $reader.Dispose()
+
+                $oauthError = $null
+                try {
+                    $oauthError = $errorBody | ConvertFrom-Json -ErrorAction Stop
+                }
+                catch {}
+
+                switch ($oauthError.error) {
+                    "authorization_pending" { continue }
+                    "slow_down" {
+                        $pollIntervalSeconds += 5
+                        continue
+                    }
+                    "authorization_declined" { throw "Device code sign-in was declined." }
+                    "expired_token" { throw "Device code expired before sign-in completed." }
+                    "bad_verification_code" { throw "Invalid device code returned by the authorization server." }
+                    default {
+                        if ($oauthError.error_description) {
+                            throw $oauthError.error_description
+                        }
+
+                        throw
+                    }
+                }
+            }
+        }
+
+        if (-not $accessToken) {
+            throw "Timed out waiting for device code sign-in to complete."
+        }
+
+        $secureAccessToken = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
+        Connect-MgGraph -AccessToken $secureAccessToken -NoWelcome -ErrorAction Stop
         $ctx = Get-MgContext
         Write-Host "[+] Connected account: $($ctx.Account)" -ForegroundColor Green
         Write-Host "[+] Tenant ID        : $($ctx.TenantId)" -ForegroundColor Green
