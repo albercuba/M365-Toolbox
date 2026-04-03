@@ -343,20 +343,32 @@ function Connect-ToGraph {
 
             $oauthError = $tokenResult.Json
             if ($oauthError) {
-                switch ($oauthError.error) {
-                    "authorization_pending" { continue }
-                    "slow_down" {
-                        $pollIntervalSeconds += 5
-                        continue
-                    }
-                    "authorization_declined" { throw "Device code sign-in was declined." }
-                    "expired_token" { throw "Device code expired before sign-in completed." }
-                    "bad_verification_code" { throw "Invalid device code returned by the authorization server." }
-                    default {
-                        if ($oauthError.error_description) {
-                            throw $oauthError.error_description
-                        }
-                    }
+                $oauthErrorCode = [string]$oauthError.error
+                $oauthErrorDescription = [string]$oauthError.error_description
+
+                if ($oauthErrorCode -eq "authorization_pending") {
+                    continue
+                }
+
+                if ($oauthErrorCode -eq "slow_down") {
+                    $pollIntervalSeconds += 5
+                    continue
+                }
+
+                if ($oauthErrorCode -eq "authorization_declined") {
+                    throw "Device code sign-in was declined."
+                }
+
+                if ($oauthErrorCode -eq "expired_token") {
+                    throw "Device code expired before sign-in completed."
+                }
+
+                if ($oauthErrorCode -eq "bad_verification_code") {
+                    throw "Invalid device code returned by the authorization server."
+                }
+
+                if ($oauthErrorDescription) {
+                    throw $oauthErrorDescription
                 }
             }
 
