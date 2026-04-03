@@ -87,7 +87,7 @@ function Field({ field, value, onChange }) {
     <label className="form-field">
       <span>{field.label}</span>
       <input
-        type={field.type === "number" ? "number" : "text"}
+        type={field.type === "number" ? "number" : field.type === "password" ? "password" : "text"}
         min={field.min}
         max={field.max}
         placeholder={field.placeholder || ""}

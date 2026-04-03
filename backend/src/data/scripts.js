@@ -105,15 +105,15 @@ const compromisedAccountScript = {
 
 const checkMfaStatusScript = {
   id: "m365-check-mfa-status",
-  name: "Check MFA Status",
+  name: "M365 MFA Report",
   category: "Identity",
-  summary: "Review MFA registration coverage and registered authentication methods.",
+  summary: "Generate a full tenant MFA report with coverage, admin risk, and exportable dashboards.",
   description:
-    "Runs the approved MFA status report across the tenant and can export the results as a CSV into the toolbox output folder.",
-  scriptRelativePath: "Check-MFAStatus.ps1",
+    "Runs the approved Microsoft 365 MFA reporting workflow and can export Excel and HTML reports into the toolbox output folder.",
+  scriptRelativePath: "Get-M365MfaReport.ps1",
   scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
   outputs:
-    "Writes an MFA status CSV export to the configured output directory when export is enabled.",
+    "Writes Excel and HTML MFA reports to the configured output directory.",
   fields: [
     {
       id: "includeGuests",
@@ -122,14 +122,33 @@ const checkMfaStatusScript = {
       defaultValue: false
     },
     {
-      id: "skipDisabled",
-      label: "Skip disabled users",
+      id: "tenantId",
+      label: "Tenant ID",
+      type: "text",
+      required: true
+    },
+    {
+      id: "clientId",
+      label: "Client ID",
+      type: "text",
+      required: true
+    },
+    {
+      id: "clientSecret",
+      label: "Client Secret",
+      type: "password",
+      required: true,
+      sensitive: true
+    },
+    {
+      id: "exportHtml",
+      label: "Export HTML dashboard",
       type: "checkbox",
       defaultValue: true
     },
     {
-      id: "exportCsv",
-      label: "Export CSV",
+      id: "exportXlsx",
+      label: "Export Excel report",
       type: "checkbox",
       defaultValue: true
     }
