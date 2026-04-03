@@ -109,7 +109,7 @@ const checkMfaStatusScript = {
   category: "Identity",
   summary: "Generate a full tenant MFA report with coverage, admin risk, and exportable dashboards.",
   description:
-    "Runs the approved Microsoft 365 MFA reporting workflow and can export Excel and HTML reports into the toolbox output folder.",
+    "Runs the approved Microsoft 365 MFA reporting workflow, prompts for admin sign-in by device code, and exports Excel and HTML reports into the toolbox output folder.",
   scriptRelativePath: "Get-M365MfaReport.ps1",
   scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
   outputs:
@@ -119,26 +119,8 @@ const checkMfaStatusScript = {
       id: "includeGuests",
       label: "Include guest users",
       type: "checkbox",
-      defaultValue: false
-    },
-    {
-      id: "tenantId",
-      label: "Tenant ID",
-      type: "text",
-      required: true
-    },
-    {
-      id: "clientId",
-      label: "Client ID",
-      type: "text",
-      required: true
-    },
-    {
-      id: "clientSecret",
-      label: "Client Secret",
-      type: "password",
-      required: true,
-      sensitive: true
+      defaultValue: false,
+      helpText: "After the run starts, use the device code shown in the output to sign in with an admin account."
     },
     {
       id: "exportHtml",

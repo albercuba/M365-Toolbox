@@ -4,7 +4,7 @@
     in a Microsoft 365 tenant.
 
 .DESCRIPTION
-    Connects to Microsoft Graph with app-based authentication and reports on:
+    Connects to Microsoft Graph with delegated device code authentication and reports on:
       - Per-user MFA registration status and enabled methods
       - Authenticator App, FIDO2, Phone, TOTP, Email, Windows Hello, etc.
       - Users with MFA disabled / not registered
@@ -28,21 +28,12 @@
 .PARAMETER IncludeGuests
     Include guest/external users in the report. Default: $false
 
-.PARAMETER TenantId
-    Microsoft Entra tenant ID for app-based authentication.
-
-.PARAMETER ClientId
-    Application (client) ID for app-based authentication.
-
-.PARAMETER ClientSecret
-    Client secret for app-based authentication.
-
 .PARAMETER AdminRoles
     List of role display-names to flag as privileged.
     Default covers the most critical built-in roles.
 
 .EXAMPLE
-    .\Get-M365MfaReport.ps1 -TenantId "<tenant-id>" -ClientId "<client-id>" -ClientSecret "<secret>" -ExportXlsx "C:\Reports\" -ExportHtml "C:\Reports\"
+    .\Get-M365MfaReport.ps1 -ExportXlsx "C:\Reports\" -ExportHtml "C:\Reports\"
 
 .EXAMPLE
     .\Get-M365MfaReport.ps1 -ExportHtml "C:\Reports\" -IncludeGuests
@@ -53,12 +44,6 @@ param (
     [string]   $ExportXlsx,
     [string]   $ExportHtml,
     [switch]   $IncludeGuests    = $false,
-    [Parameter(Mandatory = $true)]
-    [string]   $TenantId,
-    [Parameter(Mandatory = $true)]
-    [string]   $ClientId,
-    [Parameter(Mandatory = $true)]
-    [string]   $ClientSecret,
     [string[]] $AdminRoles       = @(
         "Global Administrator",
         "Privileged Role Administrator",
@@ -168,15 +153,23 @@ function Assert-RequiredModules {
 function Connect-ToGraph {
     Write-SectionHeader "CONNECTING TO MICROSOFT GRAPH"
 
-    try {
-        Write-Host "[*] Connecting to Microsoft Graph with app-based authentication..." -ForegroundColor Cyan
-        $secretSecureString = ConvertTo-SecureString -String $ClientSecret -AsPlainText -Force
-        $clientSecretCredential = [pscredential]::new($ClientId, $secretSecureString)
+    $scopes = @(
+        "User.Read.All",
+        "UserAuthenticationMethod.Read.All",
+        "Directory.Read.All",
+        "RoleManagement.Read.Directory",
+        "AuditLog.Read.All",
+        "Reports.Read.All",
+        "Organization.Read.All"
+    )
 
-        Connect-MgGraph -TenantId $TenantId -ClientId $ClientId -ClientSecretCredential $clientSecretCredential -NoWelcome -ErrorAction Stop
+    try {
+        Write-Host "[*] Starting device code sign-in for Microsoft Graph..." -ForegroundColor Cyan
+        Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor Yellow
+        Connect-MgGraph -Scopes $scopes -UseDeviceCode -NoWelcome -ErrorAction Stop
         $ctx = Get-MgContext
-        Write-Host "[+] Connected app: $ClientId" -ForegroundColor Green
-        Write-Host "[+] Tenant ID    : $($ctx.TenantId)" -ForegroundColor Green
+        Write-Host "[+] Connected account: $($ctx.Account)" -ForegroundColor Green
+        Write-Host "[+] Tenant ID        : $($ctx.TenantId)" -ForegroundColor Green
 
         # Resolve tenant domain
         try {

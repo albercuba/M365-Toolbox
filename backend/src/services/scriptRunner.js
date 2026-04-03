@@ -133,14 +133,6 @@ function buildMfaStatusArgs(script, payload) {
   const timestamp = new Date().toISOString().replace(/[:]/g, "-");
   const outputBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-mfa-report-${timestamp}`);
 
-  if (!payload.tenantId || !payload.clientId || !payload.clientSecret) {
-    throw new Error("Tenant ID, Client ID, and Client Secret are required for the M365 MFA Report.");
-  }
-
-  args.push("-TenantId", String(payload.tenantId));
-  args.push("-ClientId", String(payload.clientId));
-  args.push("-ClientSecret", String(payload.clientSecret));
-
   if (payload.includeGuests) {
     args.push("-IncludeGuests");
   }
@@ -154,33 +146,6 @@ function buildMfaStatusArgs(script, payload) {
   }
 
   return args;
-}
-
-function maskSensitiveArgs(args, sensitiveArgs = []) {
-  if (!sensitiveArgs.length) {
-    return args;
-  }
-
-  const masked = [...args];
-  for (let index = 0; index < masked.length; index += 1) {
-    if (sensitiveArgs.includes(masked[index]) && index + 1 < masked.length) {
-      masked[index + 1] = "***";
-    }
-  }
-
-  return masked;
-}
-
-function sanitizePayload(script, payload) {
-  const sensitiveFieldIds = new Set(
-    (script.fields || [])
-      .filter((field) => field.sensitive)
-      .map((field) => field.id)
-  );
-
-  return Object.fromEntries(
-    Object.entries(payload).map(([key, value]) => [key, sensitiveFieldIds.has(key) ? "***" : value])
-  );
 }
 
 function buildArgs(script, payload) {
@@ -237,7 +202,6 @@ export function startRun(scriptId, payload = {}) {
 
   const script = resolveScript(scriptId);
   const { scriptPath, args } = buildArgs(script, payload);
-  const maskedArgs = maskSensitiveArgs(args, ["-ClientSecret"]);
   const runId = uuidv4();
   const run = {
     id: runId,
@@ -246,8 +210,8 @@ export function startRun(scriptId, payload = {}) {
     status: "running",
     startedAt: new Date().toISOString(),
     finishedAt: null,
-    payload: sanitizePayload(script, payload),
-    command: ["pwsh", ...maskedArgs].join(" "),
+    payload,
+    command: ["pwsh", ...args].join(" "),
     scriptPath,
     stdout: "",
     stderr: "",
