@@ -19,17 +19,29 @@
 .PARAMETER SkipDisabled
     If specified, skips disabled user accounts.
 
+.PARAMETER TenantId
+    Optional Microsoft Entra tenant ID or primary tenant domain
+    (for example: contoso.onmicrosoft.com).
+    Use this when Graph sign-in cannot infer the tenant automatically.
+
+.PARAMETER UseDeviceCode
+    If specified, uses device code authentication instead of the default
+    interactive browser sign-in flow.
+
 .EXAMPLE
     .\Check-MFAStatus.ps1
     .\Check-MFAStatus.ps1 -ExportCsv "C:\Reports\MFA_Report.csv"
     .\Check-MFAStatus.ps1 -ExportCsv "C:\Reports\MFA_Report.csv" -SkipDisabled
+    .\Check-MFAStatus.ps1 -TenantId "contoso.onmicrosoft.com"
 #>
 
 [CmdletBinding()]
 param (
     [string]$ExportCsv,
     [switch]$IncludeGuests,
-    [switch]$SkipDisabled
+    [switch]$SkipDisabled,
+    [string]$TenantId = $(if ($env:M365_TENANT_ID) { $env:M365_TENANT_ID } elseif ($env:AZURE_TENANT_ID) { $env:AZURE_TENANT_ID } else { $null }),
+    [switch]$UseDeviceCode
 )
 
 function Connect-ToMicrosoftGraph {
@@ -41,13 +53,44 @@ function Connect-ToMicrosoftGraph {
     )
 
     try {
-        Connect-MgGraph -Scopes $requiredScopes -ErrorAction Stop
+        $connectParams = @{
+            Scopes      = $requiredScopes
+            NoWelcome   = $true
+            ErrorAction = "Stop"
+        }
+
+        if ($TenantId) {
+            $connectParams["TenantId"] = $TenantId
+            Write-Host "[*] Using tenant: $TenantId" -ForegroundColor DarkCyan
+        }
+
+        if ($UseDeviceCode) {
+            $connectParams["UseDeviceAuthentication"] = $true
+            Write-Host "[*] Using device code authentication." -ForegroundColor DarkCyan
+        }
+
+        Connect-MgGraph @connectParams
         $context = Get-MgContext
         Write-Host "[+] Connected as: $($context.Account)" -ForegroundColor Green
         Write-Host "[+] Tenant ID:    $($context.TenantId)" -ForegroundColor Green
     }
     catch {
-        Write-Error "Failed to connect to Microsoft Graph: $_"
+        $errorText = $_.Exception.Message
+
+        if ($errorText -match "AADSTS50059") {
+            $suggestion = if ($TenantId) {
+                "The provided tenant value '$TenantId' could not be resolved. Verify that it is a valid tenant GUID or domain such as 'contoso.onmicrosoft.com'."
+            }
+            else {
+                "No tenant-identifying information was supplied. Re-run the script with -TenantId '<tenant-guid-or-domain>' or set the environment variable M365_TENANT_ID."
+            }
+
+            Write-Error "Failed to connect to Microsoft Graph: $suggestion`nOriginal error: $errorText"
+        }
+        else {
+            Write-Error "Failed to connect to Microsoft Graph: $errorText"
+        }
+
         exit 1
     }
 }
