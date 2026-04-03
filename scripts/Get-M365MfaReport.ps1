@@ -262,13 +262,14 @@ function Connect-ToGraph {
     )
 
     try {
-        $tenantSegment = if ($TenantId) { $TenantId } else { "organizations" }
+        $tenantSegment = "organizations"
         $deviceCodeUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/devicecode"
         $tokenUri = "https://login.microsoftonline.com/$tenantSegment/oauth2/v2.0/token"
         $deviceCodeScope = ($deviceCodeScopes | Select-Object -Unique) -join " "
 
         if ($TenantId) {
-            Write-Output "[*] Using tenant: $TenantId"
+            Write-Output "[*] Requested tenant: $TenantId"
+            Write-Output "[*] Using the organizations sign-in endpoint and validating the tenant after authentication."
         }
 
         Write-Output "[*] Starting device code sign-in for Microsoft Graph..."
@@ -381,6 +382,32 @@ function Connect-ToGraph {
             }
         }
         catch { $script:TenantDomain = $ctx.TenantId }
+
+        if ($TenantId) {
+            $requestedTenant = $TenantId.Trim().ToLowerInvariant()
+            $tenantMatches = $false
+            $parsedTenantGuid = [guid]::Empty
+
+            if ([guid]::TryParse($requestedTenant, [ref]$parsedTenantGuid)) {
+                $tenantMatches = [string]::Equals([string]$ctx.TenantId, $requestedTenant, [System.StringComparison]::OrdinalIgnoreCase)
+            }
+            else {
+                $verifiedDomains = @()
+                if ($org -and $org.VerifiedDomains) {
+                    $verifiedDomains = @($org.VerifiedDomains | ForEach-Object { [string]$_.Name })
+                }
+
+                $tenantMatches = $verifiedDomains | Where-Object {
+                    [string]::Equals($_, $requestedTenant, [System.StringComparison]::OrdinalIgnoreCase)
+                } | Select-Object -First 1
+            }
+
+            if (-not $tenantMatches) {
+                $resolvedTenant = if ($script:TenantDomain) { $script:TenantDomain } else { [string]$ctx.TenantId }
+                try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+                throw "Signed in to tenant '$resolvedTenant', but the requested tenant was '$TenantId'. Sign in again with an account from the requested tenant."
+            }
+        }
 
         return $ctx
     }
