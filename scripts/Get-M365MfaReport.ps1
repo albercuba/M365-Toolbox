@@ -50,7 +50,6 @@ param (
     [string]   $ExportHtml,
     [switch]   $IncludeGuests    = $false,
     [string]   $TenantId         = $(if ($env:M365_TENANT_ID) { $env:M365_TENANT_ID } elseif ($env:AZURE_TENANT_ID) { $env:AZURE_TENANT_ID } else { $null }),
-    [switch]   $InternalExecution,
     [string[]] $AdminRoles       = @(
         "Global Administrator",
         "Privileged Role Administrator",
@@ -133,36 +132,6 @@ function Get-HttpErrorDetails {
     catch {}
 
     return $message
-}
-
-function Invoke-InternalExecution {
-    $relaunchArgs = @(
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        $PSCommandPath,
-        "-InternalExecution"
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($ExportXlsx)) {
-        $relaunchArgs += @("-ExportXlsx", $ExportXlsx)
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($ExportHtml)) {
-        $relaunchArgs += @("-ExportHtml", $ExportHtml)
-    }
-
-    if ($IncludeGuests) {
-        $relaunchArgs += "-IncludeGuests"
-    }
-
-    if ($TenantId) {
-        $relaunchArgs += @("-TenantId", $TenantId)
-    }
-
-    & pwsh @relaunchArgs
-    exit $LASTEXITCODE
 }
 
 # ─────────────────────────────────────────────
@@ -1171,10 +1140,6 @@ render();
 # ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
-
-if (-not $InternalExecution) {
-    Invoke-InternalExecution
-}
 
 Write-Host "`n====================================================" -ForegroundColor Cyan
 Write-Host "       M365 MFA AUTHENTICATION REPORT" -ForegroundColor Cyan
