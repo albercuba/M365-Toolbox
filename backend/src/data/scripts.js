@@ -365,6 +365,195 @@ const adminRoleAuditScript = {
   fields: [tenantField]
 };
 
+const inactiveUsersReportScript = {
+  id: "m365-inactive-users-report",
+  name: "M365 Inactive Users Report",
+  category: "Identity",
+  summary: "Find inactive accounts and identify licensed users with no recent sign-in activity.",
+  description:
+    "Exports an HTML dashboard that highlights inactive accounts, last sign-in dates, and likely license reclaim opportunities.",
+  scriptRelativePath: "M365-InactiveUsersReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-inactive-users-report",
+  outputs: "Writes an HTML inactive-user dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "inactiveDays",
+      label: "Inactive threshold (days)",
+      type: "number",
+      required: false,
+      defaultValue: 90,
+      min: 30,
+      max: 365
+    },
+    {
+      id: "includeDisabledUsers",
+      label: "Include disabled users",
+      type: "checkbox",
+      defaultValue: false
+    },
+    tenantField
+  ]
+};
+
+const appConsentAuditScript = {
+  id: "m365-app-consent-audit",
+  name: "M365 App Consent Audit",
+  category: "Security",
+  summary: "Review enterprise app consents and delegated permission grants.",
+  description:
+    "Exports an HTML dashboard for OAuth delegated grants, high-privilege scopes, and consent exposure across enterprise apps.",
+  scriptRelativePath: "M365-AppConsentAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-app-consent-audit",
+  outputs: "Writes an HTML app consent dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const mailboxPermissionAuditScript = {
+  id: "m365-mailbox-permission-audit",
+  name: "M365 Mailbox Permission Audit",
+  category: "Exchange",
+  summary: "Review mailbox Full Access and Send As delegation across user and shared mailboxes.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard that summarizes mailbox permission exposure.",
+  scriptRelativePath: "M365-MailboxPermissionAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mailbox-permission-audit",
+  outputs: "Writes an HTML mailbox permission dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const externalSharingLinksReportScript = {
+  id: "m365-external-sharing-links-report",
+  name: "M365 External Sharing Links Report",
+  category: "SharePoint",
+  summary: "Review SharePoint external sharing posture and active sites with shared-content exposure.",
+  description:
+    "Exports an HTML dashboard that combines SharePoint sharing settings with active site inventory for the selected usage period.",
+  scriptRelativePath: "M365-ExternalSharingLinksReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-external-sharing-links-report",
+  outputs: "Writes an HTML external-sharing dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "reportPeriod",
+      label: "Usage period",
+      type: "text",
+      required: false,
+      defaultValue: "D30",
+      placeholder: "D7, D30, D90, D180",
+      helpText: "Accepted values: D7, D30, D90, D180."
+    },
+    tenantField
+  ]
+};
+
+const distributionGroupAuditScript = {
+  id: "m365-distribution-group-audit",
+  name: "M365 Distribution Group Audit",
+  category: "Exchange",
+  summary: "Review distribution group ownership, member counts, and exposure to external senders.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for distribution group hygiene and sender scope.",
+  scriptRelativePath: "M365-DistributionGroupAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-distribution-group-audit",
+  outputs: "Writes an HTML distribution-group dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const serviceHealthSnapshotScript = {
+  id: "m365-service-health-snapshot",
+  name: "M365 Service Health Snapshot",
+  category: "Operations",
+  summary: "Capture current Microsoft 365 service health and active advisories.",
+  description:
+    "Exports an HTML dashboard with current service health overviews and active incident/advisory records from Microsoft 365.",
+  scriptRelativePath: "M365-ServiceHealthSnapshot.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-service-health-snapshot",
+  outputs: "Writes an HTML service-health dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const authenticationPolicyReportScript = {
+  id: "m365-authentication-policy-report",
+  name: "M365 Authentication Policy Report",
+  category: "Identity",
+  summary: "Review security defaults and Microsoft Entra authentication methods policy posture.",
+  description:
+    "Exports an HTML dashboard for security defaults and authentication methods policy settings returned by Microsoft Graph.",
+  scriptRelativePath: "M365-AuthenticationPolicyReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-authentication-policy-report",
+  outputs: "Writes an HTML authentication-policy dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const privilegedAppAuditScript = {
+  id: "m365-privileged-app-audit",
+  name: "M365 Privileged App Audit",
+  category: "Security",
+  summary: "Review enterprise apps with secrets and certificates used by non-human identities.",
+  description:
+    "Exports an HTML dashboard that inventories service-principal credentials and highlights apps with elevated credential presence.",
+  scriptRelativePath: "M365-PrivilegedAppAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-privileged-app-audit",
+  outputs: "Writes an HTML privileged-app dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const dkimDmarcReportScript = {
+  id: "m365-dkim-dmarc-report",
+  name: "M365 DKIM / DMARC Report",
+  category: "Exchange",
+  summary: "Review accepted domains for DKIM signing state and DMARC visibility.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard with DKIM state and DMARC DNS visibility for accepted domains.",
+  scriptRelativePath: "M365-DkimDmarcReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-dkim-dmarc-report",
+  outputs: "Writes an HTML DKIM/DMARC dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const groupLifecycleReportScript = {
+  id: "m365-group-lifecycle-report",
+  name: "M365 Group Lifecycle Report",
+  category: "Collaboration",
+  summary: "Review Microsoft 365 group ownership, renewal activity, and lifecycle hygiene.",
+  description:
+    "Exports an HTML dashboard for Unified group ownership gaps, membership size, and renewal status across the selected group sample.",
+  scriptRelativePath: "M365-GroupLifecycleReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-group-lifecycle-report",
+  outputs: "Writes an HTML group-lifecycle dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "maxGroupsToInspect",
+      label: "Maximum groups to inspect",
+      type: "number",
+      required: false,
+      defaultValue: 200,
+      min: 50,
+      max: 500
+    },
+    tenantField
+  ]
+};
+
 export const scripts = [
   compromisedAccountScript,
   checkMfaStatusScript,
@@ -378,5 +567,15 @@ export const scripts = [
   teamsExternalAccessReportScript,
   sharePointSharingReportScript,
   secureScoreSnapshotScript,
-  adminRoleAuditScript
+  adminRoleAuditScript,
+  inactiveUsersReportScript,
+  appConsentAuditScript,
+  mailboxPermissionAuditScript,
+  externalSharingLinksReportScript,
+  distributionGroupAuditScript,
+  serviceHealthSnapshotScript,
+  authenticationPolicyReportScript,
+  privilegedAppAuditScript,
+  dkimDmarcReportScript,
+  groupLifecycleReportScript
 ];
