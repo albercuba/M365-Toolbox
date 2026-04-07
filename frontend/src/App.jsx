@@ -493,8 +493,13 @@ export function App() {
                           <div className="card-header">
                             <span className="card-title">HTML Report</span>
                             <span className="card-badge badge-ok">preview</span>
+                            {activeRun?.id ? (
+                              <a className="filter-btn active-all" href={`${apiBase}/runs/${activeRun.id}/html`} download={`m365-mfa-report-${activeRun.id}.html`}>
+                                Download
+                              </a>
+                            ) : null}
                           </div>
-                          <div className="card-body">
+                          <div className="card-body report-card-body">
                             <iframe title="MFA HTML report preview" className="report-frame" srcDoc={activeRunHtml} />
                           </div>
                         </div>
