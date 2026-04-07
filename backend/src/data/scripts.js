@@ -137,7 +137,7 @@ const usageReportScript = {
   id: "m365-usage-report",
   name: "M365 Usage Report",
   category: "Reporting",
-  summary: "Generate OneDrive, SharePoint, and mailbox storage usage dashboards.",
+  summary: "Generate OneDrive, SharePoint, and Mailbox storage usage dashboards.",
   description:
     "Runs the approved Microsoft 365 storage usage workflow with Microsoft Graph device-code authentication and exports an HTML dashboard into the toolbox output folder.",
   scriptRelativePath: "Get-M365UsageReport.ps1",
