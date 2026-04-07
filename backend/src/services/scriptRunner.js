@@ -95,7 +95,9 @@ function resolveScriptPath(script) {
 }
 
 function buildCompromisedAccountArgs(script, payload) {
-  const args = ["-OutputPath", OUTPUT_DIR];
+  const timestamp = new Date().toISOString().replace(/[:]/g, "-");
+  const outputBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-compromised-account-remediation-${timestamp}`);
+  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${outputBase}.html`];
 
   const upns = normalizeListValue(payload.userPrincipalName);
   if (upns.length > 0) {
@@ -111,24 +113,8 @@ function buildCompromisedAccountArgs(script, payload) {
     args.push("-AuditLogDays", String(payload.auditLogDays));
   }
 
-  if (payload.csvPath) {
-    args.push("-CsvPath", String(payload.csvPath));
-  }
-
   if (payload.tenantId) {
     args.push("-TenantId", String(payload.tenantId));
-  }
-
-  if (payload.clientId) {
-    args.push("-ClientId", String(payload.clientId));
-  }
-
-  if (payload.certificateThumbprint) {
-    args.push("-CertificateThumbprint", String(payload.certificateThumbprint));
-  }
-
-  if (payload.installMissingModules) {
-    args.push("-InstallMissingModules");
   }
 
   if (payload.includeGeneratedPasswordsInResults) {
@@ -139,7 +125,12 @@ function buildCompromisedAccountArgs(script, payload) {
     args.push("-WhatIf");
   }
 
-  return args;
+  return {
+    args,
+    artifacts: {
+      htmlPath: `${outputBase}.html`
+    }
+  };
 }
 
 function buildMfaStatusArgs(script, payload) {
@@ -199,7 +190,7 @@ function buildArgs(script, payload) {
 
   switch (script.id) {
     case "m365-compromised-account-remediation":
-      args = buildCompromisedAccountArgs(runtimeScript, payload);
+      ({ args, artifacts } = buildCompromisedAccountArgs(runtimeScript, payload));
       break;
     case "m365-check-mfa-status":
       ({ args, artifacts } = buildMfaStatusArgs(runtimeScript, payload));

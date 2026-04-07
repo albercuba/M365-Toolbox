@@ -2,13 +2,13 @@ const compromisedAccountScript = {
   id: "m365-compromised-account-remediation",
   name: "Compromised Account Remediation",
   category: "Incident Response",
-  summary: "Contain a compromised Microsoft 365 account and export investigation data.",
+  summary: "Contain a compromised Microsoft 365 account and generate an incident dashboard.",
   description:
-    "Runs the approved M365 compromised-account workflow against one or more target users. The runner only exposes allowlisted parameters so the web UI can stay safe and predictable.",
-  scriptRelativePath:
-    "M365-CompromisedAccountRemediation.ps1",
+    "Runs the approved compromised-account workflow against one or more target users, authenticates by device code, performs the selected review or remediation actions, and exports an HTML dashboard into the toolbox output folder.",
+  scriptRelativePath: "M365-CompromisedAccountRemediation.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
   outputs:
-    "Writes status CSVs, error logs, unified audit exports, sign-in exports, and message trace reports to the configured output directory.",
+    "Writes an HTML incident dashboard plus supporting CSV and log artifacts to the configured output directory.",
   fields: [
     {
       id: "userPrincipalName",
@@ -57,36 +57,12 @@ const compromisedAccountScript = {
       max: 30
     },
     {
-      id: "csvPath",
-      label: "CSV Path",
+      id: "tenantId",
+      label: "Tenant ID or Domain",
       type: "text",
       required: false,
-      placeholder: "/workspace-scripts/path/to/users.csv",
-      helpText: "Optional path inside the mounted scripts folder."
-    },
-    {
-      id: "tenantId",
-      label: "Tenant ID",
-      type: "text",
-      required: false
-    },
-    {
-      id: "clientId",
-      label: "Client ID",
-      type: "text",
-      required: false
-    },
-    {
-      id: "certificateThumbprint",
-      label: "Certificate Thumbprint",
-      type: "text",
-      required: false
-    },
-    {
-      id: "installMissingModules",
-      label: "Install missing modules",
-      type: "checkbox",
-      defaultValue: false
+      placeholder: "contoso.onmicrosoft.com",
+      helpText: "Optional. If provided, device-code sign-in is scoped to this tenant."
     },
     {
       id: "includeGeneratedPasswordsInResults",
