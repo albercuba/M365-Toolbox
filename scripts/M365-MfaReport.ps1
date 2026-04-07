@@ -508,20 +508,20 @@ function Export-MfaHtmlReport {
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg:#080c14; --bg2:#0c1220; --bg3:#101828; --bg4:#141e2e;
-    --border:#1a2840; --border2:#223050;
-    --text:#c8d8f0; --text2:#6a88b0; --text3:#3a5070;
-    --accent:#38bdf8; --accent2:#0ea5e9;
-    --ok:#10b981; --ok-bg:rgba(16,185,129,.1);
-    --warn:#f59e0b; --warn-bg:rgba(245,158,11,.1);
-    --crit:#f43f5e; --crit-bg:rgba(244,63,94,.1);
+    --bg:#f5f7fb; --bg2:#ffffff; --bg3:#f7f9fc; --bg4:#eef3f9;
+    --border:#d6dfec; --border2:#b8c8dc;
+    --text:#17324d; --text2:#4b6887; --text3:#6f88a3;
+    --accent:#0f7cc0; --accent2:#1091d5;
+    --ok:#15803d; --ok-bg:rgba(21,128,61,.1);
+    --warn:#b45309; --warn-bg:rgba(180,83,9,.1);
+    --crit:#dc2626; --crit-bg:rgba(220,38,38,.1);
     --mono:'JetBrains Mono',monospace; --sans:'DM Sans',sans-serif;
     --r:8px; --r2:12px;
   }
   html { scroll-behavior:smooth; }
   body { font-family:var(--sans); background:var(--bg); color:var(--text); min-height:100vh; line-height:1.6; }
-  body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events:none; z-index:0; opacity:.4; }
-  .topbar { position:sticky; top:0; z-index:100; background:rgba(8,12,20,.9); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); padding:0 2rem; height:52px; display:flex; align-items:center; gap:1.5rem; }
+  body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E"); pointer-events:none; z-index:0; opacity:.35; }
+  .topbar { position:sticky; top:0; z-index:100; background:rgba(245,247,251,.88); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); padding:0 2rem; height:52px; display:flex; align-items:center; gap:1.5rem; }
   .topbar-logo { font-family:var(--mono); font-size:.72rem; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); }
   .topbar-sep  { color:var(--border2); }
   .topbar-server { font-family:var(--mono); font-size:.78rem; color:var(--text2); }
@@ -560,7 +560,7 @@ function Export-MfaHtmlReport {
   .badge-ok { background:var(--ok-bg); color:var(--ok); }
   .badge-warn { background:var(--warn-bg); color:var(--warn); }
   .badge-crit { background:var(--crit-bg); color:var(--crit); }
-  .badge-neutral { background:rgba(56,189,248,.1); color:var(--accent); }
+  .badge-neutral { background:rgba(15,124,192,.1); color:var(--accent); }
   .card-chevron { font-size:.65rem; color:var(--text3); transition:transform .2s; }
   .card.collapsed .card-chevron { transform:rotate(-90deg); }
   .card-body { padding:1.25rem; }
@@ -571,7 +571,7 @@ function Export-MfaHtmlReport {
   .search-box::placeholder { color:var(--text3); }
   .filter-btn { font-family:var(--sans); font-size:.72rem; font-weight:700; padding:.3rem .8rem; border-radius:5px; border:1px solid var(--border); background:var(--bg3); color:var(--text3); cursor:pointer; transition:all .15s; }
   .filter-btn:hover { color:var(--text); border-color:var(--border2); }
-  .filter-btn.active-all { border-color:var(--accent2); color:var(--accent); background:rgba(56,189,248,.08); }
+  .filter-btn.active-all { border-color:var(--accent2); color:var(--accent); background:rgba(15,124,192,.08); }
   .filter-btn.active-crit { border-color:var(--crit); color:var(--crit); background:var(--crit-bg); }
   .filter-btn.active-ok { border-color:var(--ok); color:var(--ok); background:var(--ok-bg); }
   .filter-btn.active-admin { border-color:var(--warn); color:var(--warn); background:var(--warn-bg); }
@@ -581,7 +581,7 @@ function Export-MfaHtmlReport {
   th { padding:.55rem .9rem; text-align:left; font-size:.63rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); white-space:nowrap; border-bottom:1px solid var(--border); }
   td { padding:.5rem .9rem; border-bottom:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:.76rem; vertical-align:top; max-width:340px; word-break:break-all; }
   tr:last-child td { border-bottom:none; }
-  tbody tr:hover td { background:rgba(255,255,255,.02); }
+  tbody tr:hover td { background:rgba(15,124,192,.05); }
   .pill { display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:.7rem; font-weight:600; white-space:nowrap; }
   .method-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:.85rem; }
   .method-item { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); padding:.85rem 1rem; display:flex; align-items:center; gap:.85rem; }
@@ -631,9 +631,9 @@ function kpi(value,label,sub,cls){return '<div class="kpi ' + cls + '"><div clas
 function strip(items){return items.map(function(pair){return '<div class="strip-item"><span class="strip-label">' + pair[0] + '</span><span class="strip-value">' + esc(pair[1]) + '</span></div>';}).join('');}
 function card(id,icon,title,badgeText,badgeClass,body){return '<div class="card" id="' + id + '"><div class="card-header" onclick="toggleCard(this)"><span class="card-icon">' + icon + '</span><span class="card-title">' + title + '</span><span class="card-badge ' + badgeClass + '">' + badgeText + '</span><span class="card-chevron">&#x25BC;</span></div><div class="card-body">' + body + '</div></div>';}
 function toggleCard(h){h.closest('.card').classList.toggle('collapsed');}
-function methodPill(b){return b?'<span class="pill badge-ok">Yes</span>':'<span class="pill" style="background:rgba(244,63,94,.08);color:#f43f5e">No</span>';}
+  function methodPill(b){return b?'<span class="pill badge-ok">Yes</span>':'<span class="pill" style="background:rgba(220,38,38,.08);color:#dc2626">No</span>';}
 function mfaStatusPill(v){return v==='Registered'?'<span class="pill badge-ok">' + esc(v) + '</span>':'<span class="pill badge-crit">' + esc(v) + '</span>';}
-function adminPill(v){return v===true?'<span class="pill badge-warn">Admin</span>':'<span class="pill" style="background:rgba(56,189,248,.07);color:var(--accent)">User</span>';}
+  function adminPill(v){return v===true?'<span class="pill badge-warn">Admin</span>':'<span class="pill" style="background:rgba(15,124,192,.07);color:var(--accent)">User</span>';}
 function methodLabel(v){const map={'Authenticator App':'ok','FIDO2 Key':'ok','Passkey':'ok','WHfB':'ok','TOTP':'ok','Phone':'warn','Email OTP':'warn','Password Only':'crit','None':'crit'};const cls=map[v]||'neutral';return '<span class="pill badge-' + cls + '">' + esc(v) + '</span>';}
 let _activeFilter='all'; let _searchTerm='';
 function applyUserFilter(){const rows=document.querySelectorAll('#user-tbody tr');rows.forEach(function(row){const cells=Array.from(row.cells).map(function(c){return c.textContent.toLowerCase();}).join(' ');const matchSearch=!_searchTerm||cells.includes(_searchTerm);const mfaCell=row.cells[2]?row.cells[2].textContent.toLowerCase():'';const adminCell=row.cells[3]?row.cells[3].textContent.toLowerCase():'';let matchFilter=true;if(_activeFilter==='nomfa') matchFilter=mfaCell.includes('not');if(_activeFilter==='mfa') matchFilter=!mfaCell.includes('not');if(_activeFilter==='admin') matchFilter=adminCell.includes('admin');row.style.display=(matchSearch&&matchFilter)?'':'none';});}
