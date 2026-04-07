@@ -49,6 +49,8 @@ param (
     [string]   $ExportHtml,
     [switch]   $IncludeGuests    = $false,
     [string]   $TenantId         = $(if ($env:M365_TENANT_ID) { $env:M365_TENANT_ID } elseif ($env:AZURE_TENANT_ID) { $env:AZURE_TENANT_ID } else { $null }),
+    [ValidateSet("Auto", "Browser", "DeviceCode")]
+    [string]   $AuthMode         = "Auto",
     [string[]] $AdminRoles       = @(
         "Global Administrator",
         "Privileged Role Administrator",
@@ -101,6 +103,24 @@ function Write-SectionHeader {
     $pad = [math]::Floor((50 - $Title.Length) / 2)
     Write-Host (" " * $pad + $Title) -ForegroundColor Cyan
     Write-Host "$line" -ForegroundColor Cyan
+}
+
+function Get-PreferredAuthMode {
+    param([string]$RequestedMode)
+
+    if ($RequestedMode -and $RequestedMode -ne "Auto") {
+        return $RequestedMode
+    }
+
+    # Browser auth needs a desktop session. Containers and web terminals are typically headless.
+    $hasDisplay = -not [string]::IsNullOrWhiteSpace($env:DISPLAY) -or
+                  -not [string]::IsNullOrWhiteSpace($env:WAYLAND_DISPLAY)
+
+    if ($IsLinux -or $IsMacOS) {
+        return $(if ($hasDisplay) { "Browser" } else { "DeviceCode" })
+    }
+
+    return "Browser"
 }
 
 function Get-HttpErrorDetails {
@@ -254,17 +274,25 @@ function Connect-ToGraph {
         "Organization.Read.All"
     )
     try {
+        $selectedAuthMode = Get-PreferredAuthMode -RequestedMode $AuthMode
+
         if ($TenantId) {
             Write-Host "[*] Requested tenant: $TenantId" -ForegroundColor Cyan
-            Write-Host "[*] Using the requested tenant for browser sign-in and validating the tenant after authentication." -ForegroundColor DarkCyan
+            Write-Host "[*] Using the requested tenant for $selectedAuthMode sign-in and validating the tenant after authentication." -ForegroundColor DarkCyan
         }
         else {
-            Write-Host "[*] Using the organizations sign-in flow and validating the tenant after authentication." -ForegroundColor DarkCyan
+            Write-Host "[*] Using the organizations sign-in flow with $selectedAuthMode authentication." -ForegroundColor DarkCyan
         }
 
-        Write-Host "[*] Starting browser sign-in for Microsoft Graph..." -ForegroundColor Cyan
+        Write-Host "[*] Starting $selectedAuthMode sign-in for Microsoft Graph..." -ForegroundColor Cyan
         Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor DarkCyan
-        Write-Host "[*] Opening the Microsoft Graph authentication page..." -ForegroundColor Cyan
+        if ($selectedAuthMode -eq "Browser") {
+            Write-Host "[*] Opening the Microsoft Graph authentication page..." -ForegroundColor Cyan
+        }
+        else {
+            Write-Host "[*] Starting the Microsoft Graph device code flow..." -ForegroundColor Cyan
+            Write-Host "[*] Follow the code prompt below to complete sign-in in your browser." -ForegroundColor DarkCyan
+        }
 
         $connectParams = @{
             Scopes       = $scopes
@@ -275,6 +303,10 @@ function Connect-ToGraph {
 
         if ($TenantId) {
             $connectParams.TenantId = $TenantId.Trim()
+        }
+
+        if ($selectedAuthMode -eq "DeviceCode") {
+            $connectParams.UseDeviceCode = $true
         }
 
         Connect-MgGraph @connectParams
