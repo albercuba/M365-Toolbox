@@ -541,6 +541,8 @@ textarea {
 }
 
 .multiselect-grid .checkbox-field {
+  justify-self: start;
+  width: fit-content;
   justify-content: flex-start;
   align-items: flex-start;
   text-align: left;
