@@ -486,7 +486,13 @@ function Export-MfaHtmlReport {
             Whfb             = @($Report | Where-Object { $_.HasWHfB }).Count
             Passkey          = @($Report | Where-Object { $_.HasPasskey }).Count
         }
-        Users        = @($Report | Sort-Object IsAdmin -Descending, MfaRegistered, DisplayName)
+        Users        = @(
+            $Report | Sort-Object -Property @(
+                @{ Expression = "IsAdmin"; Descending = $true },
+                @{ Expression = "MfaRegistered"; Descending = $false },
+                @{ Expression = "DisplayName"; Descending = $false }
+            )
+        )
     } | ConvertTo-Json -Depth 6 -Compress
 
     $html = @"
