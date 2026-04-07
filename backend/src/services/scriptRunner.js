@@ -181,6 +181,48 @@ function buildUsageReportArgs(script, payload) {
   };
 }
 
+function buildGenericHtmlArgs(script, payload) {
+  const timestamp = new Date().toISOString().replace(/[:]/g, "-");
+  const outputBase = path.posix.join(
+    OUTPUT_DIR.replace(/\\/g, "/"),
+    `${script.outputBaseName || script.id}-${timestamp}`
+  );
+  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${outputBase}.html`];
+
+  for (const field of script.fields || []) {
+    const rawValue = payload[field.id];
+    const paramName = field.paramName || field.id;
+
+    if (field.type === "checkbox") {
+      if (rawValue) {
+        args.push(`-${paramName}`);
+      }
+      continue;
+    }
+
+    if (field.type === "multiselect") {
+      const items = normalizeListValue(rawValue);
+      if (items.length > 0) {
+        args.push(`-${paramName}`, items.join(","));
+      }
+      continue;
+    }
+
+    if (rawValue === undefined || rawValue === null || rawValue === "") {
+      continue;
+    }
+
+    args.push(`-${paramName}`, String(rawValue));
+  }
+
+  return {
+    args,
+    artifacts: {
+      htmlPath: `${outputBase}.html`
+    }
+  };
+}
+
 function buildArgs(script, payload) {
   const scriptPath = resolveScriptPath(script);
   const wrapperPath = path.posix.join(TOOLBOX_SCRIPT_MOUNT_ROOT.replace(/\\/g, "/"), "Invoke-ToolboxScript.ps1");
@@ -199,6 +241,10 @@ function buildArgs(script, payload) {
       ({ args, artifacts } = buildUsageReportArgs(runtimeScript, payload));
       break;
     default:
+      if (script.runner === "generic-html") {
+        ({ args, artifacts } = buildGenericHtmlArgs(runtimeScript, payload));
+        break;
+      }
       throw new Error(`No runner is defined for script '${script.id}'.`);
   }
 
