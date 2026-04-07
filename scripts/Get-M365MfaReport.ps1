@@ -24,6 +24,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $script:TenantDomain = ""
+$script:CanResolveAdminRoles = $true
 
 function Write-SectionHeader {
     param([string]$Title)
@@ -39,8 +40,7 @@ function Assert-RequiredModules {
         "Microsoft.Graph.Authentication",
         "Microsoft.Graph.Users",
         "Microsoft.Graph.Identity.SignIns",
-        "Microsoft.Graph.DirectoryObjects",
-        "Microsoft.Graph.Identity.DirectoryManagement"
+        "Microsoft.Graph.DirectoryObjects"
     )
 
     Write-Host ""
@@ -57,6 +57,20 @@ function Assert-RequiredModules {
 
         Import-Module $moduleName -Force -WarningAction SilentlyContinue
         Write-Host "  [+] $moduleName v$($installed.Version)" -ForegroundColor Green
+    }
+
+    $directoryManagementModule = Get-Module -ListAvailable -Name "Microsoft.Graph.Identity.DirectoryManagement" |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+
+    if ($directoryManagementModule) {
+        Import-Module "Microsoft.Graph.Identity.DirectoryManagement" -Force -WarningAction SilentlyContinue
+        Write-Host "  [+] Microsoft.Graph.Identity.DirectoryManagement v$($directoryManagementModule.Version)" -ForegroundColor Green
+        $script:CanResolveAdminRoles = $true
+    }
+    else {
+        Write-Warning "  [!] Microsoft.Graph.Identity.DirectoryManagement is not installed. Admin role resolution will be skipped."
+        $script:CanResolveAdminRoles = $false
     }
 }
 
@@ -155,6 +169,11 @@ function Get-AdminUserIds {
 
     Write-Host "[*] Resolving privileged role assignments..." -ForegroundColor Cyan
     $adminIds = [System.Collections.Generic.HashSet[string]]::new()
+
+    if (-not $script:CanResolveAdminRoles) {
+        Write-Warning "  [!] Skipping privileged role lookup because Microsoft.Graph.Identity.DirectoryManagement is unavailable."
+        return $adminIds
+    }
 
     try {
         $roles = Get-MgDirectoryRole -All -ErrorAction Stop
