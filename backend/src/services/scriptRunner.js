@@ -9,6 +9,20 @@ const SCRIPT_MOUNT_ROOT = process.env.SCRIPT_MOUNT_ROOT || "C:/VSCode/Powershell
 const TOOLBOX_SCRIPT_MOUNT_ROOT = process.env.TOOLBOX_SCRIPT_MOUNT_ROOT || path.resolve(process.cwd(), "../scripts");
 const runStore = new Map();
 
+function updateArtifactsFromStdout(run) {
+  if (!run?.stdout) {
+    return;
+  }
+
+  const htmlMatch = run.stdout.match(/\[\+\]\s+HTML dashboard exported to:\s+(.+)/i);
+  if (htmlMatch?.[1]) {
+    run.artifacts = {
+      ...run.artifacts,
+      htmlPath: htmlMatch[1].trim()
+    };
+  }
+}
+
 function ensureOutputDir() {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
@@ -248,6 +262,7 @@ export function startRun(scriptId, payload = {}) {
   });
 
   child.on("close", (code) => {
+    updateArtifactsFromStdout(run);
     run.exitCode = code;
     run.finishedAt = new Date().toISOString();
     run.status = code === 0 ? "completed" : "failed";
