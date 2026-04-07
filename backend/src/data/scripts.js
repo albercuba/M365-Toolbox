@@ -129,18 +129,6 @@ const checkMfaStatusScript = {
       required: false,
       placeholder: "contoso.onmicrosoft.com",
       helpText: "Recommended when Microsoft Graph cannot infer the tenant automatically."
-    },
-    {
-      id: "exportHtml",
-      label: "Export HTML dashboard",
-      type: "checkbox",
-      defaultValue: true
-    },
-    {
-      id: "exportXlsx",
-      label: "Export Excel report",
-      type: "checkbox",
-      defaultValue: true
     }
   ]
 };
