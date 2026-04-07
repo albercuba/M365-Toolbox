@@ -105,8 +105,11 @@ export function App() {
   const [formValues, setFormValues] = useState({});
   const [runs, setRuns] = useState([]);
   const [activeRun, setActiveRun] = useState(null);
+  const [activeRunHtml, setActiveRunHtml] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [runDetailsOpen, setRunDetailsOpen] = useState(true);
+  const [recentRunsOpen, setRecentRunsOpen] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -145,10 +148,45 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [activeRun]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRunHtml = async () => {
+      if (!activeRun?.id || activeRun.status !== "completed" || !activeRun.artifacts?.htmlPath) {
+        setActiveRunHtml("");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${apiBase}/runs/${activeRun.id}/html`);
+        if (!response.ok) {
+          setActiveRunHtml("");
+          return;
+        }
+
+        const html = await response.text();
+        if (!cancelled) {
+          setActiveRunHtml(html);
+        }
+      } catch {
+        if (!cancelled) {
+          setActiveRunHtml("");
+        }
+      }
+    };
+
+    loadRunHtml();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRun]);
+
   const handleScriptSelect = (script) => {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
     setError("");
+    setActiveRunHtml("");
   };
 
   const handleChange = (fieldId, nextValue) => {
@@ -283,31 +321,33 @@ export function App() {
                   </div>
 
                   <div className="manage-workspace">
-                    <div className="card">
-                      <div className="card-header">
-                        <span className="card-title">Run Script</span>
-                        <span className="card-badge badge-ok">{submitting ? "Starting" : "Ready"}</span>
-                      </div>
-                      <div className="card-body">
-                        <form className="settings-row" onSubmit={handleSubmit}>
-                          {selectedScript.fields.map((field) => (
-                            <Field key={field.id} field={field} value={formValues[field.id]} onChange={handleChange} />
-                          ))}
-                          <button className="add-btn" type="submit" disabled={submitting}>
-                            {submitting ? "Starting..." : "Run in Toolbox"}
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-
                     <div className="sections">
                       <div className="card">
                         <div className="card-header">
+                          <span className="card-title">Run Script</span>
+                          <span className="card-badge badge-ok">{submitting ? "Starting" : "Ready"}</span>
+                        </div>
+                        <div className="card-body">
+                          <form className="settings-row" onSubmit={handleSubmit}>
+                            {selectedScript.fields.map((field) => (
+                              <Field key={field.id} field={field} value={formValues[field.id]} onChange={handleChange} />
+                            ))}
+                            <button className="add-btn" type="submit" disabled={submitting}>
+                              {submitting ? "Starting..." : "Run in Toolbox"}
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+
+                      <div className={`card ${runDetailsOpen ? "" : "card-collapsed"}`}>
+                        <button type="button" className="card-header card-header-button" onClick={() => setRunDetailsOpen((current) => !current)}>
                           <span className="card-title">Run Details</span>
                           <span className={`card-badge ${activeRun ? (activeRun.status === "completed" ? "badge-ok" : activeRun.status === "failed" ? "badge-crit" : "badge-warn") : "badge-neutral"}`}>
                             {activeRun ? activeRun.status : "idle"}
                           </span>
-                        </div>
+                          <span className="card-chevron">{runDetailsOpen ? "▾" : "▸"}</span>
+                        </button>
+                        {runDetailsOpen ? (
                         <div className="card-body">
                           {!activeRun ? <div className="empty-row">Select a recent run or start a new one to inspect the output.</div> : null}
                           {activeRun ? (
@@ -341,13 +381,16 @@ export function App() {
                             </>
                           ) : null}
                         </div>
+                        ) : null}
                       </div>
 
-                      <div className="card">
-                        <div className="card-header">
+                      <div className={`card ${recentRunsOpen ? "" : "card-collapsed"}`}>
+                        <button type="button" className="card-header card-header-button" onClick={() => setRecentRunsOpen((current) => !current)}>
                           <span className="card-title">Recent Runs</span>
                           <span className="card-badge badge-neutral">{runs.length}</span>
-                        </div>
+                          <span className="card-chevron">{recentRunsOpen ? "▾" : "▸"}</span>
+                        </button>
+                        {recentRunsOpen ? (
                         <div className="card-body">
                           {runs.length === 0 ? (
                             <div className="empty-row">No runs yet.</div>
@@ -384,7 +427,20 @@ export function App() {
                             </div>
                           )}
                         </div>
+                        ) : null}
                       </div>
+
+                      {activeRunHtml ? (
+                        <div className="card">
+                          <div className="card-header">
+                            <span className="card-title">HTML Report</span>
+                            <span className="card-badge badge-ok">preview</span>
+                          </div>
+                          <div className="card-body">
+                            <iframe title="MFA HTML report preview" className="report-frame" srcDoc={activeRunHtml} />
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>

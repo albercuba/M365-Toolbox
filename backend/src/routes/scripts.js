@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getRun, getRuns, getScript, listScripts, startRun } from "../services/scriptRunner.js";
+import { getRun, getRunHtml, getRuns, getScript, listScripts, startRun } from "../services/scriptRunner.js";
 
 export const scriptsRouter = Router();
 
@@ -38,3 +38,12 @@ scriptsRouter.get("/runs/:id", (req, res) => {
   res.json(run);
 });
 
+scriptsRouter.get("/runs/:id/html", (req, res) => {
+  const htmlReport = getRunHtml(req.params.id);
+  if (!htmlReport) {
+    res.status(404).json({ message: "HTML report not found for this run." });
+    return;
+  }
+
+  res.type("html").send(htmlReport.content);
+});

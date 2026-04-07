@@ -365,6 +365,21 @@ textarea {
   border-bottom: 1px solid var(--border);
 }
 
+.card-header-button {
+  width: 100%;
+  background: transparent;
+  color: inherit;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.card-header-button:hover {
+  background: var(--bg3);
+}
+
 .card-title {
   font-size: 0.7rem;
   font-weight: 700;
@@ -400,6 +415,12 @@ textarea {
 .badge-neutral {
   background: rgba(56, 189, 248, 0.1);
   color: var(--accent);
+}
+
+.card-chevron {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--text3);
 }
 
 .card-body {
@@ -451,7 +472,6 @@ textarea {
 
 .manage-workspace {
   display: grid;
-  grid-template-columns: 360px 1fr;
   gap: 1rem;
   align-items: start;
 }
@@ -557,6 +577,14 @@ textarea {
   padding: 0.8rem;
   max-height: 420px;
   overflow: auto;
+}
+
+.report-frame {
+  width: 100%;
+  min-height: 900px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: #fff;
 }
 
 .table-scroll {

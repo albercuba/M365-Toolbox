@@ -149,7 +149,13 @@ function buildMfaStatusArgs(script, payload) {
     args.push("-ExportXlsx", `${outputBase}.xlsx`);
   }
 
-  return args;
+  return {
+    args,
+    artifacts: {
+      htmlPath: payload.exportHtml !== false ? `${outputBase}.html` : null,
+      xlsxPath: payload.exportXlsx !== false ? `${outputBase}.xlsx` : null
+    }
+  };
 }
 
 function buildArgs(script, payload) {
@@ -157,13 +163,14 @@ function buildArgs(script, payload) {
   const wrapperPath = path.posix.join(TOOLBOX_SCRIPT_MOUNT_ROOT.replace(/\\/g, "/"), "Invoke-ToolboxScript.ps1");
   const runtimeScript = { ...script, scriptPath };
   let args;
+  let artifacts = {};
 
   switch (script.id) {
     case "m365-compromised-account-remediation":
       args = buildCompromisedAccountArgs(runtimeScript, payload);
       break;
     case "m365-check-mfa-status":
-      args = buildMfaStatusArgs(runtimeScript, payload);
+      ({ args, artifacts } = buildMfaStatusArgs(runtimeScript, payload));
       break;
     default:
       throw new Error(`No runner is defined for script '${script.id}'.`);
@@ -171,6 +178,7 @@ function buildArgs(script, payload) {
 
   return {
     scriptPath,
+    artifacts,
     args: [
       "-NoProfile",
       "-ExecutionPolicy",
@@ -204,7 +212,7 @@ export function startRun(scriptId, payload = {}) {
   ensureOutputDir();
 
   const script = resolveScript(scriptId);
-  const { scriptPath, args } = buildArgs(script, payload);
+  const { scriptPath, args, artifacts } = buildArgs(script, payload);
   const runId = uuidv4();
   const run = {
     id: runId,
@@ -216,6 +224,7 @@ export function startRun(scriptId, payload = {}) {
     payload,
     command: ["pwsh", ...args].join(" "),
     scriptPath,
+    artifacts,
     stdout: "",
     stderr: "",
     exitCode: null
@@ -249,4 +258,21 @@ export function startRun(scriptId, payload = {}) {
   });
 
   return run;
+}
+
+export function getRunHtml(runId) {
+  const run = getRun(runId);
+  if (!run) {
+    return null;
+  }
+
+  const htmlPath = run.artifacts?.htmlPath;
+  if (!htmlPath || !fs.existsSync(htmlPath)) {
+    return null;
+  }
+
+  return {
+    path: htmlPath,
+    content: fs.readFileSync(htmlPath, "utf8")
+  };
 }
