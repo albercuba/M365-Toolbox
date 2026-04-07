@@ -115,6 +115,8 @@ function Field({ field, value, onChange }) {
 }
 
 export function App() {
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [scripts, setScripts] = useState([]);
   const [selectedScript, setSelectedScript] = useState(null);
   const [formValues, setFormValues] = useState({});
@@ -211,6 +213,29 @@ export function App() {
     }
   }, [activeRun?.id, activeRun?.status]);
 
+  useEffect(() => {
+    if (!isResizingSidebar) {
+      return undefined;
+    }
+
+    const handlePointerMove = (event) => {
+      const nextWidth = Math.min(Math.max(event.clientX, 220), 420);
+      setSidebarWidth(nextWidth);
+    };
+
+    const handlePointerUp = () => {
+      setIsResizingSidebar(false);
+    };
+
+    window.addEventListener("mousemove", handlePointerMove);
+    window.addEventListener("mouseup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handlePointerMove);
+      window.removeEventListener("mouseup", handlePointerUp);
+    };
+  }, [isResizingSidebar]);
+
   const handleScriptSelect = (script) => {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
@@ -301,7 +326,7 @@ export function App() {
         </div>
       </header>
 
-      <div className="layout">
+      <div className="layout" style={{ "--sidebar-w": `${sidebarWidth}px` }}>
         <aside className="sidebar">
           <div className="sidebar-header">
             <div className="sidebar-label">Script Catalog</div>
@@ -333,6 +358,13 @@ export function App() {
             {runs.length === 0 ? "No runs yet." : `${runs.length} tracked run${runs.length === 1 ? "" : "s"}`}
           </div>
         </aside>
+        <div
+          className={`sidebar-resizer${isResizingSidebar ? " active" : ""}`}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize script catalog"
+          onMouseDown={() => setIsResizingSidebar(true)}
+        />
 
         <main className="main">
           {error ? (

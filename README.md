@@ -1,79 +1,123 @@
 # M365 Toolbox
 
-M365 Toolbox - Web-based PowerShell operations for Microsoft 365
+M365 Toolbox is a Dockerized web console for approved Microsoft 365 PowerShell operations. It provides a script catalog, browser-based execution, device-code sign-in prompts, tracked run history, and inline HTML report previews directly in the UI.
 
-This project is a Dockerized web application for running approved Microsoft 365 PowerShell scripts from a browser-based interface. It is designed to grow into a reusable operations console with a script catalog, safer parameter handling, per-run output tracking, and report previews directly in the UI.
-
-## Current scaffold
+## Project layout
 
 - `backend/`
-  Express API with a PowerShell runner and script catalog
+  Express API, script catalog, PowerShell runner, run tracking, and HTML artifact endpoints
 - `frontend/`
-  React/Vite web UI for browsing scripts and launching runs
+  React/Vite UI with script catalog, recent runs, inline report previews, and device-code popup handling
+- `scripts/`
+  Toolbox-native PowerShell scripts and shared helpers such as `Shared-ToolboxReport.ps1`
 - `output/`
-  Local output folder mounted into the backend container
+  Generated report artifacts mounted into the backend container
 - `docker-compose.yml`
-  Starts the backend and frontend together
+  Starts frontend and backend together
 
-## Integrated scripts
+## Current script catalog
 
-- `M365 - CompromisedAccountRemediation/M365-CompromisedAccountRemediation.ps1`
+Core reports and workflows:
+
+- `scripts/M365-CompromisedAccountRemediation.ps1`
 - `scripts/M365-MfaReport.ps1`
+- `scripts/M365-UsageReport.ps1`
+- `scripts/M365-LicensingReport.ps1`
+- `scripts/M365-GuestAccessReport.ps1`
+- `scripts/M365-ConditionalAccessReport.ps1`
+- `scripts/M365-MailForwardingAudit.ps1`
+- `scripts/M365-SharedMailboxReport.ps1`
+- `scripts/M365-SignInRiskReport.ps1`
+- `scripts/M365-TeamsExternalAccessReport.ps1`
+- `scripts/M365-SharePointSharingReport.ps1`
+- `scripts/M365-SecureScoreSnapshot.ps1`
+- `scripts/M365-AdminRoleAudit.ps1`
+
+Additional audit and hygiene reports:
+
+- `scripts/M365-InactiveUsersReport.ps1`
+- `scripts/M365-AppConsentAudit.ps1`
+- `scripts/M365-MailboxPermissionAudit.ps1`
+- `scripts/M365-ExternalSharingLinksReport.ps1`
+- `scripts/M365-DistributionGroupAudit.ps1`
+- `scripts/M365-ServiceHealthSnapshot.ps1`
+- `scripts/M365-AuthenticationPolicyReport.ps1`
+- `scripts/M365-PrivilegedAppAudit.ps1`
+- `scripts/M365-DkimDmarcReport.ps1`
+- `scripts/M365-GroupLifecycleReport.ps1`
+
+## Runtime model
 
 The backend mounts:
 
-- `../Powershell` into the container at `/workspace-scripts`
 - `./scripts` into the container at `/toolbox-scripts`
+- `./output` into the container output path used for generated artifacts
 
-The compromised-account workflow runs from `/workspace-scripts`, while toolbox-native scripts such as the MFA report run from `/toolbox-scripts`.
+Scripts are launched through `scripts/Invoke-ToolboxScript.ps1`, and the backend tracks:
 
-## How it works
+- command line
+- stdout
+- stderr
+- status
+- exit code
+- generated HTML artifact paths
 
-1. The frontend loads the script catalog from the backend.
-2. The user fills in the approved form fields for a script.
-3. The backend converts those values into an allowlisted `pwsh` command.
-4. The script runs inside the backend container.
-5. Stdout, stderr, status, and generated files are available through the UI and the mounted `output/` folder.
-6. For the MFA report, the UI detects the Microsoft device-code prompt, shows the code in a popup, and lets you open the Microsoft device login page directly.
-7. Completed MFA runs can render their generated HTML dashboard inline and offer a direct HTML download.
+## UI behavior
+
+- The left script catalog is resizable on desktop.
+- Runs can be reopened from `Recent Runs`.
+- `Run Details` and `Recent Runs` collapse automatically after successful completion.
+- HTML reports are rendered inline beneath `Recent Runs`.
+- HTML reports can be downloaded directly from the report card.
+- When a script emits the Microsoft device-code prompt, the UI opens a modal with:
+  - the device code
+  - a clickable link to `https://login.microsoft.com/device`
 
 ## Start with Docker
 
 ```powershell
 cd C:\VSCode\M365-Toolbox
 docker compose build
-docker compose up
+docker compose up -d
 ```
 
 Then open:
 
 - Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:3001/api/health`
+- Backend API health: `http://localhost:3001/api/health`
+
+If you changed backend scripts, the script catalog, or PowerShell module installation, rebuild the backend image:
+
+```powershell
+docker compose build backend
+docker compose up -d backend
+```
 
 ## Notes
 
-- The backend container installs `pwsh` so it can run PowerShell scripts directly.
-- The mounted `../Powershell` folder is read-only inside the container.
-- The mounted `./scripts` folder is also read-only inside the container and is intended for toolbox-managed scripts.
-- Only allowlisted parameters are exposed by the UI right now.
-- The script registry in `backend/src/data/scripts.js` is the place to add future scripts.
-- The MFA report uses Microsoft Graph device-code authentication inside the web UI and browser-auth/device-auth behavior can differ between local PowerShell and the containerized runner.
+- The backend container installs `pwsh` and the required Microsoft Graph / Exchange Online modules.
+- Toolbox-native scripts live in `scripts/` and are exposed through the registry in `backend/src/data/scripts.js`.
+- Shared report helpers live in `scripts/Shared-ToolboxReport.ps1`.
+- Most HTML-style reports use the shared helper for:
+  - device-code Graph auth
+  - common HTML dashboard rendering
+  - timestamped output naming
+  - Graph collection and CSV import helpers
+- MFA, usage, and compromised-account workflows remain standalone entry scripts with their own specialized logic.
 
-## MFA report flow
+## How a run works
 
-1. Open `M365 MFA Report` in the script catalog.
-2. Start the run from the web UI.
-3. When the script prints the Microsoft device-code prompt, the UI opens a popup with:
-   - the device code
-   - a clickable link to `https://login.microsoft.com/device`
-4. Complete sign-in with an admin account that has the required Microsoft Graph permissions.
-5. After the run finishes, the generated HTML dashboard appears in the UI under the report card and can be downloaded directly.
+1. The frontend loads the script catalog from the backend.
+2. You choose a script in the left catalog and fill in the allowlisted form fields.
+3. The backend turns those values into a controlled `pwsh` invocation.
+4. The script runs inside the backend container.
+5. The UI polls run status and captures stdout/stderr.
+6. If the script produces an HTML dashboard, the backend serves it back to the UI for preview and download.
 
 ## Next growth areas
 
 - authentication and RBAC
-- secrets and certificate handling
-- run history persistence
-- downloadable output browser beyond the MFA HTML report
-- approvals for high-impact scripts
-- additional M365 scripts and categories
+- run history persistence beyond process memory
+- approvals for high-impact workflows
+- richer artifact browsing for CSV, XLSX, and logs
+- secret and certificate-backed auth options where appropriate

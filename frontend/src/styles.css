@@ -163,6 +163,34 @@ textarea {
   overflow: hidden;
 }
 
+.sidebar-resizer {
+  position: fixed;
+  top: var(--topbar-h);
+  left: calc(var(--sidebar-w) - 3px);
+  bottom: 0;
+  width: 6px;
+  z-index: 150;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.sidebar-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.sidebar-resizer:hover::before,
+.sidebar-resizer.active::before {
+  background: var(--accent2);
+}
+
 .sidebar-header {
   padding: 1rem 1.1rem 0.75rem;
   border-bottom: 1px solid var(--border);
@@ -814,6 +842,10 @@ tr:last-child td {
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-resizer {
+    display: none;
   }
 
   .main {
