@@ -685,17 +685,22 @@ textarea {
 }
 
 .device-code-box {
-  font-family: var(--mono);
-  font-size: 1.5rem;
-  font-weight: 700;
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-weight: 700;
   letter-spacing: 0.16em;
   text-align: center;
   color: var(--accent);
   background: var(--bg4);
   border: 1px solid var(--border2);
-  border-radius: var(--r);
-  padding: 1rem;
-}
+    border-radius: var(--r);
+    padding: 1rem;
+  }
+
+.modal-body > a {
+    align-self: center;
+    text-align: center;
+  }
 
 .table-scroll {
   overflow-x: auto;
