@@ -1,6 +1,6 @@
 const compromisedAccountScript = {
   id: "m365-compromised-account-remediation",
-  name: "Compromised Account Remediation",
+  name: "M365 Compromised Account Remediation",
   category: "Incident Response",
   summary: "Contain a compromised Microsoft 365 account and generate an incident dashboard.",
   description:
@@ -86,7 +86,7 @@ const checkMfaStatusScript = {
   summary: "Generate a full tenant MFA report with coverage, admin risk, and exportable dashboards.",
   description:
     "Runs the approved Microsoft 365 MFA reporting workflow, prompts for admin sign-in by device code, and exports Excel and HTML reports into the toolbox output folder.",
-  scriptRelativePath: "Get-M365MfaReport.ps1",
+  scriptRelativePath: "M365-MfaReport.ps1",
   scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
   outputs:
     "Writes Excel and HTML MFA reports to the configured output directory.",
@@ -116,7 +116,7 @@ const usageReportScript = {
   summary: "Generate OneDrive, SharePoint, and Mailbox storage usage dashboards.",
   description:
     "Runs the approved Microsoft 365 storage usage workflow with Microsoft Graph device-code authentication and exports an HTML dashboard into the toolbox output folder.",
-  scriptRelativePath: "Get-M365UsageReport.ps1",
+  scriptRelativePath: "M365-UsageReport.ps1",
   scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
   outputs:
     "Writes an HTML dashboard with OneDrive, SharePoint, and mailbox usage sections to the configured output directory.",

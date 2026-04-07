@@ -18,7 +18,7 @@ This project is a Dockerized web application for running approved Microsoft 365 
 ## Integrated scripts
 
 - `M365 - CompromisedAccountRemediation/M365-CompromisedAccountRemediation.ps1`
-- `scripts/Get-M365MfaReport.ps1`
+- `scripts/M365-MfaReport.ps1`
 
 The backend mounts:
 
