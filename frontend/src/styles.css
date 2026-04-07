@@ -540,6 +540,12 @@ textarea {
   padding: 0.7rem;
 }
 
+.multiselect-grid .checkbox-field {
+  justify-content: flex-start;
+  align-items: flex-start;
+  text-align: left;
+}
+
 .quick-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

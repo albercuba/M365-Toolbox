@@ -169,7 +169,9 @@ function buildMfaStatusArgs(script, payload) {
 }
 
 function buildUsageReportArgs(script, payload) {
-  const args = ["-OutputPath", OUTPUT_DIR];
+  const timestamp = new Date().toISOString().replace(/[:]/g, "-");
+  const outputBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-usage-report-${timestamp}`);
+  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${outputBase}.html`];
   const reports = normalizeListValue(payload.reports);
 
   if (reports.length > 0) {
@@ -182,7 +184,9 @@ function buildUsageReportArgs(script, payload) {
 
   return {
     args,
-    artifacts: {}
+    artifacts: {
+      htmlPath: `${outputBase}.html`
+    }
   };
 }
 
