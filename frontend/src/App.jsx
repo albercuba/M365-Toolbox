@@ -2,6 +2,21 @@ import { useEffect, useState } from "react";
 
 const apiBase = "/api";
 
+function extractDeviceCodePrompt(stdout) {
+  if (!stdout) return null;
+
+  const match = stdout.match(
+    /To sign in, use a web browser to open the page (https:\/\/[^\s]+) and enter the code ([A-Z0-9-]+) to authenticate\./i
+  );
+
+  if (!match) return null;
+
+  return {
+    url: match[1],
+    code: match[2]
+  };
+}
+
 async function parseApiResponse(response) {
   const contentType = response.headers.get("content-type") || "";
 
@@ -110,6 +125,7 @@ export function App() {
   const [submitting, setSubmitting] = useState(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
   const [recentRunsOpen, setRecentRunsOpen] = useState(true);
+  const [devicePromptDismissed, setDevicePromptDismissed] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -189,6 +205,12 @@ export function App() {
     }
   }, [activeRun?.status]);
 
+  useEffect(() => {
+    if (activeRun?.status === "running") {
+      setDevicePromptDismissed(false);
+    }
+  }, [activeRun?.id, activeRun?.status]);
+
   const handleScriptSelect = (script) => {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
@@ -196,6 +218,7 @@ export function App() {
     setActiveRunHtml("");
     setRunDetailsOpen(true);
     setRecentRunsOpen(true);
+    setDevicePromptDismissed(false);
   };
 
   const handleChange = (fieldId, nextValue) => {
@@ -222,6 +245,7 @@ export function App() {
       }
 
       setActiveRun(data);
+      setDevicePromptDismissed(false);
       setRunDetailsOpen(true);
       setRecentRunsOpen(true);
       const runsResponse = await fetch(`${apiBase}/runs`);
@@ -233,8 +257,31 @@ export function App() {
     }
   };
 
+  const devicePrompt = extractDeviceCodePrompt(activeRun?.stdout);
+  const showDevicePrompt = Boolean(devicePrompt) && activeRun?.status === "running" && !devicePromptDismissed;
+
   return (
     <div className="app-shell">
+      {showDevicePrompt ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="device-auth-title">
+            <div className="card-header">
+              <span className="card-title" id="device-auth-title">Microsoft Authentication Required</span>
+              <button type="button" className="modal-close" onClick={() => setDevicePromptDismissed(true)}>
+                Close
+              </button>
+            </div>
+            <div className="card-body modal-body">
+              <p className="empty-sub">Open the Microsoft device login page and enter this code to continue the script run.</p>
+              <div className="device-code-box">{devicePrompt.code}</div>
+              <a className="filter-btn active-all" href={devicePrompt.url} target="_blank" rel="noreferrer">
+                Open Microsoft Device Login
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <header className="topbar">
         <div className="topbar-logo">M365 Toolbox</div>
         <div className="topbar-title">Web-based PowerShell operations for Microsoft 365</div>

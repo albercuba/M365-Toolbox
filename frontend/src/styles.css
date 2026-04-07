@@ -592,6 +592,59 @@ textarea {
   background: #fff;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(4, 8, 14, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modal-card {
+  width: min(520px, 100%);
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r2);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.modal-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.modal-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: var(--r);
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  border-color: var(--border2);
+  color: var(--text);
+}
+
+.device-code-box {
+  font-family: var(--mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-align: center;
+  color: var(--accent);
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  padding: 1rem;
+}
+
 .table-scroll {
   overflow-x: auto;
   border: 1px solid var(--border);
