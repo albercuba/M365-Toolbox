@@ -8,14 +8,14 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("IdentityRiskyUser.Read.All", "IdentityRiskEvent.Read.All", "AuditLog.Read.All", "User.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING SIGN-IN RISK DATA"
 
-$riskyUsers = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/identityProtection/riskyUsers?$top=200')
-$riskDetections = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/identityProtection/riskDetections?$top=200')
+$riskyUsers = @(Get-MgRiskyUser -All -ErrorAction Stop)
+$riskDetections = @(Get-MgRiskDetection -All -ErrorAction Stop)
 $cutoff = (Get-Date).AddDays(-1 * $LookbackDays)
 
 $filteredDetections = @(
