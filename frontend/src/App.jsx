@@ -215,7 +215,16 @@ export function App() {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
     setError("");
+    setActiveRun(null);
     setActiveRunHtml("");
+    setRunDetailsOpen(true);
+    setRecentRunsOpen(true);
+    setDevicePromptDismissed(false);
+  };
+
+  const handleOpenRun = (run) => {
+    setActiveRunHtml("");
+    setActiveRun(run ? { ...run } : null);
     setRunDetailsOpen(true);
     setRecentRunsOpen(true);
     setDevicePromptDismissed(false);
@@ -244,6 +253,7 @@ export function App() {
         throw new Error(data.message || "Failed to start run.");
       }
 
+      setActiveRunHtml("");
       setActiveRun(data);
       setDevicePromptDismissed(false);
       setRunDetailsOpen(true);
@@ -474,7 +484,7 @@ export function App() {
                                       </td>
                                       <td>{formatDate(run.startedAt)}</td>
                                       <td className="table-actions">
-                                        <button type="button" className="filter-btn active-all" onClick={() => setActiveRun(run)}>
+                                        <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
                                           Open
                                         </button>
                                       </td>
