@@ -133,4 +133,36 @@ const checkMfaStatusScript = {
   ]
 };
 
-export const scripts = [compromisedAccountScript, checkMfaStatusScript];
+const usageReportScript = {
+  id: "m365-usage-report",
+  name: "M365 Usage Report",
+  category: "Reporting",
+  summary: "Generate OneDrive, SharePoint, and mailbox storage usage CSV reports.",
+  description:
+    "Runs the approved Microsoft 365 storage usage workflow with Microsoft Graph device-code authentication and exports the selected CSV reports into the toolbox output folder.",
+  scriptRelativePath: "Get-M365UsageReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  outputs:
+    "Writes OneDrive, SharePoint, and mailbox usage CSV reports to the configured output directory.",
+  fields: [
+    {
+      id: "reports",
+      label: "Reports",
+      type: "multiselect",
+      required: true,
+      defaultValue: ["OneDrive", "SharePoint", "Mailbox"],
+      options: ["OneDrive", "SharePoint", "Mailbox"],
+      helpText: "Select one or more report types to export."
+    },
+    {
+      id: "tenantId",
+      label: "Tenant ID or Domain",
+      type: "text",
+      required: false,
+      placeholder: "contoso.onmicrosoft.com",
+      helpText: "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ]
+};
+
+export const scripts = [compromisedAccountScript, checkMfaStatusScript, usageReportScript];

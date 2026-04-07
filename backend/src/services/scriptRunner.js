@@ -168,6 +168,24 @@ function buildMfaStatusArgs(script, payload) {
   };
 }
 
+function buildUsageReportArgs(script, payload) {
+  const args = ["-OutputPath", OUTPUT_DIR];
+  const reports = normalizeListValue(payload.reports);
+
+  if (reports.length > 0) {
+    args.push("-Reports", reports.join(","));
+  }
+
+  if (payload.tenantId) {
+    args.push("-TenantId", String(payload.tenantId));
+  }
+
+  return {
+    args,
+    artifacts: {}
+  };
+}
+
 function buildArgs(script, payload) {
   const scriptPath = resolveScriptPath(script);
   const wrapperPath = path.posix.join(TOOLBOX_SCRIPT_MOUNT_ROOT.replace(/\\/g, "/"), "Invoke-ToolboxScript.ps1");
@@ -181,6 +199,9 @@ function buildArgs(script, payload) {
       break;
     case "m365-check-mfa-status":
       ({ args, artifacts } = buildMfaStatusArgs(runtimeScript, payload));
+      break;
+    case "m365-usage-report":
+      ({ args, artifacts } = buildUsageReportArgs(runtimeScript, payload));
       break;
     default:
       throw new Error(`No runner is defined for script '${script.id}'.`);
