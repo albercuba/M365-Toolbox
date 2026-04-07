@@ -253,31 +253,23 @@ function Connect-ToGraph {
         "Reports.Read.All",
         "Organization.Read.All"
     )
-    $deviceCodeScopes = @(
-        $scopes,
-        "offline_access",
-        "openid",
-        "profile"
-    )
-
     try {
         if ($TenantId) {
             Write-Host "[*] Requested tenant: $TenantId" -ForegroundColor Cyan
-            Write-Host "[*] Using the requested tenant for device code sign-in and validating the tenant after authentication." -ForegroundColor DarkCyan
+            Write-Host "[*] Using the requested tenant for browser sign-in and validating the tenant after authentication." -ForegroundColor DarkCyan
         }
         else {
             Write-Host "[*] Using the organizations sign-in flow and validating the tenant after authentication." -ForegroundColor DarkCyan
         }
 
-        Write-Host "[*] Starting device code sign-in for Microsoft Graph..." -ForegroundColor Cyan
+        Write-Host "[*] Starting browser sign-in for Microsoft Graph..." -ForegroundColor Cyan
         Write-Host "[*] Use an admin account that can read users, authentication methods, roles, audit logs, and reports." -ForegroundColor DarkCyan
-        Write-Host "[*] Launching the Microsoft Graph device code flow..." -ForegroundColor Cyan
+        Write-Host "[*] Opening the Microsoft Graph authentication page..." -ForegroundColor Cyan
 
         $connectParams = @{
             Scopes       = $scopes
             NoWelcome    = $true
             ContextScope = "Process"
-            UseDeviceCode = $true
             ErrorAction  = "Stop"
         }
 
