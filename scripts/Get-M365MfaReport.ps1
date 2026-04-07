@@ -467,364 +467,179 @@ function Export-MfaHtmlReport {
     $admins = @($Report | Where-Object { $_.IsAdmin }).Count
     $adminNoMfa = @($Report | Where-Object { $_.IsAdmin -and -not $_.MfaRegistered }).Count
     $pct = if ($total -gt 0) { [math]::Round(($registered / $total) * 100, 1) } else { 0 }
-    $displayTenant = if ($TenantDomain) { $TenantDomain } else { $TenantId }
-    $encodedDisplayTenant = [System.Net.WebUtility]::HtmlEncode($displayTenant)
-    $encodedReportDate = [System.Net.WebUtility]::HtmlEncode($ReportDate)
+
+    $sortedUsers = @(
+        $Report | Sort-Object -Property @(
+            @{ Expression = 'IsAdmin'; Descending = $true },
+            @{ Expression = 'MfaRegistered'; Descending = $true },
+            @{ Expression = 'DisplayName'; Descending = $false }
+        )
+    )
 
     $htmlData = [PSCustomObject]@{
-        Tenant       = if ($TenantDomain) { $TenantDomain } else { $TenantId }
-        ReportDate   = $ReportDate
-        TotalUsers   = $total
-        Registered   = $registered
-        NotRegistered = $notRegistered
-        CoveragePct  = $pct
-        Admins       = $admins
-        AdminNoMfa   = $adminNoMfa
-        MethodCounts = [PSCustomObject]@{
-            AuthenticatorApp = @($Report | Where-Object { $_.HasAuthApp }).Count
-            Fido2            = @($Report | Where-Object { $_.HasFIDO2 }).Count
-            Phone            = @($Report | Where-Object { $_.HasPhone }).Count
-            Totp             = @($Report | Where-Object { $_.HasTOTP }).Count
-            EmailOtp         = @($Report | Where-Object { $_.HasEmailOTP }).Count
-            Whfb             = @($Report | Where-Object { $_.HasWHfB }).Count
-            Passkey          = @($Report | Where-Object { $_.HasPasskey }).Count
-        }
-        Users        = @(
-            $Report | Sort-Object -Property @(
-                @{ Expression = "IsAdmin"; Descending = $true },
-                @{ Expression = "MfaRegistered"; Descending = $false },
-                @{ Expression = "DisplayName"; Descending = $false }
-            )
-        )
+        tenant     = if ($TenantDomain) { $TenantDomain } else { $TenantId }
+        reportDate = $ReportDate
+        total      = $total
+        registered = $registered
+        notReg     = $notRegistered
+        pct        = $pct
+        admins     = $admins
+        adminNoMfa = $adminNoMfa
+        cntAuthApp = @($Report | Where-Object { $_.HasAuthApp }).Count
+        cntFido2   = @($Report | Where-Object { $_.HasFIDO2 }).Count
+        cntPhone   = @($Report | Where-Object { $_.HasPhone }).Count
+        cntTotp    = @($Report | Where-Object { $_.HasTOTP }).Count
+        cntEmail   = @($Report | Where-Object { $_.HasEmailOTP }).Count
+        cntWhfb    = @($Report | Where-Object { $_.HasWHfB }).Count
+        cntPasskey = @($Report | Where-Object { $_.HasPasskey }).Count
+        users      = $sortedUsers
     } | ConvertTo-Json -Depth 6 -Compress
 
     $html = @"
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>M365 MFA Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #09111f;
-    --panel: #101a2b;
-    --panel-2: #14233a;
-    --line: #223553;
-    --text: #e6efff;
-    --muted: #93a8c9;
-    --ok: #1fb56c;
-    --warn: #f0ad2c;
-    --crit: #ef5b6b;
-    --accent: #4db6ff;
+    --bg:#080c14; --bg2:#0c1220; --bg3:#101828; --bg4:#141e2e;
+    --border:#1a2840; --border2:#223050;
+    --text:#c8d8f0; --text2:#6a88b0; --text3:#3a5070;
+    --accent:#38bdf8; --accent2:#0ea5e9;
+    --ok:#10b981; --ok-bg:rgba(16,185,129,.1);
+    --warn:#f59e0b; --warn-bg:rgba(245,158,11,.1);
+    --crit:#f43f5e; --crit-bg:rgba(244,63,94,.1);
+    --mono:'JetBrains Mono',monospace; --sans:'DM Sans',sans-serif;
+    --r:8px; --r2:12px;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: radial-gradient(circle at top, #13233d 0%, var(--bg) 45%);
-    color: var(--text);
-    font: 14px/1.5 Segoe UI, Arial, sans-serif;
-  }
-  .wrap {
-    max-width: 1380px;
-    margin: 0 auto;
-    padding: 28px 20px 40px;
-  }
-  .hero {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-  }
-  .hero h1 {
-    margin: 0;
-    font-size: 28px;
-  }
-  .meta {
-    color: var(--muted);
-    font-size: 13px;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 14px;
-    margin: 20px 0;
-  }
-  .card {
-    background: linear-gradient(180deg, var(--panel), var(--panel-2));
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 16px;
-    box-shadow: 0 12px 30px rgba(0,0,0,.2);
-  }
-  .label {
-    color: var(--muted);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    margin-bottom: 10px;
-  }
-  .value {
-    font-size: 28px;
-    font-weight: 700;
-  }
-  .ok { color: var(--ok); }
-  .warn { color: var(--warn); }
-  .crit { color: var(--crit); }
-  .accent { color: var(--accent); }
-  .section {
-    margin-top: 22px;
-  }
-  .section h2 {
-    margin: 0 0 12px;
-    font-size: 18px;
-  }
-  .toolbar {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .toolbar input {
-    background: #0c1524;
-    color: var(--text);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 10px 12px;
-    min-width: 260px;
-  }
-  .toolbar button {
-    background: #0c1524;
-    color: var(--muted);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 9px 12px;
-    cursor: pointer;
-  }
-  .toolbar button.active {
-    color: var(--text);
-    border-color: var(--accent);
-  }
-  .coverage {
-    height: 10px;
-    background: #0c1524;
-    border-radius: 999px;
-    overflow: hidden;
-    border: 1px solid var(--line);
-  }
-  .coverage > div {
-    height: 100%;
-    background: linear-gradient(90deg, var(--ok), #52d89a);
-  }
-  .method-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-  }
-  .method-item {
-    background: #0c1524;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 12px;
-  }
-  .table-wrap {
-    overflow: auto;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: #0c1524;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 1080px;
-  }
-  th, td {
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--line);
-    text-align: left;
-    vertical-align: top;
-  }
-  th {
-    position: sticky;
-    top: 0;
-    background: #122038;
-    color: var(--muted);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-  }
-  tr:hover td {
-    background: rgba(255,255,255,.02);
-  }
-  .pill {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .pill-ok {
-    background: rgba(31,181,108,.14);
-    color: #74e2aa;
-  }
-  .pill-crit {
-    background: rgba(239,91,107,.14);
-    color: #ff97a3;
-  }
-  .pill-admin {
-    background: rgba(240,173,44,.14);
-    color: #ffd07a;
-  }
-  .muted { color: var(--muted); }
+  html { scroll-behavior:smooth; }
+  body { font-family:var(--sans); background:var(--bg); color:var(--text); min-height:100vh; line-height:1.6; }
+  body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events:none; z-index:0; opacity:.4; }
+  .topbar { position:sticky; top:0; z-index:100; background:rgba(8,12,20,.9); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); padding:0 2rem; height:52px; display:flex; align-items:center; gap:1.5rem; }
+  .topbar-logo { font-family:var(--mono); font-size:.72rem; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); }
+  .topbar-sep  { color:var(--border2); }
+  .topbar-server { font-family:var(--mono); font-size:.78rem; color:var(--text2); }
+  .topbar-nav { display:flex; gap:.15rem; margin-left:.75rem; }
+  .topbar-nav a { font-size:.72rem; font-weight:600; color:var(--text3); text-decoration:none; padding:.3rem .65rem; border-radius:var(--r); transition:all .15s; }
+  .topbar-nav a:hover { background:var(--bg3); color:var(--text); }
+  .topbar-right { margin-left:auto; display:flex; align-items:center; gap:1rem; }
+  .topbar-time { font-family:var(--mono); font-size:.7rem; color:var(--text3); }
+  .page { max-width:1440px; margin:0 auto; padding:1.75rem 2rem; position:relative; z-index:1; }
+  .server-strip { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r2); padding:1rem 1.5rem; display:flex; flex-wrap:wrap; gap:2.5rem; margin-bottom:1.5rem; }
+  .strip-item { display:flex; flex-direction:column; gap:.2rem; }
+  .strip-label { font-size:.63rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--text3); }
+  .strip-value { font-family:var(--mono); font-size:.82rem; color:var(--accent); }
+  .hero { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.85rem; margin-bottom:1.5rem; }
+  .kpi { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r2); padding:1rem 1.1rem; position:relative; overflow:hidden; transition:transform .2s,border-color .2s; cursor:default; }
+  .kpi:hover { transform:translateY(-2px); border-color:var(--border2); }
+  .kpi::after { content:''; position:absolute; top:0;left:0;right:0; height:2px; border-radius:2px 2px 0 0; }
+  .kpi.ok::after { background:var(--ok); }
+  .kpi.warn::after { background:var(--warn); }
+  .kpi.crit::after { background:var(--crit); }
+  .kpi.neutral::after { background:var(--accent2); }
+  .kpi-label { font-size:.63rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); margin-bottom:.4rem; }
+  .kpi-value { font-family:var(--mono); font-size:1.7rem; font-weight:700; line-height:1; }
+  .kpi.ok .kpi-value { color:var(--ok); }
+  .kpi.warn .kpi-value { color:var(--warn); }
+  .kpi.crit .kpi-value { color:var(--crit); }
+  .kpi.neutral .kpi-value { color:var(--accent); }
+  .kpi-sub { font-size:.68rem; color:var(--text3); margin-top:.35rem; font-family:var(--mono); }
+  .sections { display:grid; gap:1.25rem; }
+  .card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r2); overflow:hidden; }
+  .card-header { display:flex; align-items:center; gap:.75rem; padding:.85rem 1.25rem; border-bottom:1px solid var(--border); cursor:pointer; user-select:none; transition:background .15s; }
+  .card-header:hover { background:var(--bg3); }
+  .card-icon { font-size:.95rem; width:1.4rem; text-align:center; opacity:.7; }
+  .card-title { font-size:.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text2); flex:1; }
+  .card-badge { font-family:var(--mono); font-size:.7rem; padding:.18rem .55rem; border-radius:4px; }
+  .badge-ok { background:var(--ok-bg); color:var(--ok); }
+  .badge-warn { background:var(--warn-bg); color:var(--warn); }
+  .badge-crit { background:var(--crit-bg); color:var(--crit); }
+  .badge-neutral { background:rgba(56,189,248,.1); color:var(--accent); }
+  .card-chevron { font-size:.65rem; color:var(--text3); transition:transform .2s; }
+  .card.collapsed .card-chevron { transform:rotate(-90deg); }
+  .card-body { padding:1.25rem; }
+  .card.collapsed .card-body { display:none; }
+  .toolbar { display:flex; gap:.65rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center; }
+  .search-box { flex:1; min-width:220px; max-width:360px; background:var(--bg3); border:1px solid var(--border2); border-radius:var(--r); color:var(--text); font-family:var(--mono); font-size:.78rem; padding:.4rem .75rem; outline:none; transition:border-color .15s; }
+  .search-box:focus { border-color:var(--accent2); }
+  .search-box::placeholder { color:var(--text3); }
+  .filter-btn { font-family:var(--sans); font-size:.72rem; font-weight:700; padding:.3rem .8rem; border-radius:5px; border:1px solid var(--border); background:var(--bg3); color:var(--text3); cursor:pointer; transition:all .15s; }
+  .filter-btn:hover { color:var(--text); border-color:var(--border2); }
+  .filter-btn.active-all { border-color:var(--accent2); color:var(--accent); background:rgba(56,189,248,.08); }
+  .filter-btn.active-crit { border-color:var(--crit); color:var(--crit); background:var(--crit-bg); }
+  .filter-btn.active-ok { border-color:var(--ok); color:var(--ok); background:var(--ok-bg); }
+  .filter-btn.active-admin { border-color:var(--warn); color:var(--warn); background:var(--warn-bg); }
+  .table-scroll { max-height:560px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--r); }
+  table { width:100%; border-collapse:collapse; font-size:.77rem; }
+  thead { background:var(--bg3); position:sticky; top:0; z-index:1; }
+  th { padding:.55rem .9rem; text-align:left; font-size:.63rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); white-space:nowrap; border-bottom:1px solid var(--border); }
+  td { padding:.5rem .9rem; border-bottom:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:.76rem; vertical-align:top; max-width:340px; word-break:break-all; }
+  tr:last-child td { border-bottom:none; }
+  tbody tr:hover td { background:rgba(255,255,255,.02); }
+  .pill { display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:.7rem; font-weight:600; white-space:nowrap; }
+  .method-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:.85rem; }
+  .method-item { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r); padding:.85rem 1rem; display:flex; align-items:center; gap:.85rem; }
+  .method-icon { font-size:1.25rem; opacity:.7; width:2rem; text-align:center; flex-shrink:0; }
+  .method-info { display:flex; flex-direction:column; gap:.2rem; }
+  .method-label { font-size:.63rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text3); }
+  .method-count { font-family:var(--mono); font-size:1.05rem; font-weight:700; color:var(--accent); }
+  .coverage-wrap { margin-bottom:1.25rem; }
+  .coverage-label { display:flex; justify-content:space-between; margin-bottom:.4rem; }
+  .coverage-label-text { font-size:.72rem; color:var(--text2); font-family:var(--mono); }
+  .coverage-pct { font-family:var(--mono); font-size:.72rem; }
+  .coverage-bar-bg { height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+  .coverage-bar { height:100%; border-radius:4px; transition:width 1s cubic-bezier(.25,.46,.45,.94); }
+  .coverage-bar.ok { background:linear-gradient(90deg,var(--ok),#34d399); }
+  .coverage-bar.warn { background:linear-gradient(90deg,var(--warn),#fcd34d); }
+  .coverage-bar.crit { background:linear-gradient(90deg,var(--crit),#fb7185); }
+  .empty { font-family:var(--mono); font-size:.78rem; color:var(--text3); padding:.75rem 0; font-style:italic; }
+  @media(max-width:640px){.topbar-nav{display:none}.hero{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="hero">
-    <div>
-      <h1>M365 MFA Dashboard</h1>
-      <div class="meta">Tenant: <strong>$encodedDisplayTenant</strong></div>
-      <div class="meta">Generated: $encodedReportDate</div>
-    </div>
-  </div>
-
-  <div class="grid">
-    <div class="card"><div class="label">Total Users</div><div class="value accent" id="totalUsers"></div></div>
-    <div class="card"><div class="label">MFA Registered</div><div class="value ok" id="registered"></div></div>
-    <div class="card"><div class="label">MFA Not Registered</div><div class="value crit" id="notRegistered"></div></div>
-    <div class="card"><div class="label">Admin Accounts</div><div class="value warn" id="admins"></div></div>
-    <div class="card"><div class="label">Admins Without MFA</div><div class="value crit" id="adminNoMfa"></div></div>
-  </div>
-
-  <div class="section card">
-    <h2>MFA Coverage</h2>
-    <div class="meta" id="coverageText"></div>
-    <div class="coverage" style="margin-top:10px;"><div id="coverageBar"></div></div>
-  </div>
-
-  <div class="section card">
-    <h2>Method Breakdown</h2>
-    <div class="method-grid" id="methodGrid"></div>
-  </div>
-
-  <div class="section card">
-    <h2>User Detail</h2>
-    <div class="toolbar">
-      <input id="searchBox" type="text" placeholder="Filter by name, UPN, method or status">
-      <button data-filter="all" class="active">All</button>
-      <button data-filter="no-mfa">No MFA</button>
-      <button data-filter="admin">Admins</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Display Name</th>
-            <th>UPN</th>
-            <th>User Type</th>
-            <th>Admin</th>
-            <th>MFA Status</th>
-            <th>Default Method</th>
-            <th>Method Count</th>
-            <th>Methods</th>
-            <th>Last Sign-In</th>
-          </tr>
-        </thead>
-        <tbody id="userRows"></tbody>
-      </table>
-    </div>
-  </div>
+<div class="topbar">
+  <div class="topbar-logo">&#x2B21; RegITs GmbH M365 MFA Monitor</div>
+  <span class="topbar-sep">|</span>
+  <div class="topbar-server"></div>
+  <nav class="topbar-nav">
+    <a href="#sec-overview">Overview</a>
+    <a href="#sec-methods">Methods</a>
+    <a href="#sec-users">All Users</a>
+    <a href="#sec-nomfa">No MFA</a>
+    <a href="#sec-admins">Admins</a>
+  </nav>
+  <div class="topbar-right"><div class="topbar-time"></div></div>
 </div>
-
+<div class="page">
+  <div id="server-strip" class="server-strip"></div>
+  <div id="hero" class="hero"></div>
+  <div id="sections" class="sections"></div>
+</div>
 <script>
-const report = $htmlData;
-const userRows = document.getElementById('userRows');
-const searchBox = document.getElementById('searchBox');
-const filterButtons = [...document.querySelectorAll('[data-filter]')];
-let activeFilter = 'all';
-
-document.getElementById('totalUsers').textContent = report.TotalUsers;
-document.getElementById('registered').textContent = report.Registered;
-document.getElementById('notRegistered').textContent = report.NotRegistered;
-document.getElementById('admins').textContent = report.Admins;
-document.getElementById('adminNoMfa').textContent = report.AdminNoMfa;
-document.getElementById('coverageText').textContent = report.CoveragePct + '% of users have MFA registered';
-document.getElementById('coverageBar').style.width = report.CoveragePct + '%';
-
-const methods = [
-  ['Authenticator App', report.MethodCounts.AuthenticatorApp],
-  ['FIDO2 Security Key', report.MethodCounts.Fido2],
-  ['Phone', report.MethodCounts.Phone],
-  ['Software TOTP', report.MethodCounts.Totp],
-  ['Email OTP', report.MethodCounts.EmailOtp],
-  ['Windows Hello', report.MethodCounts.Whfb],
-  ['Passkey', report.MethodCounts.Passkey]
-];
-
-document.getElementById('methodGrid').innerHTML = methods.map(([label, count]) =>
-  `<div class="method-item"><div class="label">`${label}</div><div class="value accent" style="font-size:22px;">`${count}</div></div>`
-).join('');
-
-function esc(value) {
-  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\"', '&quot;');
-}
-
-function statusPill(status) {
-  return status === 'Registered'
-    ? '<span class="pill pill-ok">Registered</span>'
-    : '<span class="pill pill-crit">Not Registered</span>';
-}
-
-function adminPill(isAdmin) {
-  return isAdmin ? '<span class="pill pill-admin">Admin</span>' : '<span class="muted">No</span>';
-}
-
-function renderRows() {
-  const term = searchBox.value.trim().toLowerCase();
-  const rows = report.Users.filter((user) => {
-    const matchesFilter =
-      activeFilter === 'all' ||
-      (activeFilter === 'no-mfa' && !user.MfaRegistered) ||
-      (activeFilter === 'admin' && user.IsAdmin);
-
-    const haystack = [
-      user.DisplayName,
-      user.UPN,
-      user.MfaStatus,
-      user.DefaultMethod,
-      user.Methods,
-      user.LastSignIn
-    ].join(' ').toLowerCase();
-
-    return matchesFilter && (!term || haystack.includes(term));
-  });
-
-  userRows.innerHTML = rows.map((user) => `
-    <tr>
-      <td>`${esc(user.DisplayName)}</td>
-      <td>`${esc(user.UPN)}</td>
-      <td>`${esc(user.UserType)}</td>
-      <td>`${adminPill(user.IsAdmin)}</td>
-      <td>`${statusPill(user.MfaStatus)}</td>
-      <td>`${esc(user.DefaultMethod)}</td>
-      <td>`${esc(user.MethodCount)}</td>
-      <td>`${esc(user.Methods || '')}</td>
-      <td>`${esc(user.LastSignIn)}</td>
-    </tr>
-  `).join('');
-}
-
-searchBox.addEventListener('input', renderRows);
-for (const button of filterButtons) {
-  button.addEventListener('click', () => {
-    activeFilter = button.dataset.filter;
-    filterButtons.forEach((b) => b.classList.toggle('active', b === button));
-    renderRows();
-  });
-}
-
-renderRows();
+const DATA = $htmlData;
+document.querySelector('.topbar-server').textContent = DATA.tenant;
+document.querySelector('.topbar-time').textContent = 'Generated: ' + DATA.reportDate;
+document.title = 'M365 MFA Report - ' + DATA.tenant;
+function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function kpi(value,label,sub,cls){return '<div class="kpi ' + cls + '"><div class="kpi-label">' + label + '</div><div class="kpi-value">' + value + '</div><div class="kpi-sub">' + sub + '</div></div>';}
+function strip(items){return items.map(function(pair){return '<div class="strip-item"><span class="strip-label">' + pair[0] + '</span><span class="strip-value">' + esc(pair[1]) + '</span></div>';}).join('');}
+function card(id,icon,title,badgeText,badgeClass,body){return '<div class="card" id="' + id + '"><div class="card-header" onclick="toggleCard(this)"><span class="card-icon">' + icon + '</span><span class="card-title">' + title + '</span><span class="card-badge ' + badgeClass + '">' + badgeText + '</span><span class="card-chevron">&#x25BC;</span></div><div class="card-body">' + body + '</div></div>';}
+function toggleCard(h){h.closest('.card').classList.toggle('collapsed');}
+function methodPill(b){return b?'<span class="pill badge-ok">Yes</span>':'<span class="pill" style="background:rgba(244,63,94,.08);color:#f43f5e">No</span>';}
+function mfaStatusPill(v){return v==='Registered'?'<span class="pill badge-ok">' + esc(v) + '</span>':'<span class="pill badge-crit">' + esc(v) + '</span>';}
+function adminPill(v){return v===true?'<span class="pill badge-warn">Admin</span>':'<span class="pill" style="background:rgba(56,189,248,.07);color:var(--accent)">User</span>';}
+function methodLabel(v){const map={'Authenticator App':'ok','FIDO2 Key':'ok','Passkey':'ok','WHfB':'ok','TOTP':'ok','Phone':'warn','Email OTP':'warn','Password Only':'crit','None':'crit'};const cls=map[v]||'neutral';return '<span class="pill badge-' + cls + '">' + esc(v) + '</span>';}
+let _activeFilter='all'; let _searchTerm='';
+function applyUserFilter(){const rows=document.querySelectorAll('#user-tbody tr');rows.forEach(function(row){const cells=Array.from(row.cells).map(function(c){return c.textContent.toLowerCase();}).join(' ');const matchSearch=!_searchTerm||cells.includes(_searchTerm);const mfaCell=row.cells[2]?row.cells[2].textContent.toLowerCase():'';const adminCell=row.cells[3]?row.cells[3].textContent.toLowerCase():'';let matchFilter=true;if(_activeFilter==='nomfa') matchFilter=mfaCell.includes('not');if(_activeFilter==='mfa') matchFilter=!mfaCell.includes('not');if(_activeFilter==='admin') matchFilter=adminCell.includes('admin');row.style.display=(matchSearch&&matchFilter)?'':'none';});}
+function setFilter(f,btn){_activeFilter=f;document.querySelectorAll('.uf-btn').forEach(function(b){b.classList.remove('active-all','active-crit','active-ok','active-admin');});if(f==='all') btn.classList.add('active-all');if(f==='nomfa') btn.classList.add('active-crit');if(f==='mfa') btn.classList.add('active-ok');if(f==='admin') btn.classList.add('active-admin');applyUserFilter();}
+function render(){const d=DATA;const pct=d.pct;const coverageClass=pct>=90?'ok':pct>=70?'warn':'crit';const coveragePctColor=pct>=90?'var(--ok)':pct>=70?'var(--warn)':'var(--crit)';document.getElementById('server-strip').innerHTML=strip([['Tenant',d.tenant],['Total Users',String(d.total)],['MFA Coverage',pct + '%'],['Admins',String(d.admins)],['Admins Without MFA',String(d.adminNoMfa)],['Report Generated',d.reportDate]]);const mfaPctCls=pct>=90?'ok':pct>=70?'warn':'crit';document.getElementById('hero').innerHTML=[kpi(d.total,'Total<br>Users','active members','neutral'),kpi(d.registered,'MFA<br>Registered','have 2nd factor',d.registered===d.total?'ok':'warn'),kpi(d.notReg,'MFA<br>NOT Registered','password only',d.notReg>0?'crit':'ok'),kpi(pct + '%','MFA<br>Coverage','of all users',mfaPctCls),kpi(d.admins,'Admin<br>Accounts','privileged roles','neutral'),kpi(d.adminNoMfa,'Admins<br>Without MFA','critical risk',d.adminNoMfa>0?'crit':'ok'),kpi(d.cntAuthApp,'Authenticator<br>App','microsoft/3rd party','neutral'),kpi(d.cntFido2,'FIDO2<br>Keys','hardware tokens',d.cntFido2>0?'ok':'neutral'),kpi(d.cntPhone,'Phone<br>SMS/Voice','legacy method',d.cntPhone>0?'warn':'neutral')].join('');const sec=document.getElementById('sections');sec.innerHTML='';const overviewBody='<div class="coverage-wrap"><div class="coverage-label"><span class="coverage-label-text">MFA Coverage - ' + d.registered + ' of ' + d.total + ' users</span><span class="coverage-pct" style="color:' + coveragePctColor + '">' + pct + '%</span></div><div class="coverage-bar-bg"><div class="coverage-bar ' + coverageClass + '" style="width:' + pct + '%"></div></div></div>' + (d.adminNoMfa>0?'<div style="background:var(--crit-bg);border:1px solid var(--crit);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:1rem;font-size:.78rem;font-family:var(--mono);color:var(--crit)"><strong>' + d.adminNoMfa + ' admin account(s)</strong> have no MFA registered - immediate action required.</div>':'') + '<div class="method-grid"><div class="method-item"><div class="method-icon" style="color:#38bdf8"><i class="fa-solid fa-mobile-screen-button"></i></div><div class="method-info"><div class="method-label">Authenticator App</div><div class="method-count">' + d.cntAuthApp + '</div></div></div><div class="method-item"><div class="method-icon" style="color:#a78bfa"><i class="fa-solid fa-key"></i></div><div class="method-info"><div class="method-label">FIDO2 Security Key</div><div class="method-count">' + d.cntFido2 + '</div></div></div><div class="method-item"><div class="method-icon" style="color:#f59e0b"><i class="fa-solid fa-phone"></i></div><div class="method-info"><div class="method-label">Phone (SMS/Voice)</div><div class="method-count">' + d.cntPhone + '</div></div></div><div class="method-item"><div class="method-icon" style="color:#10b981"><i class="fa-solid fa-clock-rotate-left"></i></div><div class="method-info"><div class="method-label">TOTP / OATH</div><div class="method-count">' + d.cntTotp + '</div></div></div><div class="method-item"><div class="method-icon" style="color:#6a88b0"><i class="fa-solid fa-envelope"></i></div><div class="method-info"><div class="method-label">Email OTP</div><div class="method-count">' + d.cntEmail + '</div></div></div><div class="method-item"><div class="method-icon" style="color:#38bdf8"><i class="fa-brands fa-windows"></i></div><div class="method-info"><div class="method-label">Windows Hello (WHfB)</div><div class="method-count">' + d.cntWhfb + '</div></div></div><div class="method-item"><div class="method-icon" style="color:#fb923c"><i class="fa-solid fa-fingerprint"></i></div><div class="method-info"><div class="method-label">Passkey</div><div class="method-count">' + d.cntPasskey + '</div></div></div></div>';sec.innerHTML+=card('sec-overview','<i class="fa-solid fa-chart-pie"></i>','MFA Coverage Overview',pct + '% covered',pct>=90?'badge-ok':pct>=70?'badge-warn':'badge-crit',overviewBody);const methodCols=['DisplayName','UPN','DefaultMethod','HasAuthApp','HasFIDO2','HasPhone','HasTOTP','HasEmailOTP','HasWHfB','HasPasskey','LastSignIn'];let mTable='<div class="table-scroll"><table><thead><tr>';for(const c of methodCols){mTable+='<th>' + esc(c.replace(/Has/,'')) + '</th>';}mTable+='</tr></thead><tbody>';for(const r of d.users){mTable+='<tr><td>' + esc(r.DisplayName) + '</td><td style="font-size:.72rem">' + esc(r.UPN) + '</td><td>' + methodLabel(r.DefaultMethod) + '</td><td>' + methodPill(r.HasAuthApp) + '</td><td>' + methodPill(r.HasFIDO2) + '</td><td>' + methodPill(r.HasPhone) + '</td><td>' + methodPill(r.HasTOTP) + '</td><td>' + methodPill(r.HasEmailOTP) + '</td><td>' + methodPill(r.HasWHfB) + '</td><td>' + methodPill(r.HasPasskey) + '</td><td>' + esc(r.LastSignIn) + '</td></tr>';}mTable+='</tbody></table></div>';sec.innerHTML+=card('sec-methods','<i class="fa-solid fa-shield-halved"></i>','Authentication Methods per User',d.total + ' users','badge-neutral',mTable);let uTable='<div class="toolbar"><input class="search-box" type="text" placeholder="Search name or UPN..." oninput="_searchTerm=this.value.toLowerCase();applyUserFilter()"><button class="filter-btn uf-btn active-all" onclick="setFilter(\'all\',this)">All (' + d.total + ')</button><button class="filter-btn uf-btn" onclick="setFilter(\'mfa\',this)">MFA Registered (' + d.registered + ')</button><button class="filter-btn uf-btn" onclick="setFilter(\'nomfa\',this)">No MFA (' + d.notReg + ')</button><button class="filter-btn uf-btn" onclick="setFilter(\'admin\',this)">Admins (' + d.admins + ')</button></div><div class="table-scroll"><table><thead><tr><th>Display Name</th><th>UPN</th><th>MFA Status</th><th>Role</th><th>Default Method</th><th># Methods</th><th>All Methods</th><th>Last Sign-In</th></tr></thead><tbody id="user-tbody">';for(const r of d.users){uTable+='<tr><td>' + esc(r.DisplayName) + '</td><td style="font-size:.72rem">' + esc(r.UPN) + '</td><td>' + mfaStatusPill(r.MfaStatus) + '</td><td>' + adminPill(r.IsAdmin) + '</td><td>' + methodLabel(r.DefaultMethod) + '</td><td>' + esc(r.MethodCount) + '</td><td style="font-size:.7rem;color:var(--text2)">' + esc(r.Methods || '—') + '</td><td>' + esc(r.LastSignIn) + '</td></tr>';}uTable+='</tbody></table></div>';sec.innerHTML+=card('sec-users','<i class="fa-solid fa-users"></i>','All Users',d.total + ' users','badge-neutral',uTable);const noMfaUsers=d.users.filter(function(u){return u.MfaStatus!=='Registered';});let noMfaBody='';if(noMfaUsers.length===0){noMfaBody='<p class="empty">Excellent! Every user has at least one MFA method registered.</p>';} else {noMfaBody='<div class="table-scroll"><table><thead><tr><th>Display Name</th><th>UPN</th><th>Role</th><th>Last Sign-In</th></tr></thead><tbody>';for(const r of noMfaUsers){noMfaBody+='<tr><td>' + esc(r.DisplayName) + '</td><td style="font-size:.72rem">' + esc(r.UPN) + '</td><td>' + adminPill(r.IsAdmin) + '</td><td>' + esc(r.LastSignIn) + '</td></tr>';}noMfaBody+='</tbody></table></div>';}sec.innerHTML+=card('sec-nomfa','<i class="fa-solid fa-triangle-exclamation"></i>','Users Without MFA',noMfaUsers.length===0?'All users protected':(noMfaUsers.length + ' user(s) at risk'),noMfaUsers.length===0?'badge-ok':'badge-crit',noMfaBody);const adminUsers=d.users.filter(function(u){return u.IsAdmin===true;});let adminBody='';if(adminUsers.length===0){adminBody='<p class="empty">No privileged admin accounts found in the scanned roles.</p>';} else {adminBody='<div class="table-scroll"><table><thead><tr><th>Display Name</th><th>UPN</th><th>MFA Status</th><th>Default Method</th><th>All Methods</th><th>Last Sign-In</th></tr></thead><tbody>';for(const r of adminUsers){adminBody+='<tr><td>' + esc(r.DisplayName) + '</td><td style="font-size:.72rem">' + esc(r.UPN) + '</td><td>' + mfaStatusPill(r.MfaStatus) + '</td><td>' + methodLabel(r.DefaultMethod) + '</td><td style="font-size:.7rem;color:var(--text2)">' + esc(r.Methods || '—') + '</td><td>' + esc(r.LastSignIn) + '</td></tr>';}adminBody+='</tbody></table></div>';}sec.innerHTML+=card('sec-admins','<i class="fa-solid fa-user-shield"></i>','Privileged Admin Accounts',d.adminNoMfa + ' without MFA',d.adminNoMfa>0?'badge-crit':d.admins>0?'badge-ok':'badge-neutral',adminBody);}
+render();
 </script>
 </body>
 </html>
