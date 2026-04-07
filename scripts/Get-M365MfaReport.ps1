@@ -276,6 +276,8 @@ function Connect-ToGraph {
     try {
         $selectedAuthMode = Get-PreferredAuthMode -RequestedMode $AuthMode
 
+        try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+
         if ($TenantId) {
             Write-Host "[*] Requested tenant: $TenantId" -ForegroundColor Cyan
             Write-Host "[*] Using the requested tenant for $selectedAuthMode sign-in and validating the tenant after authentication." -ForegroundColor DarkCyan
@@ -290,8 +292,8 @@ function Connect-ToGraph {
             Write-Host "[*] Opening the Microsoft Graph authentication page..." -ForegroundColor Cyan
         }
         else {
-            Write-Host "[*] Starting the Microsoft Graph device code flow..." -ForegroundColor Cyan
-            Write-Host "[*] Follow the code prompt below to complete sign-in in your browser." -ForegroundColor DarkCyan
+            Write-Host "[*] Starting device code authentication..." -ForegroundColor Yellow
+            Write-Host "[*] When the code appears, open https://login.microsoft.com/device" -ForegroundColor Yellow
         }
 
         $connectParams = @{
@@ -306,7 +308,7 @@ function Connect-ToGraph {
         }
 
         if ($selectedAuthMode -eq "DeviceCode") {
-            $connectParams.UseDeviceCode = $true
+            $connectParams.UseDeviceAuthentication = $true
         }
 
         Connect-MgGraph @connectParams
@@ -356,7 +358,17 @@ function Connect-ToGraph {
     catch {
         $errorText = $_.Exception.Message
 
-        if ($errorText -match "AADSTS50059") {
+        if ($errorText -match "AADSTS90002") {
+            $suggestion = if ($TenantId) {
+                "Tenant '$TenantId' was not found. Check the tenant name."
+            }
+            else {
+                "The tenant could not be resolved."
+            }
+
+            Write-Error "Failed to connect to Microsoft Graph: $suggestion"
+        }
+        elseif ($errorText -match "AADSTS50059") {
             $suggestion = if ($TenantId) {
                 "The provided tenant value '$TenantId' could not be resolved. Verify that it is a valid tenant GUID or domain such as 'contoso.onmicrosoft.com'."
             }
