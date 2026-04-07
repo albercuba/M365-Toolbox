@@ -145,15 +145,11 @@ function buildMfaStatusArgs(script, payload) {
     args.push("-ExportHtml", `${outputBase}.html`);
   }
 
-  if (payload.exportXlsx !== false) {
-    args.push("-ExportXlsx", `${outputBase}.xlsx`);
-  }
-
   return {
     args,
     artifacts: {
       htmlPath: payload.exportHtml !== false ? `${outputBase}.html` : null,
-      xlsxPath: payload.exportXlsx !== false ? `${outputBase}.xlsx` : null
+      xlsxPath: null
     }
   };
 }
