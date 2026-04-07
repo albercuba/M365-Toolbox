@@ -182,8 +182,12 @@ function Invoke-GraphCollection {
                 [void]$items.Add($item)
             }
         }
+        elseif ($response) {
+            [void]$items.Add($response)
+        }
 
-        $nextLink = $response.'@odata.nextLink'
+        $odataNextLinkProperty = $response.PSObject.Properties['@odata.nextLink']
+        $nextLink = if ($odataNextLinkProperty) { [string]$odataNextLinkProperty.Value } else { $null }
     }
 
     return @($items)
