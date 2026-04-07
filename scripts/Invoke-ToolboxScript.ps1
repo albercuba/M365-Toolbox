@@ -26,12 +26,12 @@ function Get-RequiredModuleNames {
                 continue
             }
 
-            if ($trimmed -match "ModuleName\s*=\s*['\"]([^'\"]+)['\"]") {
+            if ($trimmed -match 'ModuleName\s*=\s*[''"]([^''"]+)[''"]') {
                 [void]$moduleNames.Add($Matches[1])
                 continue
             }
 
-            if ($trimmed -match "^['\"]([^'\"]+)['\"]$") {
+            if ($trimmed -match '^[''"]([^''"]+)[''"]$') {
                 [void]$moduleNames.Add($Matches[1])
                 continue
             }
