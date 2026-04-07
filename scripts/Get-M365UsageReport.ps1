@@ -2,7 +2,6 @@
 param(
     [string]$TenantId,
 
-    [ValidateSet("OneDrive", "SharePoint", "Mailbox")]
     [string[]]$Reports = @("OneDrive", "SharePoint", "Mailbox"),
 
     [string]$OutputPath
@@ -12,6 +11,29 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $script:TenantLabel = ""
+
+function Normalize-ReportSelection {
+    param([string[]]$SelectedReports)
+
+    $allowedReports = @("OneDrive", "SharePoint", "Mailbox")
+    $normalized = @($SelectedReports |
+        Where-Object { $_ } |
+        ForEach-Object { $_ -split "," } |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ } |
+        Select-Object -Unique)
+
+    if (-not $normalized -or $normalized.Count -eq 0) {
+        return @($allowedReports)
+    }
+
+    $invalid = @($normalized | Where-Object { $_ -notin $allowedReports })
+    if ($invalid.Count -gt 0) {
+        throw "Invalid report selection: $($invalid -join ', '). Allowed values: $($allowedReports -join ', ')."
+    }
+
+    return $normalized
+}
 
 function Write-SectionHeader {
     param([string]$Title)
@@ -363,7 +385,7 @@ Assert-RequiredModules
 Connect-ToGraph
 Resolve-TenantLabel
 
-$selectedReports = @($Reports | Select-Object -Unique)
+$selectedReports = Normalize-ReportSelection -SelectedReports $Reports
 $exports = @{}
 
 foreach ($reportName in $selectedReports) {
