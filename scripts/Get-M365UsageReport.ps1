@@ -184,13 +184,14 @@ function ConvertTo-GB {
 
 function Import-ReportCsv {
     param(
-        [scriptblock]$DownloadAction
+        [Parameter(Mandatory)]
+        [string]$RequestUri
     )
 
     $tempFile = [System.IO.Path]::GetTempFileName()
 
     try {
-        & $DownloadAction $tempFile
+        Invoke-MgGraphRequest -Method GET -Uri $RequestUri -OutputFilePath $tempFile -ErrorAction Stop | Out-Null
         $rawContent = [System.IO.File]::ReadAllText($tempFile, [System.Text.Encoding]::UTF8)
         $rawContent = $rawContent -replace "^[^R]*Report Refresh Date", "Report Refresh Date"
         return @($rawContent | ConvertFrom-Csv)
@@ -204,10 +205,7 @@ function Get-OneDriveReport {
     Write-SectionHeader "ONEDRIVE USAGE REPORT"
     Write-Host "[*] Fetching OneDrive usage data from the Reports API..." -ForegroundColor Cyan
 
-    $rows = Import-ReportCsv -DownloadAction {
-        param($filePath)
-        Get-MgReportOneDriveUsageAccountDetail -Period D7 -OutFile $filePath -ErrorAction Stop | Out-Null
-    }
+    $rows = Import-ReportCsv -RequestUri "https://graph.microsoft.com/v1.0/reports/getOneDriveUsageAccountDetail(period='D7')"
 
     if (-not $rows -or $rows.Count -eq 0) {
         Write-Warning "  [!] No OneDrive usage rows were returned."
@@ -242,10 +240,7 @@ function Get-SharePointReport {
     Write-SectionHeader "SHAREPOINT USAGE REPORT"
     Write-Host "[*] Fetching SharePoint usage data from the Reports API..." -ForegroundColor Cyan
 
-    $rows = Import-ReportCsv -DownloadAction {
-        param($filePath)
-        Get-MgReportSharePointSiteUsageDetail -Period D7 -OutFile $filePath -ErrorAction Stop | Out-Null
-    }
+    $rows = Import-ReportCsv -RequestUri "https://graph.microsoft.com/v1.0/reports/getSharePointSiteUsageDetail(period='D7')"
 
     if (-not $rows -or $rows.Count -eq 0) {
         Write-Warning "  [!] No SharePoint usage rows were returned."
@@ -294,10 +289,7 @@ function Get-MailboxReport {
     Write-SectionHeader "MAILBOX USAGE REPORT"
     Write-Host "[*] Fetching mailbox usage data from the Reports API..." -ForegroundColor Cyan
 
-    $rows = Import-ReportCsv -DownloadAction {
-        param($filePath)
-        Get-MgReportMailboxUsageDetail -Period D7 -OutFile $filePath -ErrorAction Stop | Out-Null
-    }
+    $rows = Import-ReportCsv -RequestUri "https://graph.microsoft.com/v1.0/reports/getMailboxUsageDetail(period='D7')"
 
     if (-not $rows -or $rows.Count -eq 0) {
         Write-Warning "  [!] No mailbox usage rows were returned."
