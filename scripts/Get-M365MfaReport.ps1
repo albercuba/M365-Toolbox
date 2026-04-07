@@ -39,7 +39,8 @@ function Assert-RequiredModules {
         "Microsoft.Graph.Authentication",
         "Microsoft.Graph.Users",
         "Microsoft.Graph.Identity.SignIns",
-        "Microsoft.Graph.DirectoryObjects"
+        "Microsoft.Graph.DirectoryObjects",
+        "Microsoft.Graph.Identity.DirectoryManagement"
     )
 
     Write-Host ""
@@ -233,11 +234,16 @@ function Get-MfaReport {
             $methods = @(Get-MgUserAuthenticationMethod -UserId $user.Id -All -ErrorAction Stop)
 
             foreach ($method in $methods) {
-                $odata = [string]$method.AdditionalProperties['@odata.type']
+                $additionalProperties = $method.AdditionalProperties
+                if (-not $additionalProperties) {
+                    $additionalProperties = @{}
+                }
+
+                $odata = [string]$additionalProperties['@odata.type']
                 switch ($odata) {
                     "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
                         $hasAuthApp = $true
-                        $appMode = [string]$method.AdditionalProperties['authenticationMode']
+                        $appMode = [string]$additionalProperties['authenticationMode']
                         [void]$methodNames.Add("Authenticator App" + $(if ($appMode -eq "passwordless") { " (Passwordless)" } else { "" }))
                     }
                     "#microsoft.graph.fido2AuthenticationMethod" {
@@ -246,7 +252,7 @@ function Get-MfaReport {
                     }
                     "#microsoft.graph.phoneAuthenticationMethod" {
                         $hasPhone = $true
-                        $phoneType = [string]$method.AdditionalProperties['phoneType']
+                        $phoneType = [string]$additionalProperties['phoneType']
                         [void]$methodNames.Add("Phone ($phoneType)")
                     }
                     "#microsoft.graph.softwareOathAuthenticationMethod" {
