@@ -60,7 +60,8 @@ $filteredDetections = @(
     }
 )
 
-$userRows = foreach ($user in $riskyUsers) {
+$userRows = @(
+foreach ($user in $riskyUsers) {
     [pscustomobject]@{
         UserPrincipalName = [string]$user.userPrincipalName
         RiskLevel         = [string]$user.riskLevel
@@ -69,8 +70,10 @@ $userRows = foreach ($user in $riskyUsers) {
         Updated           = if ($user.riskLastUpdatedDateTime) { (Get-Date $user.riskLastUpdatedDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
     }
 }
+)
 
-$detectionRows = foreach ($detection in $filteredDetections) {
+$detectionRows = @(
+foreach ($detection in $filteredDetections) {
     [pscustomobject]@{
         UserPrincipalName = [string]$detection.userPrincipalName
         RiskType          = [string]$detection.riskType
@@ -80,6 +83,7 @@ $detectionRows = foreach ($detection in $filteredDetections) {
         Activity          = if ($detection.activityDateTime) { (Get-Date $detection.activityDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
     }
 }
+)
 
 $tenantName = if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" }
 $highRiskUsers = @($userRows | Where-Object { $_.RiskLevel -eq "high" }).Count
