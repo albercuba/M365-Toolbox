@@ -14,8 +14,43 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING SIGN-IN RISK DATA"
 
-$riskyUsers = @(Get-MgRiskyUser -All -ErrorAction Stop)
-$riskDetections = @(Get-MgRiskDetection -All -ErrorAction Stop)
+$riskFeatureUnavailable = $false
+$riskFeatureMessage = ""
+
+try {
+    $riskyUsers = @(Get-MgRiskyUser -All -ErrorAction Stop)
+}
+catch {
+    $message = $_.Exception.Message
+    if ($message -match "not licensed for this feature" -or $message -match "403 \(Forbidden\)") {
+        $riskFeatureUnavailable = $true
+        $riskFeatureMessage = "Microsoft Entra ID Identity Protection data is not available for this tenant or license level."
+        Write-Warning "  [!] $riskFeatureMessage"
+        $riskyUsers = @()
+    }
+    else {
+        throw
+    }
+}
+
+try {
+    $riskDetections = if ($riskFeatureUnavailable) { @() } else { @(Get-MgRiskDetection -All -ErrorAction Stop) }
+}
+catch {
+    $message = $_.Exception.Message
+    if ($message -match "not licensed for this feature" -or $message -match "403 \(Forbidden\)") {
+        $riskFeatureUnavailable = $true
+        if (-not $riskFeatureMessage) {
+            $riskFeatureMessage = "Microsoft Entra ID Identity Protection data is not available for this tenant or license level."
+            Write-Warning "  [!] $riskFeatureMessage"
+        }
+        $riskDetections = @()
+    }
+    else {
+        throw
+    }
+}
+
 $cutoff = (Get-Date).AddDays(-1 * $LookbackDays)
 
 $filteredDetections = @(
@@ -60,6 +95,16 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Sign-In Risk Report" -Tena
     @{ label = "Lookback"; value = "$LookbackDays days" },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
+    @{
+        title = "License Status"
+        badge = if ($riskFeatureUnavailable) { "Unavailable" } else { "Available" }
+        text = if ($riskFeatureUnavailable) {
+            $riskFeatureMessage
+        }
+        else {
+            "Identity Protection data was available and collected successfully."
+        }
+    },
     @{
         title = "Risky Users"
         badge = "$($userRows.Count) users"
