@@ -26,12 +26,12 @@ function Get-RequiredModuleNames {
                 continue
             }
 
-            if ($trimmed -match "ModuleName\s*=\s*['""]([^'""]+)['""]") {
+            if ($trimmed -match "ModuleName\s*=\s*['\"]([^'\"]+)['\"]") {
                 [void]$moduleNames.Add($Matches[1])
                 continue
             }
 
-            if ($trimmed -match "^['""]([^'""]+)['""]$") {
+            if ($trimmed -match "^['\"]([^'\"]+)['\"]$") {
                 [void]$moduleNames.Add($Matches[1])
                 continue
             }
@@ -161,6 +161,40 @@ function Split-ScriptInvocationArguments {
     }
 }
 
+function Get-ChildPowerShellArguments {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetScriptPath,
+
+        [hashtable]$NamedArguments = @{},
+
+        [string[]]$PositionalArguments = @()
+    )
+
+    $childArguments = [System.Collections.Generic.List[string]]::new()
+    $null = $childArguments.Add("-NoProfile")
+    $null = $childArguments.Add("-ExecutionPolicy")
+    $null = $childArguments.Add("Bypass")
+    $null = $childArguments.Add("-File")
+    $null = $childArguments.Add($TargetScriptPath)
+
+    foreach ($entry in $NamedArguments.GetEnumerator() | Sort-Object Name) {
+        $null = $childArguments.Add("-$($entry.Name)")
+
+        if ($entry.Value -isnot [bool] -or $entry.Value) {
+            if ($entry.Value -isnot [bool]) {
+                $null = $childArguments.Add([string]$entry.Value)
+            }
+        }
+    }
+
+    foreach ($argument in $PositionalArguments) {
+        $null = $childArguments.Add([string]$argument)
+    }
+
+    return @($childArguments)
+}
+
 try {
     if (-not (Test-Path -LiteralPath $ScriptPath)) {
         throw "Script file not found: $ScriptPath"
@@ -173,8 +207,14 @@ try {
     $invocationArguments = Split-ScriptInvocationArguments -ArgumentList $ScriptArgumentList
     $namedArguments = $invocationArguments.Named
     $positionalArguments = $invocationArguments.Positional
+    $childArguments = Get-ChildPowerShellArguments -TargetScriptPath $ScriptPath `
+        -NamedArguments $namedArguments -PositionalArguments $positionalArguments
 
-    & $ScriptPath @namedArguments @positionalArguments
+    & pwsh @childArguments
+
+    if ($LASTEXITCODE) {
+        exit $LASTEXITCODE
+    }
 
     exit 0
 }
