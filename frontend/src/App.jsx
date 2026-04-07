@@ -182,11 +182,20 @@ export function App() {
     };
   }, [activeRun]);
 
+  useEffect(() => {
+    if (activeRun?.status === "completed") {
+      setRunDetailsOpen(false);
+      setRecentRunsOpen(false);
+    }
+  }, [activeRun?.status]);
+
   const handleScriptSelect = (script) => {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
     setError("");
     setActiveRunHtml("");
+    setRunDetailsOpen(true);
+    setRecentRunsOpen(true);
   };
 
   const handleChange = (fieldId, nextValue) => {
@@ -213,6 +222,8 @@ export function App() {
       }
 
       setActiveRun(data);
+      setRunDetailsOpen(true);
+      setRecentRunsOpen(true);
       const runsResponse = await fetch(`${apiBase}/runs`);
       setRuns(await parseApiResponse(runsResponse));
     } catch (submitError) {

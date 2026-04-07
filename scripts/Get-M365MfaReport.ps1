@@ -763,7 +763,7 @@ const methods = [
 ];
 
 document.getElementById('methodGrid').innerHTML = methods.map(([label, count]) =>
-  `<div class="method-item"><div class="label">${label}</div><div class="value accent" style="font-size:22px;">${count}</div></div>`
+  `<div class="method-item"><div class="label">`${label}</div><div class="value accent" style="font-size:22px;">`${count}</div></div>`
 ).join('');
 
 function esc(value) {
@@ -802,15 +802,15 @@ function renderRows() {
 
   userRows.innerHTML = rows.map((user) => `
     <tr>
-      <td>${esc(user.DisplayName)}</td>
-      <td>${esc(user.UPN)}</td>
-      <td>${esc(user.UserType)}</td>
-      <td>${adminPill(user.IsAdmin)}</td>
-      <td>${statusPill(user.MfaStatus)}</td>
-      <td>${esc(user.DefaultMethod)}</td>
-      <td>${esc(user.MethodCount)}</td>
-      <td>${esc(user.Methods || '')}</td>
-      <td>${esc(user.LastSignIn)}</td>
+      <td>`${esc(user.DisplayName)}</td>
+      <td>`${esc(user.UPN)}</td>
+      <td>`${esc(user.UserType)}</td>
+      <td>`${adminPill(user.IsAdmin)}</td>
+      <td>`${statusPill(user.MfaStatus)}</td>
+      <td>`${esc(user.DefaultMethod)}</td>
+      <td>`${esc(user.MethodCount)}</td>
+      <td>`${esc(user.Methods || '')}</td>
+      <td>`${esc(user.LastSignIn)}</td>
     </tr>
   `).join('');
 }
