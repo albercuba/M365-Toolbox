@@ -467,6 +467,9 @@ function Export-MfaHtmlReport {
     $admins = @($Report | Where-Object { $_.IsAdmin }).Count
     $adminNoMfa = @($Report | Where-Object { $_.IsAdmin -and -not $_.MfaRegistered }).Count
     $pct = if ($total -gt 0) { [math]::Round(($registered / $total) * 100, 1) } else { 0 }
+    $displayTenant = if ($TenantDomain) { $TenantDomain } else { $TenantId }
+    $encodedDisplayTenant = [System.Net.WebUtility]::HtmlEncode($displayTenant)
+    $encodedReportDate = [System.Net.WebUtility]::HtmlEncode($ReportDate)
 
     $htmlData = [PSCustomObject]@{
         Tenant       = if ($TenantDomain) { $TenantDomain } else { $TenantId }
@@ -681,8 +684,8 @@ function Export-MfaHtmlReport {
   <div class="hero">
     <div>
       <h1>M365 MFA Dashboard</h1>
-      <div class="meta">Tenant: <strong>$([System.Web.HttpUtility]::HtmlEncode((if ($TenantDomain) { $TenantDomain } else { $TenantId })))</strong></div>
-      <div class="meta">Generated: $([System.Web.HttpUtility]::HtmlEncode($ReportDate))</div>
+      <div class="meta">Tenant: <strong>$encodedDisplayTenant</strong></div>
+      <div class="meta">Generated: $encodedReportDate</div>
     </div>
   </div>
 
