@@ -341,7 +341,10 @@ function Get-ServiceSummary {
         TotalItems  = $Rows.Count
         ActiveItems = @($Rows | Where-Object { $_.UsedGB -gt 0 }).Count
         TotalGB     = [math]::Round((($Rows | Measure-Object -Property UsedGB -Sum).Sum), 2)
-        Rows        = @($Rows | Sort-Object UsedGB -Descending, DisplayName)
+        Rows        = @($Rows | Sort-Object -Property @(
+            @{ Expression = "UsedGB"; Descending = $true },
+            @{ Expression = "DisplayName"; Descending = $false }
+        ))
     }
 }
 
