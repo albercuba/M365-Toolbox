@@ -589,7 +589,7 @@ textarea {
   min-height: 900px;
   border: 1px solid var(--border);
   border-radius: var(--r);
-  background: #fff;
+  background: transparent;
 }
 
 .report-card-body {
