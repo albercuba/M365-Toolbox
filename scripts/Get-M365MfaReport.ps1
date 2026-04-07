@@ -36,40 +36,72 @@ function Write-SectionHeader {
 }
 
 function Assert-RequiredModules {
-    $required = @(
+    $coreModules = @(
         "Microsoft.Graph.Authentication",
         "Microsoft.Graph.Users",
         "Microsoft.Graph.Identity.SignIns",
         "Microsoft.Graph.DirectoryObjects"
     )
+    $optionalRoleModule = "Microsoft.Graph.Identity.DirectoryManagement"
 
     Write-Host ""
     Write-Host "[*] Checking required PowerShell modules..." -ForegroundColor Cyan
 
-    foreach ($moduleName in $required) {
-        $installed = Get-Module -ListAvailable -Name $moduleName |
-            Sort-Object Version -Descending |
-            Select-Object -First 1
+    $coreModuleInventory = @{}
+    $commonVersions = $null
 
-        if (-not $installed) {
+    foreach ($moduleName in $coreModules) {
+        $installed = @(Get-Module -ListAvailable -Name $moduleName | Sort-Object Version -Descending)
+
+        if (-not $installed -or $installed.Count -eq 0) {
             throw "Required module '$moduleName' is not installed."
         }
 
-        Import-Module $moduleName -Force -WarningAction SilentlyContinue
-        Write-Host "  [+] $moduleName v$($installed.Version)" -ForegroundColor Green
+        $coreModuleInventory[$moduleName] = $installed
+        $versionStrings = @($installed | ForEach-Object { $_.Version.ToString() })
+
+        if ($null -eq $commonVersions) {
+            $commonVersions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($versionString in $versionStrings) {
+                [void]$commonVersions.Add($versionString)
+            }
+        }
+        else {
+            $nextCommonVersions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($versionString in $versionStrings) {
+                if ($commonVersions.Contains($versionString)) {
+                    [void]$nextCommonVersions.Add($versionString)
+                }
+            }
+            $commonVersions = $nextCommonVersions
+        }
     }
 
-    $directoryManagementModule = Get-Module -ListAvailable -Name "Microsoft.Graph.Identity.DirectoryManagement" |
+    if (-not $commonVersions -or $commonVersions.Count -eq 0) {
+        throw "No common Microsoft Graph module version is installed across: $($coreModules -join ', ')."
+    }
+
+    $selectedGraphVersion = $commonVersions |
+        ForEach-Object { [version]$_ } |
+        Sort-Object -Descending |
+        Select-Object -First 1
+
+    foreach ($moduleName in $coreModules) {
+        Import-Module $moduleName -RequiredVersion $selectedGraphVersion -Force -WarningAction SilentlyContinue
+        Write-Host "  [+] $moduleName v$selectedGraphVersion" -ForegroundColor Green
+    }
+
+    $directoryManagementModule = Get-Module -ListAvailable -Name $optionalRoleModule |
         Sort-Object Version -Descending |
         Select-Object -First 1
 
-    if ($directoryManagementModule) {
-        Import-Module "Microsoft.Graph.Identity.DirectoryManagement" -Force -WarningAction SilentlyContinue
-        Write-Host "  [+] Microsoft.Graph.Identity.DirectoryManagement v$($directoryManagementModule.Version)" -ForegroundColor Green
+    if ($directoryManagementModule -and ($directoryManagementModule.Version -eq $selectedGraphVersion)) {
+        Import-Module $optionalRoleModule -RequiredVersion $selectedGraphVersion -Force -WarningAction SilentlyContinue
+        Write-Host "  [+] $optionalRoleModule v$selectedGraphVersion" -ForegroundColor Green
         $script:CanResolveAdminRoles = $true
     }
     else {
-        Write-Warning "  [!] Microsoft.Graph.Identity.DirectoryManagement is not installed. Admin role resolution will be skipped."
+        Write-Warning "  [!] $optionalRoleModule v$selectedGraphVersion is not installed. Admin role resolution will be skipped."
         $script:CanResolveAdminRoles = $false
     }
 }
@@ -172,7 +204,7 @@ function Get-AdminUserIds {
 
     if (-not $script:CanResolveAdminRoles) {
         Write-Warning "  [!] Skipping privileged role lookup because Microsoft.Graph.Identity.DirectoryManagement is unavailable."
-        return $adminIds
+        return ,$adminIds
     }
 
     try {
@@ -191,7 +223,7 @@ function Get-AdminUserIds {
         Write-Warning "  [!] Could not retrieve role memberships: $_"
     }
 
-    return $adminIds
+    return ,$adminIds
 }
 
 function Get-MfaReport {
