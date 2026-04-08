@@ -25,6 +25,10 @@ The current catalog includes 44 toolbox-native scripts across categories such as
   Generated report artifacts written by backend runs
 - `docker-compose.yml`
   Starts the backend and frontend containers together
+- `docker-compose.prod.yml`
+  Production-oriented Docker Compose deployment for self-hosting
+- `docker-compose.coolify.yml`
+  Compose variant aimed at Coolify or Portainer-style deployments
 
 ## Current capabilities
 
@@ -188,7 +192,16 @@ What Compose exposes:
 - `http://localhost:5173` for the frontend
 - `http://localhost:3001` for the backend API
 
-Deployment steps:
+Available compose files:
+
+- `docker-compose.yml`
+  Local default compose file that publishes the frontend on port `5173`
+- `docker-compose.prod.yml`
+  Production-oriented self-hosted deployment that publishes the frontend on port `8080` by default
+- `docker-compose.coolify.yml`
+  Platform-friendly variant that uses a named Docker volume for report output and keeps the backend internal
+
+Default deployment steps:
 
 ```powershell
 cd C:\VSCode\M365-Toolbox
@@ -210,6 +223,55 @@ docker compose logs -f backend
 docker compose logs -f frontend
 docker compose down
 ```
+
+Deploy with the production compose file:
+
+```powershell
+cd C:\VSCode\M365-Toolbox
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Default production ports:
+
+- Frontend: `http://localhost:8080`
+- Backend health: `http://localhost:3001/api/health`
+
+The production compose file supports these environment overrides:
+
+- `FRONTEND_ORIGIN`
+  Public frontend URL used by backend CORS validation
+- `FRONTEND_PORT`
+  Host port mapped to the frontend container, default `8080`
+- `BACKEND_PORT`
+  Host port mapped to the backend container, default `3001`
+
+Example:
+
+```powershell
+$env:FRONTEND_ORIGIN="https://toolbox.example.com"
+$env:FRONTEND_PORT="80"
+$env:BACKEND_PORT="3001"
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Deploy with the Coolify or Portainer-friendly compose file:
+
+```powershell
+docker compose -f docker-compose.coolify.yml up -d --build
+```
+
+Why this variant is different:
+
+- the backend uses `expose` instead of a public host port
+- report output is stored in a named Docker volume called `toolbox_output`
+- runtime values are expected to be supplied by the platform UI
+
+Recommended variables for Coolify or Portainer:
+
+- `FRONTEND_ORIGIN`
+  Set this to the public URL of the deployed frontend, for example `https://toolbox.example.com`
+- `FRONTEND_PORT`
+  Optional host port override if you are not using a platform-managed proxy
 
 When to rebuild:
 
@@ -234,6 +296,7 @@ Notes for deployment:
 - The backend keeps run history in memory, so restarting the backend clears the in-app run list.
 - Generated artifacts remain in the host `output/` folder because it is mounted into the container.
 - Scripts are loaded from the host `scripts/` folder, so keep that directory in place on the machine running Docker Compose.
+- The Coolify or Portainer-friendly compose file stores artifacts in a Docker-managed volume instead of the host `output/` folder.
 
 ## Run with Docker
 

@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      OUTPUT_DIR: /app/output
+      TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
+    volumes:
+      - toolbox_output:/app/output
+      - ./scripts:/toolbox-scripts:ro
+    expose:
+      - "3001"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  toolbox_output:
