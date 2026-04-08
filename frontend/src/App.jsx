@@ -508,7 +508,7 @@ export function App() {
             <div>{runs.length === 0 ? "No runs yet." : `${runs.length} tracked run${runs.length === 1 ? "" : "s"}`}</div>
             <a
               className="sidebar-repo-link"
-              href="https://github.com/"
+              href="https://github.com/albercuba/M365-Toolbox"
               target="_blank"
               rel="noreferrer"
               aria-label="Open GitHub repository"
@@ -519,7 +519,7 @@ export function App() {
                   fill="currentColor"
                 />
               </svg>
-              <span>GitHub Repo</span>
+              <span>GitHub</span>
             </a>
           </div>
         </aside>
