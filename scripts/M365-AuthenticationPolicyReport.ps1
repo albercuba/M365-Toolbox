@@ -16,10 +16,15 @@ Write-SectionHeader "COLLECTING AUTHENTICATION POLICY DATA"
 $securityDefaults = $null
 $authMethodsPolicy = $null
 $microsoftAuthenticator = $null
+$collectionWarnings = @()
 
-try { $securityDefaults = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/identitySecurityDefaultsEnforcementPolicy' -ErrorAction Stop } catch {}
-try { $authMethodsPolicy = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/authenticationMethodsPolicy' -ErrorAction Stop } catch {}
-try { $microsoftAuthenticator = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/MicrosoftAuthenticator' -ErrorAction Stop } catch {}
+try { $securityDefaults = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/identitySecurityDefaultsEnforcementPolicy' -ErrorAction Stop } catch { $collectionWarnings += "Security Defaults: $($_.Exception.Message)" }
+try { $authMethodsPolicy = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/authenticationMethodsPolicy' -ErrorAction Stop } catch { $collectionWarnings += "Authentication Methods Policy: $($_.Exception.Message)" }
+try { $microsoftAuthenticator = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/MicrosoftAuthenticator' -ErrorAction Stop } catch { $collectionWarnings += "Microsoft Authenticator configuration: $($_.Exception.Message)" }
+
+foreach ($warningMessage in $collectionWarnings) {
+    Write-Warning "  [!] $warningMessage"
+}
 
 $rows = @(
     [pscustomobject]@{ Setting = "Security Defaults"; Value = if ($securityDefaults.isEnabled) { "Enabled" } else { "Disabled" } },
@@ -40,6 +45,11 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Authentication Policy Repo
     @{ label = "Tenant"; value = $tenantName },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
+    @{
+        title = "Collection Status"
+        badge = if ($collectionWarnings.Count -gt 0) { "Warning" } else { "Healthy" }
+        text = if ($collectionWarnings.Count -gt 0) { ($collectionWarnings -join "`n") } else { "Authentication policy data was collected successfully." }
+    },
     @{
         title = "Authentication Policy Settings"
         badge = "Tenant posture"

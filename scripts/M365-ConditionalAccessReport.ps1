@@ -8,13 +8,22 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Policy.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING CONDITIONAL ACCESS DATA"
 
-$policies = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies?$top=999')
+$policies = @()
+$policyWarning = $null
+try {
+    $policies = @(Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop)
+}
+catch {
+    $policyWarning = $_.Exception.Message
+    Write-Warning "  [!] Conditional Access policies could not be retrieved. $policyWarning"
+}
+
 if (-not $IncludeDisabledPolicies) {
     $policies = @($policies | Where-Object { $_.state -ne "disabled" })
 }
@@ -51,6 +60,11 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Conditional Access Report"
     @{ label = "Disabled Included"; value = if ($IncludeDisabledPolicies) { "Yes" } else { "No" } },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
+    @{
+        title = "Collection Status"
+        badge = if ($policyWarning) { "Warning" } else { "Healthy" }
+        text = if ($policyWarning) { "Conditional Access policies could not be retrieved: $policyWarning" } else { "Conditional Access policies were collected successfully." }
+    },
     @{
         title = "Policy Inventory"
         badge = "$($policyRows.Count) policies"

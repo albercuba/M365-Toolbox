@@ -810,7 +810,9 @@ function Export-SignInReports {
 
     $safeName = Get-SafeFileBaseName -Value $Context.Upn
     $escapedUpn = $Context.Upn.Replace("'", "''")
-    $filter = "userPrincipalName eq '$escapedUpn' and createdDateTime ge $($StartDate.ToString('o')) and createdDateTime le $($EndDate.ToString('o'))"
+    $startUtc = $StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $endUtc = $EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $filter = "userPrincipalName eq '$escapedUpn' and createdDateTime ge $startUtc and createdDateTime le $endUtc"
     $signIns = @(Get-MgAuditLogSignIn -Filter $filter -All -ErrorAction Stop)
 
     $normalized = foreach ($signIn in $signIns) {

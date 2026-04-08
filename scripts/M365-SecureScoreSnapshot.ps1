@@ -14,10 +14,20 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING SECURE SCORE DATA"
 
-$scoreResponse = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/security/secureScores?$top=1' -ErrorAction Stop
-$score = @($scoreResponse.value | Sort-Object createdDateTime -Descending | Select-Object -First 1)[0]
-$controlResponse = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/security/secureScoreControlProfiles?`$top={0}" -f $TopActions) -ErrorAction Stop
-$controls = @($controlResponse.value)
+$secureScoreWarning = $null
+$score = $null
+$controls = @()
+
+try {
+    $scoreResponse = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/security/secureScores?$top=1' -ErrorAction Stop
+    $score = @($scoreResponse.value | Sort-Object createdDateTime -Descending | Select-Object -First 1)[0]
+    $controlResponse = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/security/secureScoreControlProfiles?`$top={0}" -f $TopActions) -ErrorAction Stop
+    $controls = @($controlResponse.value)
+}
+catch {
+    $secureScoreWarning = $_.Exception.Message
+    Write-Warning "  [!] Secure Score data could not be retrieved. $secureScoreWarning"
+}
 
 $controlRows = foreach ($control in $controls) {
     [pscustomobject]@{
@@ -29,8 +39,8 @@ $controlRows = foreach ($control in $controls) {
     }
 }
 
-$currentScore = [double]$score.currentScore
-$maxScore = [double]$score.maxScore
+$currentScore = if ($score) { [double]$score.currentScore } else { 0 }
+$maxScore = if ($score) { [double]$score.maxScore } else { 0 }
 $percent = if ($maxScore -gt 0) { [math]::Round(($currentScore / $maxScore) * 100, 1) } else { 0 }
 $tenantName = if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" }
 $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "SecureScore" -OutputPath $OutputPath
@@ -38,17 +48,17 @@ $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "SecureScore" -Outpu
 Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Secure Score Snapshot" -Tenant $tenantName -Subtitle "Current Secure Score and top control opportunities" -Kpis @(
     @{ label = "Current"; value = $currentScore; sub = "Current secure score"; cls = "neutral" },
     @{ label = "Max"; value = $maxScore; sub = "Maximum score"; cls = "neutral" },
-    @{ label = "Percent"; value = "$percent%"; sub = "Score attainment"; cls = if ($percent -lt 50) { "warn" } elseif ($percent -lt 75) { "neutral" } else { "ok" } },
-    @{ label = "Controls"; value = $controlRows.Count; sub = "Improvement actions"; cls = "neutral" }
+    @{ label = "Percent"; value = "$percent%"; sub = "Score attainment"; cls = if ($secureScoreWarning) { "warn" } elseif ($percent -lt 50) { "warn" } elseif ($percent -lt 75) { "neutral" } else { "ok" } },
+    @{ label = "Controls"; value = $controlRows.Count; sub = "Improvement actions"; cls = if ($secureScoreWarning) { "warn" } else { "neutral" } }
 ) -StripItems @(
     @{ label = "Tenant"; value = $tenantName },
-    @{ label = "Snapshot"; value = if ($score.createdDateTime) { (Get-Date $score.createdDateTime).ToString("yyyy-MM-dd HH:mm") } else { "Latest" } },
+    @{ label = "Snapshot"; value = if ($score -and $score.createdDateTime) { (Get-Date $score.createdDateTime).ToString("yyyy-MM-dd HH:mm") } else { "Unavailable" } },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
     @{
         title = "Score Snapshot"
-        badge = "$percent%"
-        text = if ($score.averageComparativeScores) { "Secure Score snapshot captured successfully." } else { "Latest secure score snapshot captured successfully." }
+        badge = if ($secureScoreWarning) { "Unavailable" } else { "$percent%" }
+        text = if ($secureScoreWarning) { "Secure Score data could not be retrieved: $secureScoreWarning" } elseif ($score.averageComparativeScores) { "Secure Score snapshot captured successfully." } else { "Latest secure score snapshot captured successfully." }
     },
     @{
         title = "Control Opportunities"

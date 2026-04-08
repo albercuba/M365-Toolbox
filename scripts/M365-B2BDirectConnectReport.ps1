@@ -14,11 +14,14 @@ Resolve-ToolboxTenantLabel
 Write-SectionHeader "COLLECTING CROSS-TENANT ACCESS DATA"
 
 $policy = $null
+$policyWarning = $null
 try {
     $policy = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/crossTenantAccessPolicy' -ErrorAction Stop
 }
 catch {
     $policy = $null
+    $policyWarning = $_.Exception.Message
+    Write-Warning "  [!] Cross-tenant access policy could not be retrieved. $policyWarning"
 }
 
 $rows = @(
@@ -40,6 +43,11 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 B2B Direct Connect Report"
     @{ label = "Tenant"; value = $tenantName },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
+    @{
+        title = "Collection Status"
+        badge = if ($policyWarning) { "Warning" } else { "Healthy" }
+        text = if ($policyWarning) { "Cross-tenant access policy could not be retrieved: $policyWarning" } else { "Cross-tenant access policy data was collected successfully." }
+    },
     @{
         title = "Cross-Tenant Access Defaults"
         badge = "Policy"
