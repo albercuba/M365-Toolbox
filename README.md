@@ -167,7 +167,28 @@ By default, Docker mounts:
 5. If a Microsoft device-code prompt appears in stdout, the UI opens a sign-in modal.
 6. If the script generates an HTML report, the backend serves it back for inline preview and download.
 
-## Run with Docker
+## Deploy with Docker Compose
+
+Docker Compose is the easiest way to deploy the project because it builds both services, wires the frontend to the backend, and mounts the folders used for scripts and generated output.
+
+What Compose starts:
+
+- `backend`
+  Node/Express API with `pwsh`, Microsoft Graph modules, Exchange Online Management, and the script runner
+- `frontend`
+  Nginx container serving the built React app
+
+What Compose mounts:
+
+- `./scripts` into the backend container at `/toolbox-scripts` as read-only
+- `./output` into the backend container at `/app/output` for generated artifacts
+
+What Compose exposes:
+
+- `http://localhost:5173` for the frontend
+- `http://localhost:3001` for the backend API
+
+Deployment steps:
 
 ```powershell
 cd C:\VSCode\M365-Toolbox
@@ -175,16 +196,53 @@ docker compose build
 docker compose up -d
 ```
 
-Open:
+After deployment:
 
 - Frontend: `http://localhost:5173`
 - Backend health: `http://localhost:3001/api/health`
 
-If you change backend code, script metadata, or PowerShell dependencies, rebuild the backend image:
+Useful Docker Compose commands:
+
+```powershell
+docker compose ps
+docker compose logs -f
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose down
+```
+
+When to rebuild:
+
+- Rebuild `backend` if you change backend code, script metadata, PowerShell scripts, or PowerShell module installation
+- Rebuild `frontend` if you change the React UI and want the containerized build updated
+- Rebuild everything if you change shared package metadata or Dockerfiles
+
+Examples:
 
 ```powershell
 docker compose build backend
 docker compose up -d backend
+```
+
+```powershell
+docker compose build frontend
+docker compose up -d frontend
+```
+
+Notes for deployment:
+
+- The backend keeps run history in memory, so restarting the backend clears the in-app run list.
+- Generated artifacts remain in the host `output/` folder because it is mounted into the container.
+- Scripts are loaded from the host `scripts/` folder, so keep that directory in place on the machine running Docker Compose.
+
+## Run with Docker
+
+If you just want the short version:
+
+```powershell
+cd C:\VSCode\M365-Toolbox
+docker compose build
+docker compose up -d
 ```
 
 ## Run locally for development
