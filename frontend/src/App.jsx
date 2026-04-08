@@ -54,6 +54,43 @@ function groupScriptsByCategory(scripts) {
   }, {});
 }
 
+function CategoryIcon({ category }) {
+  const normalized = (category || "Other").toLowerCase();
+  let path = "M12 3.5a8.5 8.5 0 1 0 8.5 8.5A8.51 8.51 0 0 0 12 3.5Zm0 4.25a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 12 7.75Zm2.25 8.5h-4.5v-1.5h.75v-2.25h-.75V11h3v3.75h1.5Z";
+
+  if (normalized === "identity") {
+    path = "M12 3.5c-2.9 0-5.25 2.35-5.25 5.25S9.1 14 12 14s5.25-2.35 5.25-5.25S14.9 3.5 12 3.5Zm0 12c-3.43 0-6.38 1.9-7.88 4.7l1.33.8c1.23-2.3 3.68-3.75 6.55-3.75s5.32 1.45 6.55 3.75l1.33-.8c-1.5-2.8-4.45-4.7-7.88-4.7Z";
+  } else if (normalized === "exchange") {
+    path = "M4 6.25A2.25 2.25 0 0 1 6.25 4h11.5A2.25 2.25 0 0 1 20 6.25v11.5A2.25 2.25 0 0 1 17.75 20H6.25A2.25 2.25 0 0 1 4 17.75ZM7 8v1.5h10V8Zm0 3.25v1.5h6.5v-1.5Zm0 3.25V16h8v-1.5Z";
+  } else if (normalized === "security") {
+    path = "M12 3.5 5.5 6v4.75c0 4.15 2.8 7.97 6.5 8.95 3.7-.98 6.5-4.8 6.5-8.95V6Zm0 4a2.5 2.5 0 0 1 2.5 2.5v.5h.5v4h-6v-4h.5V10A2.5 2.5 0 0 1 12 7.5Zm0 1.5A1 1 0 0 0 11 10v.5h2V10a1 1 0 0 0-1-1Z";
+  } else if (normalized === "sharepoint") {
+    path = "M7 5.25A3.75 3.75 0 1 0 10.75 9 3.75 3.75 0 0 0 7 5.25Zm10 2A2.75 2.75 0 1 0 19.75 10 2.75 2.75 0 0 0 17 7.25ZM8 14c-3.05 0-5.65 1.68-7 4.17L2.28 19C3.38 16.96 5.5 15.5 8 15.5c1.13 0 2.18.3 3.08.83l.73-1.31A7.97 7.97 0 0 0 8 14Zm9.25.5c-2.14 0-4.02 1.07-5.16 2.7l1.23.86c.87-1.25 2.31-2.06 3.93-2.06 1.28 0 2.45.5 3.33 1.32l1.02-1.1a6.25 6.25 0 0 0-4.35-1.72Z";
+  } else if (normalized === "teams") {
+    path = "M6 6.25A2.25 2.25 0 0 1 8.25 4h5.5A2.25 2.25 0 0 1 16 6.25v11.5A2.25 2.25 0 0 1 13.75 20h-5.5A2.25 2.25 0 0 1 6 17.75ZM9 8v1.5h1.75V16h1.5V9.5H14V8Zm9.25.5a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5Zm-1.5 4.75a2.75 2.75 0 0 0-2.75 2.75V17h5.5v-1a2.75 2.75 0 0 0-2.75-2.75Z";
+  } else if (normalized === "reporting") {
+    path = "M5 19.25h14v1.5H3.5V5H5Zm2-2.5V10h1.75v6.75Zm4 0V7.5h1.75v9.25Zm4 0V12h1.75v4.75Z";
+  } else if (normalized === "licensing") {
+    path = "M12 3.75 5 6.5v5.25c0 4.1 2.72 7.87 7 8.75 4.28-.88 7-4.65 7-8.75V6.5Zm-1.25 5h2.5v2.5h2.5v2.5h-2.5v2.5h-2.5v-2.5h-2.5v-2.5h2.5Z";
+  } else if (normalized === "incident response") {
+    path = "M12 4 3.5 19.5h17ZM12 9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 12 9Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z";
+  } else if (normalized === "operations") {
+    path = "m12 4 1.15 2.53 2.78.33-1.87 2 0.5 2.74L12 10.35 9.44 11.6l.5-2.74-1.87-2 2.78-.33Zm-6.5 8 1.15 2.53 2.78.33-1.87 2 .5 2.74L5.5 18.35 2.94 19.6l.5-2.74-1.87-2 2.78-.33Zm13 0 1.15 2.53 2.78.33-1.87 2 .5 2.74-2.56-1.25-2.56 1.25.5-2.74-1.87-2 2.78-.33Z";
+  } else if (normalized === "collaboration") {
+    path = "M8 6.25A2.25 2.25 0 1 0 10.25 8.5 2.25 2.25 0 0 0 8 6.25Zm8 0A2.25 2.25 0 1 0 18.25 8.5 2.25 2.25 0 0 0 16 6.25ZM4.75 17A3.25 3.25 0 0 1 8 13.75h.5A3.25 3.25 0 0 1 11.75 17v.75h-7Zm7.5.75V17a4.7 4.7 0 0 0-.77-2.56 3.23 3.23 0 0 1 1.77-.69H16A3.25 3.25 0 0 1 19.25 17v.75Z";
+  } else if (normalized === "devices") {
+    path = "M7.25 4h9.5A2.25 2.25 0 0 1 19 6.25v11.5A2.25 2.25 0 0 1 16.75 20h-9.5A2.25 2.25 0 0 1 5 17.75V6.25A2.25 2.25 0 0 1 7.25 4ZM11 16.5h2v-1.25h-2Z";
+  }
+
+  return (
+    <span className="catalog-group-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <path d={path} fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
 function getFavoriteScriptIds() {
   try {
     const raw = window.localStorage.getItem("m365-toolbox-favorites");
@@ -420,7 +457,10 @@ export function App() {
                       setExpandedCategories(isExpanded ? {} : { [category]: true })
                     }
                   >
-                    <span className="catalog-group-title">{category}</span>
+                    <span className="catalog-group-title">
+                      <CategoryIcon category={category} />
+                      <span>{category}</span>
+                    </span>
                     <span className="catalog-group-count">{scriptGroups[category].length}</span>
                     <span className="catalog-group-chevron">{isExpanded ? "▾" : "▸"}</span>
                   </button>
