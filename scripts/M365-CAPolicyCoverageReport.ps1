@@ -43,13 +43,19 @@ function Get-CaUserNames {
         if (-not $userNameCache.ContainsKey($id)) {
             try {
                 $user = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/users/{0}?`$select=displayName,userPrincipalName" -f $id) -ErrorAction Stop
-                $label = if ($user.userPrincipalName) {
+                $label = $null
+                if ($user.userPrincipalName) {
                     "{0} ({1})" -f [string]$user.displayName, [string]$user.userPrincipalName
                 }
                 else {
                     [string]$user.displayName
                 }
-                $userNameCache[$id] = if ($label) { $label } else { [string]$id }
+                if ($label) {
+                    $userNameCache[$id] = $label
+                }
+                else {
+                    $userNameCache[$id] = [string]$id
+                }
             }
             catch {
                 $userNameCache[$id] = [string]$id
@@ -59,7 +65,11 @@ function Get-CaUserNames {
         [void]$names.Add([string]$userNameCache[$id])
     }
 
-    return if ($names.Count -gt 0) { $names -join "; " } else { "None" }
+    if ($names.Count -gt 0) {
+        return ($names -join "; ")
+    }
+
+    return "None"
 }
 
 function Get-CaGroupNames {
@@ -72,7 +82,12 @@ function Get-CaGroupNames {
         if (-not $groupNameCache.ContainsKey($id)) {
             try {
                 $group = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/groups/{0}?`$select=displayName" -f $id) -ErrorAction Stop
-                $groupNameCache[$id] = if ($group.displayName) { [string]$group.displayName } else { [string]$id }
+                if ($group.displayName) {
+                    $groupNameCache[$id] = [string]$group.displayName
+                }
+                else {
+                    $groupNameCache[$id] = [string]$id
+                }
             }
             catch {
                 $groupNameCache[$id] = [string]$id
@@ -82,7 +97,11 @@ function Get-CaGroupNames {
         [void]$names.Add([string]$groupNameCache[$id])
     }
 
-    return if ($names.Count -gt 0) { $names -join "; " } else { "None" }
+    if ($names.Count -gt 0) {
+        return ($names -join "; ")
+    }
+
+    return "None"
 }
 
 function Get-CaAppNames {
@@ -115,7 +134,12 @@ function Get-CaAppNames {
             try {
                 $servicePrincipals = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appId eq '{0}'&`$select=displayName,appId" -f $id))
                 $servicePrincipal = @($servicePrincipals | Select-Object -First 1)[0]
-                $appNameCache[$id] = if ($servicePrincipal.displayName) { [string]$servicePrincipal.displayName } else { [string]$id }
+                if ($servicePrincipal.displayName) {
+                    $appNameCache[$id] = [string]$servicePrincipal.displayName
+                }
+                else {
+                    $appNameCache[$id] = [string]$id
+                }
             }
             catch {
                 $appNameCache[$id] = [string]$id
@@ -125,7 +149,11 @@ function Get-CaAppNames {
         [void]$names.Add([string]$appNameCache[$id])
     }
 
-    return if ($names.Count -gt 0) { $names -join "; " } else { "None" }
+    if ($names.Count -gt 0) {
+        return ($names -join "; ")
+    }
+
+    return "None"
 }
 
 $policies = @(Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop)
@@ -151,13 +179,13 @@ $rows = foreach ($policy in $policies) {
         IncludeGroupsNames = Get-CaGroupNames -Ids @($policy.conditions.users.includeGroups)
         ExcludeGroups      = $excludeGroups
         ExcludeGroupsNames = Get-CaGroupNames -Ids @($policy.conditions.users.excludeGroups)
-        GuestScope         = if ($includeGuests -gt 0) { "Included" } else { "Not Explicit" }
+        GuestScope         = $(if ($includeGuests -gt 0) { "Included" } else { "Not Explicit" })
         Apps               = $includeApps.Count
         AppNames           = Get-CaAppNames -Ids $includeApps
     }
 }
 
-$tenantName = if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" }
+$tenantName = $(if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" })
 $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "CAPolicyCoverage" -OutputPath $OutputPath
 
 Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 CA Policy Coverage Report" -Tenant $tenantName -Subtitle "Conditional Access scope and exclusions overview" -Kpis @(
@@ -167,7 +195,7 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 CA Policy Coverage Report"
     @{ label = "With Exclusions"; value = @($rows | Where-Object { $_.ExcludeUsers -gt 0 -or $_.ExcludeGroups -gt 0 }).Count; sub = "Review scope"; cls = "warn" }
 ) -StripItems @(
     @{ label = "Tenant"; value = $tenantName },
-    @{ label = "Disabled Included"; value = if ($IncludeDisabledPolicies) { "Yes" } else { "No" } },
+    @{ label = "Disabled Included"; value = $(if ($IncludeDisabledPolicies) { "Yes" } else { "No" }) },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
     @{
