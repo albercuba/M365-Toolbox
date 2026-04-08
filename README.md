@@ -37,24 +37,104 @@ The current catalog includes 44 toolbox-native scripts across categories such as
 - Device-code modal that surfaces the sign-in code and login URL
 - GitHub repository link in the sidebar footer
 
-## Script catalog highlights
+## Current script catalog
 
-Representative workflows currently included in the toolbox:
+Core workflows and reporting:
 
-- `M365-CompromisedAccountRemediation.ps1`
-- `M365-MfaReport.ps1`
-- `M365-UsageReport.ps1`
-- `M365-LicensingReport.ps1`
-- `M365-ConditionalAccessReport.ps1`
-- `M365-SecureScoreSnapshot.ps1`
-- `M365-AdminRoleAudit.ps1`
-- `M365-PrivilegedAppAudit.ps1`
-- `M365-DefenderIncidentSnapshot.ps1`
-- `M365-DeviceComplianceSnapshot.ps1`
-- `M365-BreakGlassAccountAudit.ps1`
-- `M365-MailflowConnectorAudit.ps1`
+- `scripts/M365-CompromisedAccountRemediation.ps1`
+  Contains and investigates compromised accounts, then generates an incident dashboard.
+- `scripts/M365-MfaReport.ps1`
+  Builds a tenant-wide MFA coverage report with admin-risk visibility.
+- `scripts/M365-UsageReport.ps1`
+  Creates OneDrive, SharePoint, and mailbox usage dashboards.
+- `scripts/M365-LicensingReport.ps1`
+  Reviews subscribed SKUs, assigned licenses, and unlicensed users.
+- `scripts/M365-GuestAccessReport.ps1`
+  Audits guest accounts, invitation state, stale guests, and external domains.
+- `scripts/M365-ConditionalAccessReport.ps1`
+  Summarizes Conditional Access policies, state, scope, and grant controls.
+- `scripts/M365-MailForwardingAudit.ps1`
+  Finds mailbox forwarding and inbox rules that redirect mail.
+- `scripts/M365-SharedMailboxReport.ps1`
+  Reviews shared mailboxes, forwarding, visibility, and delegate counts.
+- `scripts/M365-SignInRiskReport.ps1`
+  Shows risky users and detections when Identity Protection data is licensed and available.
+- `scripts/M365-TeamsExternalAccessReport.ps1`
+  Reviews Teams guest exposure, ownership gaps, and external membership.
+- `scripts/M365-SharePointSharingReport.ps1`
+  Combines SharePoint tenant sharing settings with site usage inventory.
+- `scripts/M365-SecureScoreSnapshot.ps1`
+  Captures the latest Secure Score snapshot and top improvement controls.
+- `scripts/M365-AdminRoleAudit.ps1`
+  Audits privileged role assignments and MFA hygiene for admin accounts.
 
-Additional scripts cover guest access, Teams ownership, mailbox permissions, external sharing, service health, mail transport rules, password reset readiness, legacy auth exposure, PIM role activation, app credential expiry, and more.
+Audit, hygiene, and operations reports:
+
+- `scripts/M365-InactiveUsersReport.ps1`
+  Identifies inactive accounts and likely license-reclaim candidates.
+- `scripts/M365-AppConsentAudit.ps1`
+  Reviews enterprise app consent grants and high-privilege delegated scopes.
+- `scripts/M365-MailboxPermissionAudit.ps1`
+  Audits Full Access and Send As delegation across mailboxes.
+- `scripts/M365-ExternalSharingLinksReport.ps1`
+  Reviews SharePoint external sharing posture and active sites.
+- `scripts/M365-DistributionGroupAudit.ps1`
+  Audits distribution group ownership, membership, and external sender exposure.
+- `scripts/M365-ServiceHealthSnapshot.ps1`
+  Captures current Microsoft 365 service health and active advisories.
+- `scripts/M365-AuthenticationPolicyReport.ps1`
+  Reviews security defaults and authentication methods policy posture.
+- `scripts/M365-PrivilegedAppAudit.ps1`
+  Inventories service principal credentials and non-human identity exposure.
+- `scripts/M365-DkimDmarcReport.ps1`
+  Reviews accepted domains for DKIM signing and DMARC presence.
+- `scripts/M365-GroupLifecycleReport.ps1`
+  Audits Microsoft 365 group ownership, renewal activity, and lifecycle hygiene.
+
+Latest additions:
+
+- `scripts/M365-CAPolicyCoverageReport.ps1`
+  Maps Conditional Access inclusion and exclusion coverage across users, groups, guests, and apps.
+- `scripts/M365-LegacyAuthExposureReport.ps1`
+  Surfaces recent legacy-authentication sign-ins and affected users.
+- `scripts/M365-PIMRoleActivationReport.ps1`
+  Reviews active and eligible privileged role schedule instances from Entra ID.
+- `scripts/M365-DeviceComplianceSnapshot.ps1`
+  Summarizes Intune-managed device compliance, ownership, and platform mix.
+- `scripts/M365-B2BDirectConnectReport.ps1`
+  Reviews cross-tenant access defaults and B2B direct connect posture.
+- `scripts/M365-MailTransportRulesAudit.ps1`
+  Audits Exchange Online mail transport rules and test/audit mode coverage.
+- `scripts/M365-DefenderIncidentSnapshot.ps1`
+  Captures current Defender incidents, severity, and status.
+- `scripts/M365-PrivilegedGroupAudit.ps1`
+  Reviews sensitive groups for owner gaps and membership exposure.
+- `scripts/M365-PasswordResetReadinessReport.ps1`
+  Estimates self-service password reset readiness from registered auth methods.
+- `scripts/M365-OneDriveExternalSharingReport.ps1`
+  Reviews OneDrive usage and highlights large or highly active personal sites.
+- `scripts/M365-MFARegistrationCampaignReport.ps1`
+  Reviews MFA registration campaign settings and rollout posture.
+- `scripts/M365-EnterpriseAppsInventory.ps1`
+  Inventories enterprise applications for ownership, visibility, and risk review.
+- `scripts/M365-GuestInvitationFailures.ps1`
+  Surfaces guest invitation issues and onboarding failures for follow-up.
+- `scripts/M365-MailboxAutoReplyAudit.ps1`
+  Reviews mailbox automatic replies for external exposure and operational awareness.
+- `scripts/M365-CalendarSharingAudit.ps1`
+  Audits mailbox calendar sharing posture and external visibility.
+- `scripts/M365-RoleEligibleAssignmentsReport.ps1`
+  Reviews eligible privileged role assignments and standing access exposure.
+- `scripts/M365-AnonymousLinkExposureReport.ps1`
+  Highlights anonymous sharing links and externally accessible content exposure.
+- `scripts/M365-TeamsOwnershipAudit.ps1`
+  Reviews Microsoft Teams ownership gaps and governance hygiene.
+- `scripts/M365-AppCredentialExpiryReport.ps1`
+  Finds expiring or stale application credentials that need rotation.
+- `scripts/M365-MailflowConnectorAudit.ps1`
+  Reviews inbound and outbound Exchange Online connectors, relay paths, and TLS posture.
+- `scripts/M365-BreakGlassAccountAudit.ps1`
+  Reviews emergency access accounts for privilege, MFA, and recent sign-in visibility.
 
 The registry for the full catalog lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbox/backend/src/data/scripts.js), and the PowerShell entry scripts live in [scripts](/c:/VSCode/M365-Toolbox/scripts).
 
