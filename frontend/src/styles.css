@@ -377,23 +377,6 @@ textarea {
   overflow: hidden;
 }
 
-.tenant-badges {
-  display: flex;
-  gap: 0.3rem;
-  flex-wrap: wrap;
-  margin-top: 0.35rem;
-}
-
-.tiny-badge {
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  color: var(--accent);
-  background: rgba(15, 134, 216, 0.08);
-  border: 1px solid rgba(15, 134, 216, 0.14);
-  border-radius: 999px;
-  padding: 0.12rem 0.38rem;
-}
-
 .favorite-btn {
   align-self: flex-start;
   border: 1px solid var(--border);

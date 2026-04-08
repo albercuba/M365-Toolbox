@@ -515,11 +515,6 @@ export function App() {
                           <div className="tenant-info">
                             <div className="tenant-name">{script.name}</div>
                             <div className="tenant-meta">{script.summary}</div>
-                            <div className="tenant-badges">
-                              <span className="tiny-badge">{script.authType}</span>
-                              <span className="tiny-badge">{script.mode}</span>
-                              <span className="tiny-badge">{script.outputType}</span>
-                            </div>
                           </div>
                           <button
                             type="button"
