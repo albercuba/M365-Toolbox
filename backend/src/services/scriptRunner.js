@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 import { scripts } from "../data/scripts.js";
 
 const OUTPUT_DIR = process.env.OUTPUT_DIR || path.resolve(process.cwd(), "../output");
-const SCRIPT_MOUNT_ROOT = process.env.SCRIPT_MOUNT_ROOT || "C:/VSCode/Powershell";
 const TOOLBOX_SCRIPT_MOUNT_ROOT = process.env.TOOLBOX_SCRIPT_MOUNT_ROOT || path.resolve(process.cwd(), "../scripts");
 const runStore = new Map();
 
@@ -50,7 +49,7 @@ function getScriptMountRoot(script) {
     return process.env[script.scriptMountRootEnv];
   }
 
-  return SCRIPT_MOUNT_ROOT;
+  return TOOLBOX_SCRIPT_MOUNT_ROOT;
 }
 
 function findScriptByFileName(rootPath, fileName) {

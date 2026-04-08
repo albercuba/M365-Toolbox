@@ -142,6 +142,7 @@ docker compose up -d backend
 ## Notes
 
 - The backend container installs `pwsh` and the required Microsoft Graph / Exchange Online modules.
+- The toolbox now runs only toolbox-native scripts from `scripts/`; there is no external PowerShell repository mount anymore.
 - Toolbox-native scripts live in `scripts/` and are exposed through the registry in `backend/src/data/scripts.js`.
 - Shared report helpers live in `scripts/Shared-ToolboxReport.ps1`.
 - Most HTML-style reports use the shared helper for:

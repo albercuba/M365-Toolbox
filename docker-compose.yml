@@ -7,12 +7,10 @@ services:
     environment:
       PORT: 3001
       OUTPUT_DIR: /app/output
-      SCRIPT_MOUNT_ROOT: /workspace-scripts
       TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
       FRONTEND_ORIGIN: http://localhost:5173
     volumes:
       - ./output:/app/output
-      - ../Powershell:/workspace-scripts:ro
       - ./scripts:/toolbox-scripts:ro
     ports:
       - "3001:3001"
