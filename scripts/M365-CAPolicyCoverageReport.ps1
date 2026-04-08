@@ -189,22 +189,22 @@ $detailSections = foreach ($row in ($rows | Sort-Object Policy)) {
     @{
         title = $row.Policy
         badge = $row.State
-        text = @"
-Included Users
-$($row.IncludeUsersNames)
-
-Excluded Users
-$($row.ExcludeUsersNames)
-
-Included Groups
-$($row.IncludeGroupsNames)
-
-Excluded Groups
-$($row.ExcludeGroupsNames)
-
-Applications
-$($row.AppNames)
-"@
+        columns = @(
+            @{ key = "IncludeUsersNames"; header = "Included Users" },
+            @{ key = "ExcludeUsersNames"; header = "Excluded Users" },
+            @{ key = "IncludeGroupsNames"; header = "Included Groups" },
+            @{ key = "ExcludeGroupsNames"; header = "Excluded Groups" },
+            @{ key = "AppNames"; header = "Applications" }
+        )
+        rows = @(
+            [pscustomobject]@{
+                IncludeUsersNames  = $row.IncludeUsersNames
+                ExcludeUsersNames  = $row.ExcludeUsersNames
+                IncludeGroupsNames = $row.IncludeGroupsNames
+                ExcludeGroupsNames = $row.ExcludeGroupsNames
+                AppNames           = $row.AppNames
+            }
+        )
     }
 }
 
