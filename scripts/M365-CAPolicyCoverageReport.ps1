@@ -190,11 +190,11 @@ $detailSections = foreach ($row in ($rows | Sort-Object Policy)) {
         title = $row.Policy
         badge = $row.State
         columns = @(
-            @{ key = "IncludeUsersNames"; header = "Included Users" },
-            @{ key = "ExcludeUsersNames"; header = "Excluded Users" },
-            @{ key = "IncludeGroupsNames"; header = "Included Groups" },
-            @{ key = "ExcludeGroupsNames"; header = "Excluded Groups" },
-            @{ key = "AppNames"; header = "Applications" }
+            @{ key = "IncludeUsersNames"; header = "Included Users"; type = "multiline" },
+            @{ key = "ExcludeUsersNames"; header = "Excluded Users"; type = "multiline" },
+            @{ key = "IncludeGroupsNames"; header = "Included Groups"; type = "multiline" },
+            @{ key = "ExcludeGroupsNames"; header = "Excluded Groups"; type = "multiline" },
+            @{ key = "AppNames"; header = "Applications"; type = "badgelist" }
         )
         rows = @(
             [pscustomobject]@{

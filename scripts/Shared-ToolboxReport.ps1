@@ -304,6 +304,7 @@ function Export-ToolboxHtmlReport {
     .card-body{padding:1.25rem}
     .card-text{font-size:.92rem;color:var(--text2)}
     .pill{display:inline-block;padding:.12rem .45rem;border-radius:4px;font-size:.7rem}
+    .badge-stack{display:flex;flex-wrap:wrap;gap:.35rem}
     .ok{background:rgba(21,128,61,.1);color:var(--ok)}
     .warn{background:rgba(180,83,9,.1);color:var(--warn)}
     .crit{background:rgba(220,38,38,.1);color:var(--crit)}
@@ -363,6 +364,16 @@ function Export-ToolboxHtmlReport {
         const raw=row[col.key];
         if(col.type==='pill'){html+='<td><span class="pill '+pillClass(raw)+'">'+esc(raw||'—')+'</span></td>';continue;}
         if(col.type==='link' && raw){html+='<td><a href="'+esc(raw)+'" target="_blank" rel="noreferrer">'+esc(raw)+'</a></td>';continue;}
+        if(col.type==='multiline'){
+          const lines=String(raw==null?'':raw).split(/\r?\n/).filter(Boolean);
+          html+='<td>'+(lines.length?lines.map(function(line){return esc(line);}).join('<br>'):'—')+'</td>';
+          continue;
+        }
+        if(col.type==='badgelist'){
+          const lines=String(raw==null?'':raw).split(/\r?\n/).filter(Boolean);
+          html+='<td>'+(lines.length?'<div class="badge-stack">'+lines.map(function(line){return '<span class="pill neutral">'+esc(line)+'</span>';}).join('')+'</div>':'—')+'</td>';
+          continue;
+        }
         html+='<td>'+esc(raw||'—')+'</td>';
       }
       html+='</tr>';
