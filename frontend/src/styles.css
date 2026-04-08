@@ -486,6 +486,7 @@ textarea {
 .empty-row,
 .description,
 .form-field small {
+  font-family: var(--mono);
   font-size: 0.85rem;
   color: var(--text2);
 }
