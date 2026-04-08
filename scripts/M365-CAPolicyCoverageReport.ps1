@@ -56,8 +56,7 @@ function Get-CaUserNames {
         if (-not $userNameCache.ContainsKey($id)) {
             try {
                 $user = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/users/{0}?`$select=displayName,userPrincipalName" -f $id) -ErrorAction Stop
-                $label = $null
-                if ($user.userPrincipalName) {
+                $label = if ($user.userPrincipalName) {
                     "{0} ({1})" -f [string]$user.displayName, [string]$user.userPrincipalName
                 }
                 else {
