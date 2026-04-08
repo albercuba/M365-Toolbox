@@ -210,6 +210,53 @@ textarea {
   padding: 0.5rem;
 }
 
+.catalog-group {
+  margin-bottom: 0.45rem;
+}
+
+.catalog-group-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.55rem 0.7rem;
+  color: var(--text2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.catalog-group-header:hover {
+  border-color: var(--border2);
+  background: var(--bg4);
+}
+
+.catalog-group-header.expanded {
+  background: var(--bg2);
+  border-color: var(--border2);
+}
+
+.catalog-group-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.catalog-group-count,
+.catalog-group-chevron {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--text3);
+}
+
+.catalog-group-items {
+  padding-top: 0.35rem;
+}
+
 .tenant-item {
   display: flex;
   align-items: center;
@@ -261,10 +308,15 @@ textarea {
 }
 
 .tenant-meta {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 0.62rem;
   color: var(--text3);
   margin-top: 0.1rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .sidebar-footer {

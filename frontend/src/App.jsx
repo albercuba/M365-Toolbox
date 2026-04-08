@@ -43,6 +43,17 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function groupScriptsByCategory(scripts) {
+  return scripts.reduce((groups, script) => {
+    const category = script.category || "Other";
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+    groups[category].push(script);
+    return groups;
+  }, {});
+}
+
 function Field({ field, value, onChange }) {
   if (field.type === "checkbox") {
     return (
@@ -128,6 +139,7 @@ export function App() {
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
   const [recentRunsOpen, setRecentRunsOpen] = useState(true);
   const [devicePromptDismissed, setDevicePromptDismissed] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState({});
 
   useEffect(() => {
     const load = async () => {
@@ -144,6 +156,7 @@ export function App() {
       if (scriptsData.length > 0) {
         setSelectedScript(scriptsData[0]);
         setFormValues(normalizeDefaults(scriptsData[0].fields));
+        setExpandedCategories({ [scriptsData[0].category || "Other"]: true });
       }
     };
 
@@ -239,6 +252,10 @@ export function App() {
   const handleScriptSelect = (script) => {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
+    setExpandedCategories((current) => ({
+      ...current,
+      [script.category || "Other"]: true
+    }));
     setError("");
     setActiveRun(null);
     setActiveRunHtml("");
@@ -294,6 +311,8 @@ export function App() {
 
   const devicePrompt = extractDeviceCodePrompt(activeRun?.stdout);
   const showDevicePrompt = Boolean(devicePrompt) && activeRun?.status === "running" && !devicePromptDismissed;
+  const scriptGroups = groupScriptsByCategory(scripts);
+  const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="app-shell">
@@ -332,26 +351,52 @@ export function App() {
             <div className="sidebar-label">Script Catalog</div>
           </div>
           <div className="tenant-list">
-            {scripts.map((script) => (
-              <div
-                key={script.id}
-                className={selectedScript?.id === script.id ? "tenant-item active" : "tenant-item"}
-                onClick={() => handleScriptSelect(script)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    handleScriptSelect(script);
-                  }
-                }}
-              >
-                <div className="tenant-avatar">{script.name.slice(0, 2).toUpperCase()}</div>
-                <div className="tenant-info">
-                  <div className="tenant-name">{script.name}</div>
-                  <div className="tenant-meta">{script.category}</div>
+            {sortedCategories.map((category) => {
+              const isExpanded = Boolean(expandedCategories[category]);
+              return (
+                <div key={category} className="catalog-group">
+                  <button
+                    type="button"
+                    className={`catalog-group-header${isExpanded ? " expanded" : ""}`}
+                    onClick={() =>
+                      setExpandedCategories((current) => ({
+                        ...current,
+                        [category]: !current[category]
+                      }))
+                    }
+                  >
+                    <span className="catalog-group-title">{category}</span>
+                    <span className="catalog-group-count">{scriptGroups[category].length}</span>
+                    <span className="catalog-group-chevron">{isExpanded ? "▾" : "▸"}</span>
+                  </button>
+
+                  {isExpanded ? (
+                    <div className="catalog-group-items">
+                      {scriptGroups[category].map((script) => (
+                        <div
+                          key={script.id}
+                          className={selectedScript?.id === script.id ? "tenant-item active" : "tenant-item"}
+                          onClick={() => handleScriptSelect(script)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              handleScriptSelect(script);
+                            }
+                          }}
+                        >
+                          <div className="tenant-avatar">{script.name.slice(0, 2).toUpperCase()}</div>
+                          <div className="tenant-info">
+                            <div className="tenant-name">{script.name}</div>
+                            <div className="tenant-meta">{script.summary}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="sidebar-footer">
