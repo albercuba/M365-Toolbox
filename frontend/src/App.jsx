@@ -164,9 +164,6 @@ export function App() {
   const [expandedCategories, setExpandedCategories] = useState({});
   const [scriptSearch, setScriptSearch] = useState("");
   const [favoriteScriptIds, setFavoriteScriptIds] = useState(() => getFavoriteScriptIds());
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [authFilter, setAuthFilter] = useState("All");
-  const [modeFilter, setModeFilter] = useState("All");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   useEffect(() => {
@@ -350,9 +347,6 @@ export function App() {
   const devicePrompt = extractDeviceCodePrompt(activeRun?.stdout);
   const showDevicePrompt = Boolean(devicePrompt) && activeRun?.status === "running" && !devicePromptDismissed;
   const normalizedSearch = scriptSearch.trim().toLowerCase();
-  const availableCategories = ["All", ...Array.from(new Set(scripts.map((script) => script.category || "Other"))).sort((a, b) => a.localeCompare(b))];
-  const availableAuthTypes = ["All", ...Array.from(new Set(scripts.map((script) => script.authType || "Unknown"))).sort((a, b) => a.localeCompare(b))];
-  const availableModes = ["All", ...Array.from(new Set(scripts.map((script) => script.mode || "Unknown"))).sort((a, b) => a.localeCompare(b))];
   const filteredScripts = scripts.filter((script) => {
     const matchesSearch = !normalizedSearch || [
       script.name,
@@ -360,14 +354,11 @@ export function App() {
       script.summary,
       script.description,
       script.id
-    ]
+      ]
       .filter(Boolean)
       .some((value) => value.toLowerCase().includes(normalizedSearch));
-    const matchesCategory = categoryFilter === "All" || (script.category || "Other") === categoryFilter;
-    const matchesAuth = authFilter === "All" || (script.authType || "Unknown") === authFilter;
-    const matchesMode = modeFilter === "All" || (script.mode || "Unknown") === modeFilter;
     const matchesFavorite = !favoritesOnly || favoriteScriptIds.includes(script.id);
-    return matchesSearch && matchesCategory && matchesAuth && matchesMode && matchesFavorite;
+    return matchesSearch && matchesFavorite;
   });
   const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
@@ -424,54 +415,14 @@ export function App() {
               />
             </label>
             <div className="sidebar-filter-group">
-              <div className="sidebar-filter-label">Category</div>
+              <div className="sidebar-filter-label">Favorites</div>
               <div className="chip-row">
-                {availableCategories.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={categoryFilter === option ? "filter-chip active" : "filter-chip"}
-                    onClick={() => setCategoryFilter(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="sidebar-filter-group">
-              <div className="sidebar-filter-label">Auth</div>
-              <div className="chip-row">
-                {availableAuthTypes.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={authFilter === option ? "filter-chip active" : "filter-chip"}
-                    onClick={() => setAuthFilter(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="sidebar-filter-group">
-              <div className="sidebar-filter-label">Mode</div>
-              <div className="chip-row">
-                {availableModes.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={modeFilter === option ? "filter-chip active" : "filter-chip"}
-                    onClick={() => setModeFilter(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
                 <button
                   type="button"
                   className={favoritesOnly ? "filter-chip active" : "filter-chip"}
                   onClick={() => setFavoritesOnly((current) => !current)}
                 >
-                  Favorites
+                  Favorites Only
                 </button>
               </div>
             </div>
@@ -798,7 +749,6 @@ export function App() {
                           className="category-card"
                           onClick={() => {
                             setExpandedCategories({ [entry.category]: true });
-                            setCategoryFilter(entry.category);
                           }}
                         >
                           <div className="category-card-title">{entry.category}</div>
