@@ -18,11 +18,24 @@ $userNameCache = @{}
 $groupNameCache = @{}
 $appNameCache = @{}
 
+function Expand-CaIds {
+    param([object[]]$Ids)
+
+    return @(
+        $Ids |
+            Where-Object { $_ -ne $null } |
+            ForEach-Object { [string]$_ } |
+            ForEach-Object { $_ -split ',' } |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ }
+    )
+}
+
 function Get-CaUserNames {
     param([object[]]$Ids)
 
     $names = [System.Collections.Generic.List[string]]::new()
-    foreach ($id in @($Ids)) {
+    foreach ($id in @(Expand-CaIds -Ids $Ids)) {
         if (-not $id) { continue }
 
         switch -Regex ($id) {
@@ -76,7 +89,7 @@ function Get-CaGroupNames {
     param([object[]]$Ids)
 
     $names = [System.Collections.Generic.List[string]]::new()
-    foreach ($id in @($Ids)) {
+    foreach ($id in @(Expand-CaIds -Ids $Ids)) {
         if (-not $id) { continue }
 
         if (-not $groupNameCache.ContainsKey($id)) {
@@ -108,7 +121,7 @@ function Get-CaAppNames {
     param([object[]]$Ids)
 
     $names = [System.Collections.Generic.List[string]]::new()
-    foreach ($id in @($Ids)) {
+    foreach ($id in @(Expand-CaIds -Ids $Ids)) {
         if (-not $id) { continue }
 
         switch -Regex ($id) {
