@@ -153,12 +153,9 @@ export function App() {
       const runsData = await parseApiResponse(runsResponse);
       setScripts(scriptsData);
       setRuns(runsData);
-
-      if (scriptsData.length > 0) {
-        setSelectedScript(scriptsData[0]);
-        setFormValues(normalizeDefaults(scriptsData[0].fields));
-        setExpandedCategories({ [scriptsData[0].category || "Other"]: true });
-      }
+      setSelectedScript(null);
+      setFormValues({});
+      setExpandedCategories({});
     };
 
     load().catch((loadError) => setError(loadError.message));
