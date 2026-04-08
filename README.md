@@ -1,125 +1,93 @@
 # M365 Toolbox
 
-M365 Toolbox is a Dockerized web console for approved Microsoft 365 PowerShell operations. It provides a script catalog, browser-based execution, device-code sign-in prompts, tracked run history, and inline HTML report previews directly in the UI.
+M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operations. It combines a React frontend, an Express API, and a toolbox-native PowerShell script catalog so admins can launch reports and response workflows from the browser, authenticate with Microsoft device code, and review results without leaving the app.
+
+## What the project does
+
+- Presents a categorized script catalog for Microsoft 365 operations
+- Runs allowlisted PowerShell scripts through a controlled backend wrapper
+- Prompts for Microsoft device-code sign-in when a script requires authentication
+- Tracks run status, command details, stdout, stderr, exit code, and artifacts
+- Renders HTML reports inline in the UI and supports direct download
+- Stores favorites in the browser for faster access to common workflows
+
+The current catalog includes 44 toolbox-native scripts across categories such as Identity, Exchange, Security, SharePoint, Teams, Reporting, Licensing, Devices, Operations, Collaboration, and Incident Response.
 
 ## Project layout
 
 - `backend/`
-  Express API, script catalog, PowerShell runner, run tracking, and HTML artifact endpoints
+  Express API, script registry, PowerShell runner, run tracking, and HTML artifact endpoints
 - `frontend/`
-  React/Vite UI with script catalog, recent runs, inline report previews, and device-code popup handling
+  React/Vite UI with the resizable sidebar, category icons, favorites, recent runs, and inline report preview
 - `scripts/`
-  Toolbox-native PowerShell scripts and shared helpers such as `Shared-ToolboxReport.ps1`
+  Toolbox-native PowerShell scripts, the script wrapper, and shared report helpers
 - `output/`
-  Generated report artifacts mounted into the backend container
+  Generated report artifacts written by backend runs
 - `docker-compose.yml`
-  Starts frontend and backend together
+  Starts the backend and frontend containers together
 
-## Current script catalog
+## Current capabilities
 
-Core workflows and reporting:
+- Resizable left sidebar for the script catalog
+- Search and category browsing in the catalog
+- Category icons in the sidebar for faster scanning
+- Favorites toggle and favorites-only filtering
+- Recent run history in the UI
+- Inline HTML report preview after successful runs
+- Device-code modal that surfaces the sign-in code and login URL
+- GitHub repository link in the sidebar footer
 
-- `scripts/M365-CompromisedAccountRemediation.ps1`
-  Contains and investigates compromised accounts, then generates an incident dashboard.
-- `scripts/M365-MfaReport.ps1`
-  Builds a tenant-wide MFA coverage report with admin-risk visibility.
-- `scripts/M365-UsageReport.ps1`
-  Creates OneDrive, SharePoint, and mailbox usage dashboards.
-- `scripts/M365-LicensingReport.ps1`
-  Reviews subscribed SKUs, assigned licenses, and unlicensed users.
-- `scripts/M365-GuestAccessReport.ps1`
-  Audits guest accounts, invitation state, stale guests, and external domains.
-- `scripts/M365-ConditionalAccessReport.ps1`
-  Summarizes Conditional Access policies, state, scope, and grant controls.
-- `scripts/M365-MailForwardingAudit.ps1`
-  Finds mailbox forwarding and inbox rules that redirect mail.
-- `scripts/M365-SharedMailboxReport.ps1`
-  Reviews shared mailboxes, forwarding, visibility, and delegate counts.
-- `scripts/M365-SignInRiskReport.ps1`
-  Shows risky users and detections when Identity Protection data is licensed and available.
-- `scripts/M365-TeamsExternalAccessReport.ps1`
-  Reviews Teams guest exposure, ownership gaps, and external membership.
-- `scripts/M365-SharePointSharingReport.ps1`
-  Combines SharePoint tenant sharing settings with site usage inventory.
-- `scripts/M365-SecureScoreSnapshot.ps1`
-  Captures the latest Secure Score snapshot and top improvement controls.
-- `scripts/M365-AdminRoleAudit.ps1`
-  Audits privileged role assignments and MFA hygiene for admin accounts.
+## Script catalog highlights
 
-Audit, hygiene, and operations reports:
+Representative workflows currently included in the toolbox:
 
-- `scripts/M365-InactiveUsersReport.ps1`
-  Identifies inactive accounts and likely license-reclaim candidates.
-- `scripts/M365-AppConsentAudit.ps1`
-  Reviews enterprise app consent grants and high-privilege delegated scopes.
-- `scripts/M365-MailboxPermissionAudit.ps1`
-  Audits Full Access and Send As delegation across mailboxes.
-- `scripts/M365-ExternalSharingLinksReport.ps1`
-  Reviews SharePoint external sharing posture and active sites.
-- `scripts/M365-DistributionGroupAudit.ps1`
-  Audits distribution group ownership, membership, and external sender exposure.
-- `scripts/M365-ServiceHealthSnapshot.ps1`
-  Captures current Microsoft 365 service health and active advisories.
-- `scripts/M365-AuthenticationPolicyReport.ps1`
-  Reviews security defaults and authentication methods policy posture.
-- `scripts/M365-PrivilegedAppAudit.ps1`
-  Inventories service principal credentials and non-human identity exposure.
-- `scripts/M365-DkimDmarcReport.ps1`
-  Reviews accepted domains for DKIM signing and DMARC presence.
-- `scripts/M365-GroupLifecycleReport.ps1`
-  Audits Microsoft 365 group ownership, renewal activity, and lifecycle hygiene.
+- `M365-CompromisedAccountRemediation.ps1`
+- `M365-MfaReport.ps1`
+- `M365-UsageReport.ps1`
+- `M365-LicensingReport.ps1`
+- `M365-ConditionalAccessReport.ps1`
+- `M365-SecureScoreSnapshot.ps1`
+- `M365-AdminRoleAudit.ps1`
+- `M365-PrivilegedAppAudit.ps1`
+- `M365-DefenderIncidentSnapshot.ps1`
+- `M365-DeviceComplianceSnapshot.ps1`
+- `M365-BreakGlassAccountAudit.ps1`
+- `M365-MailflowConnectorAudit.ps1`
 
-Latest additions:
+Additional scripts cover guest access, Teams ownership, mailbox permissions, external sharing, service health, mail transport rules, password reset readiness, legacy auth exposure, PIM role activation, app credential expiry, and more.
 
-- `scripts/M365-CAPolicyCoverageReport.ps1`
-  Maps Conditional Access inclusion and exclusion coverage across users, groups, guests, and apps.
-- `scripts/M365-LegacyAuthExposureReport.ps1`
-  Surfaces recent legacy-authentication sign-ins and affected users.
-- `scripts/M365-PIMRoleActivationReport.ps1`
-  Reviews active and eligible privileged role schedule instances from Entra ID.
-- `scripts/M365-DeviceComplianceSnapshot.ps1`
-  Summarizes Intune-managed device compliance, ownership, and platform mix.
-- `scripts/M365-B2BDirectConnectReport.ps1`
-  Reviews cross-tenant access defaults and B2B direct connect posture.
-- `scripts/M365-MailTransportRulesAudit.ps1`
-  Audits Exchange Online mail transport rules and test/audit mode coverage.
-- `scripts/M365-DefenderIncidentSnapshot.ps1`
-  Captures current Defender incidents, severity, and status.
-- `scripts/M365-PrivilegedGroupAudit.ps1`
-  Reviews sensitive groups for owner gaps and membership exposure.
-- `scripts/M365-PasswordResetReadinessReport.ps1`
-  Estimates self-service password reset readiness from registered auth methods.
-- `scripts/M365-OneDriveExternalSharingReport.ps1`
-  Reviews OneDrive usage and highlights large or highly active personal sites.
+The registry for the full catalog lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbox/backend/src/data/scripts.js), and the PowerShell entry scripts live in [scripts](/c:/VSCode/M365-Toolbox/scripts).
 
 ## Runtime model
 
-The backend mounts:
+The backend loads script metadata from the catalog registry and launches scripts through `scripts/Invoke-ToolboxScript.ps1`. Each run is executed with controlled arguments based on allowlisted form fields.
 
-- `./scripts` into the container at `/toolbox-scripts`
-- `./output` into the container output path used for generated artifacts
+The backend tracks:
 
-Scripts are launched through `scripts/Invoke-ToolboxScript.ps1`, and the backend tracks:
-
-- command line
+- selected script id
+- generated command line
 - stdout
 - stderr
-- status
+- run status
 - exit code
-- generated HTML artifact paths
+- timestamps
+- HTML artifact paths
 
-## UI behavior
+By default, Docker mounts:
 
-- The left script catalog is resizable on desktop.
-- Runs can be reopened from `Recent Runs`.
-- `Run Details` and `Recent Runs` collapse automatically after successful completion.
-- HTML reports are rendered inline beneath `Recent Runs`.
-- HTML reports can be downloaded directly from the report card.
-- When a script emits the Microsoft device-code prompt, the UI opens a modal with:
-  - the device code
-  - a clickable link to `https://login.microsoft.com/device`
+- `./scripts` to `/toolbox-scripts`
+- `./output` to `/app/output`
 
-## Start with Docker
+## UI flow
+
+1. The frontend loads the script catalog from the backend API.
+2. You select a script from the sidebar and fill in its approved input fields.
+3. The backend transforms those values into a controlled `pwsh` invocation.
+4. The script runs and the UI polls for status updates.
+5. If a Microsoft device-code prompt appears in stdout, the UI opens a sign-in modal.
+6. If the script generates an HTML report, the backend serves it back for inline preview and download.
+
+## Run with Docker
 
 ```powershell
 cd C:\VSCode\M365-Toolbox
@@ -127,44 +95,53 @@ docker compose build
 docker compose up -d
 ```
 
-Then open:
+Open:
 
 - Frontend: `http://localhost:5173`
-- Backend API health: `http://localhost:3001/api/health`
+- Backend health: `http://localhost:3001/api/health`
 
-If you changed backend scripts, the script catalog, or PowerShell module installation, rebuild the backend image:
+If you change backend code, script metadata, or PowerShell dependencies, rebuild the backend image:
 
 ```powershell
 docker compose build backend
 docker compose up -d backend
 ```
 
+## Run locally for development
+
+Install workspace dependencies:
+
+```powershell
+cd C:\VSCode\M365-Toolbox
+npm install
+```
+
+Start both apps together:
+
+```powershell
+npm run dev
+```
+
+That starts:
+
+- backend on `http://localhost:3001`
+- frontend dev server on `http://localhost:5173`
+
+The frontend Vite config proxies `/api` requests to the backend during local development.
+
 ## Notes
 
-- The backend container installs `pwsh` and the required Microsoft Graph / Exchange Online modules.
-- The toolbox now runs only toolbox-native scripts from `scripts/`; there is no external PowerShell repository mount anymore.
-- Toolbox-native scripts live in `scripts/` and are exposed through the registry in `backend/src/data/scripts.js`.
-- Shared report helpers live in `scripts/Shared-ToolboxReport.ps1`.
-- Most HTML-style reports use the shared helper for:
-  - device-code Graph auth
-  - common HTML dashboard rendering
-  - timestamped output naming
-  - Graph collection and CSV import helpers
-- MFA, usage, and compromised-account workflows remain standalone entry scripts with their own specialized logic.
-
-## How a run works
-
-1. The frontend loads the script catalog from the backend.
-2. You choose a script in the left catalog and fill in the allowlisted form fields.
-3. The backend turns those values into a controlled `pwsh` invocation.
-4. The script runs inside the backend container.
-5. The UI polls run status and captures stdout/stderr.
-6. If the script produces an HTML dashboard, the backend serves it back to the UI for preview and download.
+- The backend uses in-memory run tracking today, so history resets when the backend restarts.
+- Toolbox-native scripts are served only from `scripts/`; there is no external PowerShell repository mount.
+- Shared helpers such as `Shared-ToolboxReport.ps1` support common HTML dashboard rendering and output handling.
+- The backend API currently exposes script listing, run creation, run status, and HTML artifact retrieval endpoints.
+- CORS is restricted to configured origins, localhost, and private IPv4 ranges.
 
 ## Next growth areas
 
 - authentication and RBAC
-- run history persistence beyond process memory
+- persistent run history storage
 - approvals for high-impact workflows
 - richer artifact browsing for CSV, XLSX, and logs
-- secret and certificate-backed auth options where appropriate
+- localization when multilingual support becomes a priority
+- alternative auth flows such as certificate-based or app-based execution where appropriate
