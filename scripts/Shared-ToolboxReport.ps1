@@ -309,13 +309,14 @@ function Export-ToolboxHtmlReport {
     .crit{background:rgba(220,38,38,.1);color:var(--crit)}
     .neutral{background:rgba(15,124,192,.1);color:var(--accent)}
     .table-scroll{max-height:620px;overflow:auto;border:1px solid var(--border);border-radius:var(--r)}
-    table{width:max-content;min-width:100%;border-collapse:collapse;font-size:.77rem}
+    table{width:100%;border-collapse:collapse;font-size:.77rem}
     thead{background:var(--bg3);position:sticky;top:0;z-index:1}
     th{padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
-    td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;white-space:pre-wrap;word-break:break-word}
+    td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;word-break:break-word}
     tr:last-child td{border-bottom:none}
     tbody tr:hover td{background:rgba(15,124,192,.05)}
     .empty{font-family:var(--mono);font-size:.78rem;color:var(--text3);font-style:italic}
+    .card-text{white-space:pre-wrap;word-break:break-word}
     a{color:var(--accent)}
     @media(max-width:700px){.page{padding:1rem}.topbar{padding:0 1rem}.hero{grid-template-columns:repeat(2,1fr)}}
   </style>

@@ -185,6 +185,52 @@ $rows = foreach ($policy in $policies) {
     }
 }
 
+$detailSections = foreach ($row in ($rows | Sort-Object Policy)) {
+    @{
+        title = $row.Policy
+        badge = $row.State
+        text = @"
+Included Users
+$($row.IncludeUsersNames)
+
+Excluded Users
+$($row.ExcludeUsersNames)
+
+Included Groups
+$($row.IncludeGroupsNames)
+
+Excluded Groups
+$($row.ExcludeGroupsNames)
+
+Applications
+$($row.AppNames)
+"@
+    }
+}
+
+$sections = @(
+    @{
+        title = "Policy Coverage"
+        badge = "$($rows.Count) policies"
+        columns = @(
+            @{ key = "Policy"; header = "Policy" },
+            @{ key = "State"; header = "State"; type = "pill" },
+            @{ key = "IncludeUsers"; header = "Inc Users" },
+            @{ key = "ExcludeUsers"; header = "Exc Users" },
+            @{ key = "IncludeGroups"; header = "Inc Groups" },
+            @{ key = "ExcludeGroups"; header = "Exc Groups" },
+            @{ key = "GuestScope"; header = "Guests"; type = "pill" },
+            @{ key = "Apps"; header = "Apps" }
+        )
+        rows = @($rows | Sort-Object Policy)
+    },
+    @{
+        title = "Policy Details"
+        badge = "$($detailSections.Count) detail cards"
+        text = "Detailed policy scope is shown in the cards below."
+    }
+) + @($detailSections)
+
 $tenantName = $(if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" })
 $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "CAPolicyCoverage" -OutputPath $OutputPath
 
@@ -197,27 +243,6 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 CA Policy Coverage Report"
     @{ label = "Tenant"; value = $tenantName },
     @{ label = "Disabled Included"; value = $(if ($IncludeDisabledPolicies) { "Yes" } else { "No" }) },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
-) -Sections @(
-    @{
-        title = "Policy Coverage"
-        badge = "$($rows.Count) policies"
-        columns = @(
-            @{ key = "Policy"; header = "Policy" },
-            @{ key = "State"; header = "State"; type = "pill" },
-            @{ key = "IncludeUsers"; header = "Inc Users" },
-            @{ key = "IncludeUsersNames"; header = "Inc User Names" },
-            @{ key = "ExcludeUsers"; header = "Exc Users" },
-            @{ key = "ExcludeUsersNames"; header = "Exc User Names" },
-            @{ key = "IncludeGroups"; header = "Inc Groups" },
-            @{ key = "IncludeGroupsNames"; header = "Inc Group Names" },
-            @{ key = "ExcludeGroups"; header = "Exc Groups" },
-            @{ key = "ExcludeGroupsNames"; header = "Exc Group Names" },
-            @{ key = "GuestScope"; header = "Guests"; type = "pill" },
-            @{ key = "Apps"; header = "Apps" },
-            @{ key = "AppNames"; header = "App Names" }
-        )
-        rows = @($rows | Sort-Object Policy)
-    }
-)
+) -Sections $sections
 
 Write-Host "[+] HTML dashboard exported to: $htmlPath" -ForegroundColor Green
