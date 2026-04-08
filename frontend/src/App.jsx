@@ -349,14 +349,6 @@ export function App() {
   });
   const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
-  const categoryCards = Object.entries(groupScriptsByCategory(scripts))
-    .map(([category, categoryScripts]) => ({
-      category,
-      count: categoryScripts.length,
-      description: categoryScripts[0]?.summary || `${categoryScripts.length} scripts`
-    }))
-    .sort((a, b) => a.category.localeCompare(b.category));
-
   return (
     <div className="app-shell">
       {showDevicePrompt ? (
@@ -691,7 +683,7 @@ export function App() {
                       <div className="method-item method-item-selected">
                         <div className="method-info">
                           <div className="method-label">Choose A Script</div>
-                          <div className="method-count">Browse categories on the left, use search, or pick a category card below.</div>
+                          <div className="method-count">Browse categories on the left, use search, or mark favorites for faster access.</div>
                         </div>
                       </div>
                       <div className="method-item">
@@ -704,30 +696,6 @@ export function App() {
                   </div>
                 </div>
 
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">Categories</span>
-                    <span className="card-badge badge-neutral">{categoryCards.length}</span>
-                  </div>
-                  <div className="card-body">
-                    <div className="category-card-grid">
-                      {categoryCards.map((entry) => (
-                        <button
-                          key={entry.category}
-                          type="button"
-                          className="category-card"
-                          onClick={() => {
-                            setExpandedCategories({ [entry.category]: true });
-                          }}
-                        >
-                          <div className="category-card-title">{entry.category}</div>
-                          <div className="category-card-count">{entry.count} scripts</div>
-                          <div className="category-card-meta">{entry.description}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           )}
