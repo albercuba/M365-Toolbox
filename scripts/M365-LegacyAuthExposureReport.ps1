@@ -14,7 +14,7 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING LEGACY AUTH EXPOSURE"
 
-$cutoff = (Get-Date).AddDays(-1 * $LookbackDays).ToString("o")
+$cutoff = (Get-Date).ToUniversalTime().AddDays(-1 * $LookbackDays).ToString("yyyy-MM-ddTHH:mm:ssZ")
 $signIns = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/auditLogs/signIns?`$filter=createdDateTime ge {0}&`$select=userPrincipalName,appDisplayName,clientAppUsed,createdDateTime,conditionalAccessStatus,ipAddress&`$top=999" -f $cutoff))
 $legacyClients = @("imap","pop","smtp","mapi","exchange active sync","other clients","autodiscover","exchange web services")
 
