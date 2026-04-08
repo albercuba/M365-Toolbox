@@ -63,19 +63,6 @@ function getFavoriteScriptIds() {
   }
 }
 
-function getQuickActionScripts(scripts) {
-  const preferredIds = [
-    "m365-check-mfa-status",
-    "m365-licensing-report",
-    "m365-break-glass-account-audit",
-    "m365-compromised-account-remediation"
-  ];
-
-  return preferredIds
-    .map((id) => scripts.find((script) => script.id === id))
-    .filter(Boolean);
-}
-
 function Field({ field, value, onChange }) {
   if (field.type === "checkbox") {
     return (
@@ -362,7 +349,6 @@ export function App() {
   });
   const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
-  const quickActionScripts = getQuickActionScripts(scripts);
   const categoryCards = Object.entries(groupScriptsByCategory(scripts))
     .map(([category, categoryScripts]) => ({
       category,
@@ -705,7 +691,7 @@ export function App() {
                       <div className="method-item method-item-selected">
                         <div className="method-info">
                           <div className="method-label">Choose A Script</div>
-                          <div className="method-count">Browse categories on the left, use search and filter chips, or start with a quick action below.</div>
+                          <div className="method-count">Browse categories on the left, use search, or pick a category card below.</div>
                         </div>
                       </div>
                       <div className="method-item">
@@ -714,23 +700,6 @@ export function App() {
                           <div className="method-count">{favoriteScriptIds.length} scripts marked as favorites for faster access.</div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">Quick Actions</span>
-                    <span className="card-badge badge-ok">ready</span>
-                  </div>
-                  <div className="card-body">
-                    <div className="quick-actions">
-                      {quickActionScripts.map((script) => (
-                        <button key={script.id} type="button" className="quick-action-card" onClick={() => handleScriptSelect(script)}>
-                          <div className="quick-action-title">{script.name}</div>
-                          <div className="quick-action-meta">{script.summary}</div>
-                        </button>
-                      ))}
                     </div>
                   </div>
                 </div>
