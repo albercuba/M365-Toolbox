@@ -554,6 +554,175 @@ const groupLifecycleReportScript = {
   ]
 };
 
+const caPolicyCoverageReportScript = {
+  id: "m365-ca-policy-coverage-report",
+  name: "M365 CA Policy Coverage Report",
+  category: "Identity",
+  summary: "Map Conditional Access inclusion and exclusion scope across users, groups, guests, and apps.",
+  description:
+    "Exports an HTML dashboard showing Conditional Access policy scope, exclusions, guest coverage, and app targeting.",
+  scriptRelativePath: "M365-CAPolicyCoverageReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-ca-policy-coverage-report",
+  outputs: "Writes an HTML Conditional Access coverage dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "includeDisabledPolicies",
+      label: "Include disabled policies",
+      type: "checkbox",
+      defaultValue: false
+    },
+    tenantField
+  ]
+};
+
+const legacyAuthExposureReportScript = {
+  id: "m365-legacy-auth-exposure-report",
+  name: "M365 Legacy Auth Exposure Report",
+  category: "Identity",
+  summary: "Review recent sign-ins tied to legacy authentication clients and protocols.",
+  description:
+    "Exports an HTML dashboard with recent legacy-auth sign-ins, affected users, and Conditional Access status visibility.",
+  scriptRelativePath: "M365-LegacyAuthExposureReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-legacy-auth-exposure-report",
+  outputs: "Writes an HTML legacy-auth exposure dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "lookbackDays",
+      label: "Lookback window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 30,
+      min: 7,
+      max: 180
+    },
+    tenantField
+  ]
+};
+
+const pimRoleActivationReportScript = {
+  id: "m365-pim-role-activation-report",
+  name: "M365 PIM Role Activation Report",
+  category: "Identity",
+  summary: "Review active and eligible privileged role schedule instances from Entra ID.",
+  description:
+    "Exports an HTML dashboard with active and eligible role schedules, including permanent assignments that may need review.",
+  scriptRelativePath: "M365-PIMRoleActivationReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-pim-role-activation-report",
+  outputs: "Writes an HTML PIM role activation dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const deviceComplianceSnapshotScript = {
+  id: "m365-device-compliance-snapshot",
+  name: "M365 Device Compliance Snapshot",
+  category: "Devices",
+  summary: "Review managed device compliance state, ownership, and platform mix.",
+  description:
+    "Exports an HTML dashboard summarizing Intune-managed device compliance and ownership posture from Microsoft Graph.",
+  scriptRelativePath: "M365-DeviceComplianceSnapshot.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-device-compliance-snapshot",
+  outputs: "Writes an HTML device-compliance dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const b2bDirectConnectReportScript = {
+  id: "m365-b2b-direct-connect-report",
+  name: "M365 B2B Direct Connect Report",
+  category: "Identity",
+  summary: "Review cross-tenant access defaults and B2B direct connect posture.",
+  description:
+    "Exports an HTML dashboard summarizing cross-tenant access policy defaults and partner posture from Microsoft Entra ID.",
+  scriptRelativePath: "M365-B2BDirectConnectReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-b2b-direct-connect-report",
+  outputs: "Writes an HTML B2B direct connect dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const mailTransportRulesAuditScript = {
+  id: "m365-mail-transport-rules-audit",
+  name: "M365 Mail Transport Rules Audit",
+  category: "Exchange",
+  summary: "Review Exchange Online transport rules, modes, and mail-flow logic.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for transport rule state, priority, and test/audit mode coverage.",
+  scriptRelativePath: "M365-MailTransportRulesAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mail-transport-rules-audit",
+  outputs: "Writes an HTML transport-rules dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const defenderIncidentSnapshotScript = {
+  id: "m365-defender-incident-snapshot",
+  name: "M365 Defender Incident Snapshot",
+  category: "Security",
+  summary: "Capture current incidents from Microsoft Defender via Graph Security.",
+  description:
+    "Exports an HTML dashboard with active Defender incidents, severity, status, and classification.",
+  scriptRelativePath: "M365-DefenderIncidentSnapshot.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-defender-incident-snapshot",
+  outputs: "Writes an HTML Defender incident dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const privilegedGroupAuditScript = {
+  id: "m365-privileged-group-audit",
+  name: "M365 Privileged Group Audit",
+  category: "Identity",
+  summary: "Review sensitive groups for owner gaps, membership exposure, and visibility posture.",
+  description:
+    "Exports an HTML dashboard covering selected privileged groups, member counts, owner state, and visibility.",
+  scriptRelativePath: "M365-PrivilegedGroupAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-privileged-group-audit",
+  outputs: "Writes an HTML privileged-group dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const passwordResetReadinessReportScript = {
+  id: "m365-password-reset-readiness-report",
+  name: "M365 Password Reset Readiness Report",
+  category: "Identity",
+  summary: "Review SSPR readiness based on registered password-reset-capable authentication methods.",
+  description:
+    "Exports an HTML dashboard that highlights which users appear ready for self-service password reset and which still need method registration.",
+  scriptRelativePath: "M365-PasswordResetReadinessReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-password-reset-readiness-report",
+  outputs: "Writes an HTML password-reset readiness dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const oneDriveExternalSharingReportScript = {
+  id: "m365-onedrive-external-sharing-report",
+  name: "M365 OneDrive External Sharing Report",
+  category: "SharePoint",
+  summary: "Review OneDrive site usage and surface large or highly active personal sites.",
+  description:
+    "Exports an HTML dashboard with OneDrive usage data, site sizes, and recent activity to support sharing and storage reviews.",
+  scriptRelativePath: "M365-OneDriveExternalSharingReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-onedrive-external-sharing-report",
+  outputs: "Writes an HTML OneDrive sharing dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
 export const scripts = [
   compromisedAccountScript,
   checkMfaStatusScript,
@@ -577,5 +746,15 @@ export const scripts = [
   authenticationPolicyReportScript,
   privilegedAppAuditScript,
   dkimDmarcReportScript,
-  groupLifecycleReportScript
+  groupLifecycleReportScript,
+  caPolicyCoverageReportScript,
+  legacyAuthExposureReportScript,
+  pimRoleActivationReportScript,
+  deviceComplianceSnapshotScript,
+  b2bDirectConnectReportScript,
+  mailTransportRulesAuditScript,
+  defenderIncidentSnapshotScript,
+  privilegedGroupAuditScript,
+  passwordResetReadinessReportScript,
+  oneDriveExternalSharingReportScript
 ];
