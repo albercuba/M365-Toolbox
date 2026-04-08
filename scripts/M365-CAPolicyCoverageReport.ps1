@@ -66,7 +66,7 @@ function Get-CaUserNames {
     }
 
     if ($names.Count -gt 0) {
-        return ($names -join "; ")
+        return ($names -join "`n")
     }
 
     return "None"
@@ -98,7 +98,7 @@ function Get-CaGroupNames {
     }
 
     if ($names.Count -gt 0) {
-        return ($names -join "; ")
+        return ($names -join "`n")
     }
 
     return "None"
@@ -150,7 +150,7 @@ function Get-CaAppNames {
     }
 
     if ($names.Count -gt 0) {
-        return ($names -join "; ")
+        return ($names -join "`n")
     }
 
     return "None"
