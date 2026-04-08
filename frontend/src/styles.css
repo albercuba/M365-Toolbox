@@ -402,6 +402,28 @@ textarea {
   font-family: var(--mono);
   font-size: 0.62rem;
   color: var(--text3);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sidebar-repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 0.68rem;
+  font-family: var(--mono);
+}
+
+.sidebar-repo-link:hover {
+  color: var(--accent);
+}
+
+.sidebar-repo-link svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .main {
