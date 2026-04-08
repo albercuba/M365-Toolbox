@@ -253,10 +253,7 @@ export function App() {
   const handleScriptSelect = (script) => {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
-    setExpandedCategories((current) => ({
-      ...current,
-      [script.category || "Other"]: true
-    }));
+    setExpandedCategories({ [script.category || "Other"]: true });
     setError("");
     setActiveRun(null);
     setActiveRunHtml("");
@@ -385,10 +382,7 @@ export function App() {
                     type="button"
                     className={`catalog-group-header${isExpanded ? " expanded" : ""}`}
                     onClick={() =>
-                      setExpandedCategories((current) => ({
-                        ...current,
-                        [category]: !current[category]
-                      }))
+                      setExpandedCategories(isExpanded ? {} : { [category]: true })
                     }
                   >
                     <span className="catalog-group-title">{category}</span>
