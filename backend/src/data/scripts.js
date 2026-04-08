@@ -723,6 +723,222 @@ const oneDriveExternalSharingReportScript = {
   fields: [tenantField]
 };
 
+const mfaRegistrationCampaignReportScript = {
+  id: "m365-mfa-registration-campaign-report",
+  name: "M365 MFA Registration Campaign Report",
+  category: "Identity",
+  summary: "Track MFA registration readiness by user and department for adoption campaigns.",
+  description:
+    "Exports an HTML dashboard that highlights who is and is not registered for MFA, along with department-level campaign targeting visibility.",
+  scriptRelativePath: "M365-MFARegistrationCampaignReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mfa-registration-campaign-report",
+  outputs: "Writes an HTML MFA registration campaign dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "maxUsersToInspect",
+      label: "Maximum users to inspect",
+      type: "number",
+      required: false,
+      defaultValue: 250,
+      min: 50,
+      max: 1000
+    },
+    tenantField
+  ]
+};
+
+const enterpriseAppsInventoryScript = {
+  id: "m365-enterprise-apps-inventory",
+  name: "M365 Enterprise Apps Inventory",
+  category: "Security",
+  summary: "Inventory enterprise apps with publisher, assignment, and credential visibility.",
+  description:
+    "Exports an HTML dashboard that inventories service principals, assignment requirements, publishers, and credential counts.",
+  scriptRelativePath: "M365-EnterpriseAppsInventory.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-enterprise-apps-inventory",
+  outputs: "Writes an HTML enterprise-app inventory dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const guestInvitationFailuresScript = {
+  id: "m365-guest-invitation-failures",
+  name: "M365 Guest Invitation Failures",
+  category: "Identity",
+  summary: "Find guest invitations that were never accepted or never resulted in sign-in activity.",
+  description:
+    "Exports an HTML dashboard of guest accounts with pending invitation state, stale acceptance, or no successful sign-in history.",
+  scriptRelativePath: "M365-GuestInvitationFailures.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-guest-invitation-failures",
+  outputs: "Writes an HTML guest invitation dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "staleDays",
+      label: "Stale threshold (days)",
+      type: "number",
+      required: false,
+      defaultValue: 30,
+      min: 7,
+      max: 365
+    },
+    tenantField
+  ]
+};
+
+const mailboxAutoReplyAuditScript = {
+  id: "m365-mailbox-auto-reply-audit",
+  name: "M365 Mailbox Auto-Reply Audit",
+  category: "Exchange",
+  summary: "Review automatic reply configuration across user and shared mailboxes.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for active and external automatic replies.",
+  scriptRelativePath: "M365-MailboxAutoReplyAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mailbox-auto-reply-audit",
+  outputs: "Writes an HTML mailbox auto-reply dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const calendarSharingAuditScript = {
+  id: "m365-calendar-sharing-audit",
+  name: "M365 Calendar Sharing Audit",
+  category: "Exchange",
+  summary: "Review calendar delegate and anonymous sharing exposure across inspected mailboxes.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for calendar sharing posture and anonymous exposure.",
+  scriptRelativePath: "M365-CalendarSharingAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-calendar-sharing-audit",
+  outputs: "Writes an HTML calendar sharing dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "maxMailboxesToInspect",
+      label: "Maximum mailboxes to inspect",
+      type: "number",
+      required: false,
+      defaultValue: 150,
+      min: 25,
+      max: 500
+    },
+    tenantField
+  ]
+};
+
+const roleEligibleAssignmentsReportScript = {
+  id: "m365-role-eligible-assignments-report",
+  name: "M365 Role Eligible Assignments Report",
+  category: "Identity",
+  summary: "Review eligible privileged roles, principals, and permanent assignment patterns.",
+  description:
+    "Exports an HTML dashboard for Entra ID role eligibility schedule instances, including assignment timing and permanence.",
+  scriptRelativePath: "M365-RoleEligibleAssignmentsReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-role-eligible-assignments-report",
+  outputs: "Writes an HTML eligible-role dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const anonymousLinkExposureReportScript = {
+  id: "m365-anonymous-link-exposure-report",
+  name: "M365 Anonymous Link Exposure Report",
+  category: "SharePoint",
+  summary: "Review SharePoint sharing defaults and site footprint that can amplify anyone-link exposure.",
+  description:
+    "Exports an HTML dashboard that combines tenant sharing settings with SharePoint site usage inventory.",
+  scriptRelativePath: "M365-AnonymousLinkExposureReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-anonymous-link-exposure-report",
+  outputs: "Writes an HTML anonymous-link exposure dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "reportPeriod",
+      label: "Usage period",
+      type: "text",
+      required: false,
+      defaultValue: "D30",
+      placeholder: "D7, D30, D90, D180",
+      helpText: "Accepted values: D7, D30, D90, D180."
+    },
+    tenantField
+  ]
+};
+
+const teamsOwnershipAuditScript = {
+  id: "m365-teams-ownership-audit",
+  name: "M365 Teams Ownership Audit",
+  category: "Teams",
+  summary: "Find ownerless or single-owner Teams and highlight guest-heavy ownership risk.",
+  description:
+    "Exports an HTML dashboard covering Teams ownership resilience, owner names, and guest concentration.",
+  scriptRelativePath: "M365-TeamsOwnershipAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-teams-ownership-audit",
+  outputs: "Writes an HTML Teams ownership dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "maxTeamsToInspect",
+      label: "Maximum teams to inspect",
+      type: "number",
+      required: false,
+      defaultValue: 150,
+      min: 25,
+      max: 500
+    },
+    tenantField
+  ]
+};
+
+const appCredentialExpiryReportScript = {
+  id: "m365-app-credential-expiry-report",
+  name: "M365 App Credential Expiry Report",
+  category: "Security",
+  summary: "Review expiring and expired secrets or certificates across app registrations.",
+  description:
+    "Exports an HTML dashboard that highlights app credentials nearing expiry or already expired.",
+  scriptRelativePath: "M365-AppCredentialExpiryReport.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-app-credential-expiry-report",
+  outputs: "Writes an HTML app credential expiry dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "daysAhead",
+      label: "Expiry window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 60,
+      min: 7,
+      max: 365
+    },
+    tenantField
+  ]
+};
+
+const mailflowConnectorAuditScript = {
+  id: "m365-mailflow-connector-audit",
+  name: "M365 Mailflow Connector Audit",
+  category: "Exchange",
+  summary: "Review inbound and outbound Exchange Online connectors, relay paths, and TLS posture.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for mailflow connector inventory and status.",
+  scriptRelativePath: "M365-MailflowConnectorAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mailflow-connector-audit",
+  outputs: "Writes an HTML mailflow connector dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
 export const scripts = [
   compromisedAccountScript,
   checkMfaStatusScript,
@@ -756,5 +972,15 @@ export const scripts = [
   defenderIncidentSnapshotScript,
   privilegedGroupAuditScript,
   passwordResetReadinessReportScript,
-  oneDriveExternalSharingReportScript
+  oneDriveExternalSharingReportScript,
+  mfaRegistrationCampaignReportScript,
+  enterpriseAppsInventoryScript,
+  guestInvitationFailuresScript,
+  mailboxAutoReplyAuditScript,
+  calendarSharingAuditScript,
+  roleEligibleAssignmentsReportScript,
+  anonymousLinkExposureReportScript,
+  teamsOwnershipAuditScript,
+  appCredentialExpiryReportScript,
+  mailflowConnectorAuditScript
 ];
