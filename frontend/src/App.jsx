@@ -140,6 +140,7 @@ export function App() {
   const [recentRunsOpen, setRecentRunsOpen] = useState(true);
   const [devicePromptDismissed, setDevicePromptDismissed] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [scriptSearch, setScriptSearch] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -311,7 +312,21 @@ export function App() {
 
   const devicePrompt = extractDeviceCodePrompt(activeRun?.stdout);
   const showDevicePrompt = Boolean(devicePrompt) && activeRun?.status === "running" && !devicePromptDismissed;
-  const scriptGroups = groupScriptsByCategory(scripts);
+  const normalizedSearch = scriptSearch.trim().toLowerCase();
+  const filteredScripts = normalizedSearch
+    ? scripts.filter((script) =>
+        [
+          script.name,
+          script.category,
+          script.summary,
+          script.description,
+          script.id
+        ]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(normalizedSearch))
+      )
+    : scripts;
+  const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
 
   return (
@@ -349,10 +364,21 @@ export function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <div className="sidebar-label">Script Catalog</div>
+            <label className="sidebar-search">
+              <input
+                type="text"
+                placeholder="Search scripts..."
+                value={scriptSearch}
+                onChange={(event) => setScriptSearch(event.target.value)}
+              />
+            </label>
           </div>
           <div className="tenant-list">
+            {sortedCategories.length === 0 ? (
+              <div className="empty-row">No scripts match your search.</div>
+            ) : null}
             {sortedCategories.map((category) => {
-              const isExpanded = Boolean(expandedCategories[category]);
+              const isExpanded = normalizedSearch ? true : Boolean(expandedCategories[category]);
               return (
                 <div key={category} className="catalog-group">
                   <button

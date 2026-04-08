@@ -204,6 +204,27 @@ textarea {
   color: var(--text3);
 }
 
+.sidebar-search {
+  display: block;
+  margin-top: 0.7rem;
+}
+
+.sidebar-search input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 0.58rem 0.72rem;
+  outline: none;
+}
+
+.sidebar-search input:focus {
+  border-color: var(--accent2);
+}
+
 .tenant-list {
   flex: 1;
   overflow-y: auto;
