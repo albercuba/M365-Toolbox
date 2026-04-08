@@ -14,6 +14,120 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING CONDITIONAL ACCESS COVERAGE"
 
+$userNameCache = @{}
+$groupNameCache = @{}
+$appNameCache = @{}
+
+function Get-CaUserNames {
+    param([object[]]$Ids)
+
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($id in @($Ids)) {
+        if (-not $id) { continue }
+
+        switch -Regex ($id) {
+            '^All$' {
+                [void]$names.Add("All users")
+                continue
+            }
+            '^GuestsOrExternalUsers$' {
+                [void]$names.Add("Guests or external users")
+                continue
+            }
+            '^None$' {
+                [void]$names.Add("None")
+                continue
+            }
+        }
+
+        if (-not $userNameCache.ContainsKey($id)) {
+            try {
+                $user = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/users/{0}?`$select=displayName,userPrincipalName" -f $id) -ErrorAction Stop
+                $label = if ($user.userPrincipalName) {
+                    "{0} ({1})" -f [string]$user.displayName, [string]$user.userPrincipalName
+                }
+                else {
+                    [string]$user.displayName
+                }
+                $userNameCache[$id] = if ($label) { $label } else { [string]$id }
+            }
+            catch {
+                $userNameCache[$id] = [string]$id
+            }
+        }
+
+        [void]$names.Add([string]$userNameCache[$id])
+    }
+
+    return if ($names.Count -gt 0) { $names -join "; " } else { "None" }
+}
+
+function Get-CaGroupNames {
+    param([object[]]$Ids)
+
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($id in @($Ids)) {
+        if (-not $id) { continue }
+
+        if (-not $groupNameCache.ContainsKey($id)) {
+            try {
+                $group = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/groups/{0}?`$select=displayName" -f $id) -ErrorAction Stop
+                $groupNameCache[$id] = if ($group.displayName) { [string]$group.displayName } else { [string]$id }
+            }
+            catch {
+                $groupNameCache[$id] = [string]$id
+            }
+        }
+
+        [void]$names.Add([string]$groupNameCache[$id])
+    }
+
+    return if ($names.Count -gt 0) { $names -join "; " } else { "None" }
+}
+
+function Get-CaAppNames {
+    param([object[]]$Ids)
+
+    $names = [System.Collections.Generic.List[string]]::new()
+    foreach ($id in @($Ids)) {
+        if (-not $id) { continue }
+
+        switch -Regex ($id) {
+            '^All$' {
+                [void]$names.Add("All cloud apps")
+                continue
+            }
+            '^Office365$' {
+                [void]$names.Add("Office 365")
+                continue
+            }
+            '^MicrosoftAdminPortals$' {
+                [void]$names.Add("Microsoft Admin Portals")
+                continue
+            }
+            '^None$' {
+                [void]$names.Add("None")
+                continue
+            }
+        }
+
+        if (-not $appNameCache.ContainsKey($id)) {
+            try {
+                $servicePrincipals = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appId eq '{0}'&`$select=displayName,appId" -f $id))
+                $servicePrincipal = @($servicePrincipals | Select-Object -First 1)[0]
+                $appNameCache[$id] = if ($servicePrincipal.displayName) { [string]$servicePrincipal.displayName } else { [string]$id }
+            }
+            catch {
+                $appNameCache[$id] = [string]$id
+            }
+        }
+
+        [void]$names.Add([string]$appNameCache[$id])
+    }
+
+    return if ($names.Count -gt 0) { $names -join "; " } else { "None" }
+}
+
 $policies = @(Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop)
 if (-not $IncludeDisabledPolicies) {
     $policies = @($policies | Where-Object { $_.state -ne "disabled" })
@@ -25,15 +139,21 @@ $rows = foreach ($policy in $policies) {
     $includeGroups = @($policy.conditions.users.includeGroups).Count
     $excludeGroups = @($policy.conditions.users.excludeGroups).Count
     $includeGuests = @($policy.conditions.users.includeGuestsOrExternalUsers).Count
+    $includeApps = @($policy.conditions.applications.includeApplications)
     [pscustomobject]@{
-        Policy          = [string]$policy.displayName
-        State           = [string]$policy.state
-        IncludeUsers    = $includeUsers
-        ExcludeUsers    = $excludeUsers
-        IncludeGroups   = $includeGroups
-        ExcludeGroups   = $excludeGroups
-        GuestScope      = if ($includeGuests -gt 0) { "Included" } else { "Not Explicit" }
-        Apps            = @($policy.conditions.applications.includeApplications).Count
+        Policy             = [string]$policy.displayName
+        State              = [string]$policy.state
+        IncludeUsers       = $includeUsers
+        IncludeUsersNames  = Get-CaUserNames -Ids @($policy.conditions.users.includeUsers)
+        ExcludeUsers       = $excludeUsers
+        ExcludeUsersNames  = Get-CaUserNames -Ids @($policy.conditions.users.excludeUsers)
+        IncludeGroups      = $includeGroups
+        IncludeGroupsNames = Get-CaGroupNames -Ids @($policy.conditions.users.includeGroups)
+        ExcludeGroups      = $excludeGroups
+        ExcludeGroupsNames = Get-CaGroupNames -Ids @($policy.conditions.users.excludeGroups)
+        GuestScope         = if ($includeGuests -gt 0) { "Included" } else { "Not Explicit" }
+        Apps               = $includeApps.Count
+        AppNames           = Get-CaAppNames -Ids $includeApps
     }
 }
 
@@ -57,11 +177,16 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 CA Policy Coverage Report"
             @{ key = "Policy"; header = "Policy" },
             @{ key = "State"; header = "State"; type = "pill" },
             @{ key = "IncludeUsers"; header = "Inc Users" },
+            @{ key = "IncludeUsersNames"; header = "Inc User Names" },
             @{ key = "ExcludeUsers"; header = "Exc Users" },
+            @{ key = "ExcludeUsersNames"; header = "Exc User Names" },
             @{ key = "IncludeGroups"; header = "Inc Groups" },
+            @{ key = "IncludeGroupsNames"; header = "Inc Group Names" },
             @{ key = "ExcludeGroups"; header = "Exc Groups" },
+            @{ key = "ExcludeGroupsNames"; header = "Exc Group Names" },
             @{ key = "GuestScope"; header = "Guests"; type = "pill" },
-            @{ key = "Apps"; header = "Apps" }
+            @{ key = "Apps"; header = "Apps" },
+            @{ key = "AppNames"; header = "App Names" }
         )
         rows = @($rows | Sort-Object Policy)
     }
