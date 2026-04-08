@@ -54,6 +54,28 @@ function groupScriptsByCategory(scripts) {
   }, {});
 }
 
+function getFavoriteScriptIds() {
+  try {
+    const raw = window.localStorage.getItem("m365-toolbox-favorites");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getQuickActionScripts(scripts) {
+  const preferredIds = [
+    "m365-check-mfa-status",
+    "m365-licensing-report",
+    "m365-break-glass-account-audit",
+    "m365-compromised-account-remediation"
+  ];
+
+  return preferredIds
+    .map((id) => scripts.find((script) => script.id === id))
+    .filter(Boolean);
+}
+
 function Field({ field, value, onChange }) {
   if (field.type === "checkbox") {
     return (
@@ -141,6 +163,11 @@ export function App() {
   const [devicePromptDismissed, setDevicePromptDismissed] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({});
   const [scriptSearch, setScriptSearch] = useState("");
+  const [favoriteScriptIds, setFavoriteScriptIds] = useState(() => getFavoriteScriptIds());
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [authFilter, setAuthFilter] = useState("All");
+  const [modeFilter, setModeFilter] = useState("All");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -247,6 +274,14 @@ export function App() {
     };
   }, [isResizingSidebar]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("m365-toolbox-favorites", JSON.stringify(favoriteScriptIds));
+    } catch {
+      // Ignore storage errors.
+    }
+  }, [favoriteScriptIds]);
+
   const handleScriptSelect = (script) => {
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
@@ -269,6 +304,14 @@ export function App() {
 
   const handleChange = (fieldId, nextValue) => {
     setFormValues((current) => ({ ...current, [fieldId]: nextValue }));
+  };
+
+  const handleToggleFavorite = (scriptId) => {
+    setFavoriteScriptIds((current) =>
+      current.includes(scriptId)
+        ? current.filter((id) => id !== scriptId)
+        : [...current, scriptId]
+    );
   };
 
   const handleSubmit = async (event) => {
@@ -307,21 +350,35 @@ export function App() {
   const devicePrompt = extractDeviceCodePrompt(activeRun?.stdout);
   const showDevicePrompt = Boolean(devicePrompt) && activeRun?.status === "running" && !devicePromptDismissed;
   const normalizedSearch = scriptSearch.trim().toLowerCase();
-  const filteredScripts = normalizedSearch
-    ? scripts.filter((script) =>
-        [
-          script.name,
-          script.category,
-          script.summary,
-          script.description,
-          script.id
-        ]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(normalizedSearch))
-      )
-    : scripts;
+  const availableCategories = ["All", ...Array.from(new Set(scripts.map((script) => script.category || "Other"))).sort((a, b) => a.localeCompare(b))];
+  const availableAuthTypes = ["All", ...Array.from(new Set(scripts.map((script) => script.authType || "Unknown"))).sort((a, b) => a.localeCompare(b))];
+  const availableModes = ["All", ...Array.from(new Set(scripts.map((script) => script.mode || "Unknown"))).sort((a, b) => a.localeCompare(b))];
+  const filteredScripts = scripts.filter((script) => {
+    const matchesSearch = !normalizedSearch || [
+      script.name,
+      script.category,
+      script.summary,
+      script.description,
+      script.id
+    ]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(normalizedSearch));
+    const matchesCategory = categoryFilter === "All" || (script.category || "Other") === categoryFilter;
+    const matchesAuth = authFilter === "All" || (script.authType || "Unknown") === authFilter;
+    const matchesMode = modeFilter === "All" || (script.mode || "Unknown") === modeFilter;
+    const matchesFavorite = !favoritesOnly || favoriteScriptIds.includes(script.id);
+    return matchesSearch && matchesCategory && matchesAuth && matchesMode && matchesFavorite;
+  });
   const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
+  const quickActionScripts = getQuickActionScripts(scripts);
+  const categoryCards = Object.entries(groupScriptsByCategory(scripts))
+    .map(([category, categoryScripts]) => ({
+      category,
+      count: categoryScripts.length,
+      description: categoryScripts[0]?.summary || `${categoryScripts.length} scripts`
+    }))
+    .sort((a, b) => a.category.localeCompare(b.category));
 
   return (
     <div className="app-shell">
@@ -366,6 +423,58 @@ export function App() {
                 onChange={(event) => setScriptSearch(event.target.value)}
               />
             </label>
+            <div className="sidebar-filter-group">
+              <div className="sidebar-filter-label">Category</div>
+              <div className="chip-row">
+                {availableCategories.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={categoryFilter === option ? "filter-chip active" : "filter-chip"}
+                    onClick={() => setCategoryFilter(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="sidebar-filter-group">
+              <div className="sidebar-filter-label">Auth</div>
+              <div className="chip-row">
+                {availableAuthTypes.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={authFilter === option ? "filter-chip active" : "filter-chip"}
+                    onClick={() => setAuthFilter(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="sidebar-filter-group">
+              <div className="sidebar-filter-label">Mode</div>
+              <div className="chip-row">
+                {availableModes.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={modeFilter === option ? "filter-chip active" : "filter-chip"}
+                    onClick={() => setModeFilter(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={favoritesOnly ? "filter-chip active" : "filter-chip"}
+                  onClick={() => setFavoritesOnly((current) => !current)}
+                >
+                  Favorites
+                </button>
+              </div>
+            </div>
           </div>
           <div className="tenant-list">
             {sortedCategories.length === 0 ? (
@@ -406,7 +515,22 @@ export function App() {
                           <div className="tenant-info">
                             <div className="tenant-name">{script.name}</div>
                             <div className="tenant-meta">{script.summary}</div>
+                            <div className="tenant-badges">
+                              <span className="tiny-badge">{script.authType}</span>
+                              <span className="tiny-badge">{script.mode}</span>
+                              <span className="tiny-badge">{script.outputType}</span>
+                            </div>
                           </div>
+                          <button
+                            type="button"
+                            className={favoriteScriptIds.includes(script.id) ? "favorite-btn active" : "favorite-btn"}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleToggleFavorite(script.id);
+                            }}
+                          >
+                            Fav
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -473,8 +597,8 @@ export function App() {
                         </div>
                         <div className="method-item">
                           <div className="method-info">
-                            <div className="method-label">Growth Model</div>
-                            <div className="method-count">Registry-based script catalog for future M365 tools</div>
+                            <div className="method-label">How To Use</div>
+                            <div className="method-count">Review the summary, confirm the filters, then run the script and authenticate when prompted.</div>
                           </div>
                         </div>
                       </div>
@@ -529,7 +653,16 @@ export function App() {
                                 </div>
                               </div>
                               <div className="manage-form-panel" style={{ marginTop: "1rem" }}>
-                                <h4>Command</h4>
+                                <div className="panel-toolbar">
+                                  <h4>Command</h4>
+                                  <button
+                                    type="button"
+                                    className="filter-btn active-all"
+                                    onClick={() => navigator.clipboard?.writeText(activeRun.command)}
+                                  >
+                                    Copy Command
+                                  </button>
+                                </div>
                                 <pre className="manage-response">{activeRun.command}</pre>
                               </div>
                               <div className="manage-form-panel">
@@ -614,11 +747,75 @@ export function App() {
               </div>
             </>
           ) : (
-            <section className="empty-state">
-              <div className="empty-icon">M365</div>
-              <div className="empty-title">Loading Toolbox...</div>
-              <div className="empty-sub">{error || "Waiting for the script catalog from the backend."}</div>
-            </section>
+            <div className="dash-page">
+              <div className="sections">
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">Welcome</span>
+                    <span className="card-badge badge-neutral">{scripts.length} scripts</span>
+                  </div>
+                  <div className="card-body">
+                    <div className="method-grid">
+                      <div className="method-item method-item-selected">
+                        <div className="method-info">
+                          <div className="method-label">Choose A Script</div>
+                          <div className="method-count">Browse categories on the left, use search and filter chips, or start with a quick action below.</div>
+                        </div>
+                      </div>
+                      <div className="method-item">
+                        <div className="method-info">
+                          <div className="method-label">Favorites</div>
+                          <div className="method-count">{favoriteScriptIds.length} scripts marked as favorites for faster access.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">Quick Actions</span>
+                    <span className="card-badge badge-ok">ready</span>
+                  </div>
+                  <div className="card-body">
+                    <div className="quick-actions">
+                      {quickActionScripts.map((script) => (
+                        <button key={script.id} type="button" className="quick-action-card" onClick={() => handleScriptSelect(script)}>
+                          <div className="quick-action-title">{script.name}</div>
+                          <div className="quick-action-meta">{script.summary}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">Categories</span>
+                    <span className="card-badge badge-neutral">{categoryCards.length}</span>
+                  </div>
+                  <div className="card-body">
+                    <div className="category-card-grid">
+                      {categoryCards.map((entry) => (
+                        <button
+                          key={entry.category}
+                          type="button"
+                          className="category-card"
+                          onClick={() => {
+                            setExpandedCategories({ [entry.category]: true });
+                            setCategoryFilter(entry.category);
+                          }}
+                        >
+                          <div className="category-card-title">{entry.category}</div>
+                          <div className="category-card-count">{entry.count} scripts</div>
+                          <div className="category-card-meta">{entry.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </main>
       </div>

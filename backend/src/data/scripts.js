@@ -939,6 +939,65 @@ const mailflowConnectorAuditScript = {
   fields: [tenantField]
 };
 
+const breakGlassAccountAuditScript = {
+  id: "m365-break-glass-account-audit",
+  name: "M365 Break-Glass Account Audit",
+  category: "Identity",
+  summary: "Review emergency access accounts for privilege, MFA, and recent sign-in visibility.",
+  description:
+    "Exports an HTML dashboard that locates likely break-glass accounts and checks whether they are enabled, privileged, and protected by MFA.",
+  scriptRelativePath: "M365-BreakGlassAccountAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-break-glass-account-audit",
+  outputs: "Writes an HTML break-glass account dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const exchangeAuthScriptIds = new Set([
+  "m365-mail-forwarding-audit",
+  "m365-shared-mailbox-report",
+  "m365-mailbox-permission-audit",
+  "m365-distribution-group-audit",
+  "m365-dkim-dmarc-report",
+  "m365-mail-transport-rules-audit",
+  "m365-mailbox-auto-reply-audit",
+  "m365-calendar-sharing-audit",
+  "m365-mailflow-connector-audit"
+]);
+
+const remediationScriptIds = new Set([
+  "m365-compromised-account-remediation"
+]);
+
+const premiumScriptIds = new Set([
+  "m365-check-mfa-status",
+  "m365-sign-in-risk-report",
+  "m365-device-compliance-snapshot",
+  "m365-role-eligible-assignments-report",
+  "m365-pim-role-activation-report",
+  "m365-defender-incident-snapshot",
+  "m365-secure-score-snapshot"
+]);
+
+function enrichScript(script) {
+  let authType = "Graph";
+  if (exchangeAuthScriptIds.has(script.id)) {
+    authType = "Exchange";
+  }
+  if (script.id === "m365-compromised-account-remediation") {
+    authType = "Graph + Exchange";
+  }
+
+  return {
+    ...script,
+    mode: remediationScriptIds.has(script.id) ? "Remediation" : "Read-only",
+    authType,
+    outputType: script.outputs?.includes("Excel") ? "HTML + Excel" : script.outputs?.includes("CSV") ? "HTML + CSV" : "HTML",
+    licenseLevel: premiumScriptIds.has(script.id) ? "Premium" : "Standard"
+  };
+}
+
 export const scripts = [
   compromisedAccountScript,
   checkMfaStatusScript,
@@ -983,4 +1042,6 @@ export const scripts = [
   teamsOwnershipAuditScript,
   appCredentialExpiryReportScript,
   mailflowConnectorAuditScript
-];
+  ,
+  breakGlassAccountAuditScript
+].map(enrichScript);
