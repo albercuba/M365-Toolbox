@@ -751,24 +751,6 @@ export function App() {
                             <div className="method-count">{selectedScript.summary}</div>
                           </div>
                         </div>
-                        <div className="method-item">
-                          <div className="method-info">
-                            <div className="method-label">Prerequisites</div>
-                            <div className="method-count">{selectedScript.prerequisites?.join(" | ")}</div>
-                          </div>
-                        </div>
-                        <div className="method-item">
-                          <div className="method-info">
-                            <div className="method-label">Permissions</div>
-                            <div className="method-count">{selectedScript.permissions?.join(" | ")}</div>
-                          </div>
-                        </div>
-                        <div className="method-item">
-                          <div className="method-info">
-                            <div className="method-label">Examples</div>
-                            <div className="method-count">{selectedScript.examples?.map((example) => example.title).join(" | ")}</div>
-                          </div>
-                        </div>
                       </div>
                       <div className="empty-row" style={{ marginTop: "0.85rem" }}>{selectedScript.description}</div>
                     </div>
