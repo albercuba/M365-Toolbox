@@ -604,7 +604,7 @@ function Export-MfaHtmlReport {
 </head>
 <body>
 <div class="topbar">
-  <div class="topbar-logo">&#x2B21; RegITs GmbH M365 MFA Monitor</div>
+  <div class="topbar-logo">&#x2B21; M365 MFA Monitor</div>
   <span class="topbar-sep">|</span>
   <div class="topbar-server"></div>
   <nav class="topbar-nav">
