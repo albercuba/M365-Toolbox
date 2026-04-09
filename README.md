@@ -174,8 +174,6 @@ Latest additions:
   Reviews likely break-glass accounts for MFA, state, and hardening posture.
 - `scripts/M365-OAuthAppRiskReview.ps1`
   Highlights OAuth-enabled apps with delegated grants, risky scopes, and credential risk.
-- `scripts/M365-MailboxPhishingReview.ps1`
-  Reviews a specific mailbox for phishing indicators and enriches the findings with Exchange message trace context.
 
 The registry for the full catalog lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbox/backend/src/data/scripts.js), and the PowerShell entry scripts live in [scripts](/c:/VSCode/M365-Toolbox/scripts).
 
