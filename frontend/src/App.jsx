@@ -198,13 +198,10 @@ export function App() {
   const [artifacts, setArtifacts] = useState([]);
   const [activeRunHtml, setActiveRunHtml] = useState("");
   const [status, setStatus] = useState(null);
-  const [authInfo, setAuthInfo] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [canceling, setCanceling] = useState(false);
-  const [authWorking, setAuthWorking] = useState(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
   const [recentRunsOpen, setRecentRunsOpen] = useState(true);
   const [devicePromptDismissed, setDevicePromptDismissed] = useState(false);
@@ -216,7 +213,7 @@ export function App() {
   const [theme, setTheme] = useState(() => getThemePreference());
 
   useEffect(() => {
-    const loadToolboxData = async () => {
+    const load = async () => {
       const [scriptsResponse, runsResponse, statusResponse] = await Promise.all([
         fetch(`${apiBase}/scripts`),
         fetch(`${apiBase}/runs`),
@@ -234,17 +231,7 @@ export function App() {
       setExpandedCategories({});
     };
 
-    const load = async () => {
-      const sessionResponse = await fetch(`${apiBase}/auth/session`);
-      const sessionData = await parseApiResponse(sessionResponse);
-      setAuthInfo(sessionData);
-
-      if (sessionData.config?.mode === "disabled" || sessionData.session) {
-        await loadToolboxData();
-      }
-    };
-
-    load().catch((loadError) => setError(loadError.message)).finally(() => setAuthLoading(false));
+    load().catch((loadError) => setError(loadError.message));
   }, []);
 
   useEffect(() => {
@@ -256,18 +243,6 @@ export function App() {
       // Ignore storage errors.
     }
   }, [theme]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const authError = params.get("authError");
-    if (authError) {
-      setError(authError);
-      params.delete("authError");
-      const nextQuery = params.toString();
-      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
-      window.history.replaceState({}, "", nextUrl);
-    }
-  }, []);
 
   useEffect(() => {
     if (!activeRun || !["running", "queued", "canceling"].includes(activeRun.status)) {
@@ -426,74 +401,6 @@ export function App() {
     setFormValues((current) => ({ ...current, [fieldId]: nextValue }));
   };
 
-  const handleMicrosoftLogin = async () => {
-    setAuthWorking(true);
-    setError("");
-    try {
-      const response = await fetch(`${apiBase}/auth/login?returnTo=/`);
-      const data = await parseApiResponse(response);
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to start Microsoft sign-in.");
-      }
-      window.location.href = data.url;
-    } catch (loginError) {
-      setError(loginError.message);
-      setAuthWorking(false);
-    }
-  };
-
-  const handleContinueWithoutLogin = async () => {
-    setAuthWorking(true);
-    setError("");
-    try {
-      const response = await fetch(`${apiBase}/auth/anonymous`, {
-        method: "POST"
-      });
-      const data = await parseApiResponse(response);
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to continue without login.");
-      }
-      setAuthInfo(data);
-      const [scriptsResponse, runsResponse, statusResponse] = await Promise.all([
-        fetch(`${apiBase}/scripts`),
-        fetch(`${apiBase}/runs`),
-        fetch(`${apiBase}/status`)
-      ]);
-      setScripts(await parseApiResponse(scriptsResponse));
-      setRuns(await parseApiResponse(runsResponse));
-      setStatus(await parseApiResponse(statusResponse));
-    } catch (anonymousError) {
-      setError(anonymousError.message);
-    } finally {
-      setAuthWorking(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    setAuthWorking(true);
-    setError("");
-    setSuccess("");
-    try {
-      await fetch(`${apiBase}/auth/logout`, {
-        method: "POST"
-      });
-      const sessionResponse = await fetch(`${apiBase}/auth/session`);
-      const sessionData = await parseApiResponse(sessionResponse);
-      setAuthInfo(sessionData);
-      setScripts([]);
-      setRuns([]);
-      setStatus(null);
-      setSelectedScript(null);
-      setActiveRun(null);
-      setArtifacts([]);
-      setActiveRunHtml("");
-    } catch (logoutError) {
-      setError(logoutError.message);
-    } finally {
-      setAuthWorking(false);
-    }
-  };
-
   const handleToggleFavorite = (scriptId) => {
     setFavoriteScriptIds((current) =>
       current.includes(scriptId)
@@ -599,47 +506,6 @@ export function App() {
   });
   const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
-
-  if (authLoading) {
-    return (
-      <div className="app-shell auth-shell">
-        <div className="auth-card">
-          <div className="topbar-logo">M365 Toolbox</div>
-          <div className="empty-row">Loading toolbox session...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (authInfo && authInfo.config?.mode !== "disabled" && !authInfo.session) {
-    return (
-      <div className="app-shell auth-shell">
-        <div className="auth-card">
-          <div className="topbar-logo">M365 Toolbox</div>
-          <h1 className="auth-title">Choose how you want to enter the toolbox</h1>
-          <p className="empty-sub">Sign in with Microsoft Entra ID for audit trail, user visibility, and per-user accountability.</p>
-          <div className="auth-actions">
-            {authInfo.config?.loginEnabled ? (
-              <button type="button" className="add-btn" onClick={handleMicrosoftLogin} disabled={authWorking}>
-                {authWorking ? "Preparing sign-in..." : "Sign in with Microsoft Entra ID"}
-              </button>
-            ) : null}
-            {authInfo.config?.allowAnonymous ? (
-              <button type="button" className="filter-btn auth-secondary" onClick={handleContinueWithoutLogin} disabled={authWorking}>
-                {authWorking ? "Starting..." : "Continue without login"}
-              </button>
-            ) : null}
-          </div>
-          {authInfo.config?.allowAnonymous ? (
-            <div className="auth-note">
-              {authInfo.config.anonymousWarning}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="app-shell">
       {showDevicePrompt ? (
@@ -666,20 +532,9 @@ export function App() {
         <div className="topbar-logo">M365 Toolbox</div>
         <div className="topbar-title">Web-based PowerShell operations for Microsoft 365</div>
         <div className="topbar-right">
-          {authInfo?.session ? (
-            <div className="topbar-user">
-              <span>{authInfo.session.user.displayName}</span>
-              <span className="topbar-user-mode">{authInfo.session.isAnonymous ? "anonymous" : "entra"}</span>
-            </div>
-          ) : null}
           <button type="button" className="topbar-toggle" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>
             {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
-          {authInfo?.config?.mode !== "disabled" ? (
-            <button type="button" className="topbar-toggle" onClick={handleLogout} disabled={authWorking}>
-              {authWorking ? "Working..." : "Logout"}
-            </button>
-          ) : null}
           <div className="topbar-count">{scripts.length} script{scripts.length === 1 ? "" : "s"}</div>
           <div className="topbar-count">{runs.length} run{runs.length === 1 ? "" : "s"}</div>
         </div>
@@ -956,10 +811,6 @@ export function App() {
                                 <div className="quick-summary-item">
                                   <div className="method-label">Current Step</div>
                                   <div className="method-count">{activeRun.currentStep || "Waiting for logs"}</div>
-                                </div>
-                                <div className="quick-summary-item">
-                                  <div className="method-label">Requested By</div>
-                                  <div className="method-count">{activeRun.requestedBy?.displayName || "Unknown"}</div>
                                 </div>
                                 <div className="quick-summary-item">
                                   <div className="method-label">Exit Code</div>

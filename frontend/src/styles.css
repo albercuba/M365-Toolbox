@@ -89,47 +89,6 @@ textarea {
   z-index: 1;
 }
 
-.auth-shell {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 2rem;
-}
-
-.auth-card {
-  width: min(560px, 100%);
-  padding: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--r2);
-  background: var(--bg2);
-  box-shadow: var(--shadow);
-  display: grid;
-  gap: 1rem;
-}
-
-.auth-title {
-  margin: 0;
-  font-size: 1.4rem;
-  color: var(--text);
-}
-
-.auth-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.auth-note {
-  padding: 0.8rem 0.9rem;
-  border: 1px solid rgba(215, 138, 28, 0.25);
-  border-radius: var(--r);
-  background: var(--warn-bg);
-  color: var(--warn);
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  line-height: 1.6;
-}
-
 .topbar {
   position: fixed;
   top: 0;
@@ -166,25 +125,6 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
-
-.topbar-user {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--bg2);
-  color: var(--text2);
-  font-family: var(--mono);
-  font-size: 0.64rem;
-}
-
-.topbar-user-mode {
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 .topbar-toggle {
@@ -1236,10 +1176,6 @@ tr:last-child td {
   border-color: var(--accent2);
   color: var(--accent);
   background: rgba(15, 134, 216, 0.08);
-}
-
-.filter-btn.auth-secondary {
-  padding-inline: 1rem;
 }
 
 .filter-btn.destructive {

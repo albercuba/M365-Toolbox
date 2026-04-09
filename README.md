@@ -43,8 +43,6 @@ The current catalog includes 44 toolbox-native scripts across categories such as
 - Persistent run history in the UI
 - Queue-aware execution with queued run status
 - Run cancellation from the UI
-- Basic Microsoft Entra ID sign-in, session management, and logout
-- Continue-without-login option for teams that do not want identity tracking
 - Structured run logs, timestamps, and clearer run-state feedback
 - Artifact browser for HTML, CSV, XLSX, text, and log downloads
 - Inline HTML report preview after successful runs
@@ -173,18 +171,6 @@ The backend tracks:
 
 Runtime controls available through environment variables:
 
-- `AUTH_MODE`
-  Controls toolbox access mode. Supported values are `disabled`, `optional`, and `required`.
-- `APP_BASE_URL`
-  Public frontend URL used for Microsoft Entra redirect handling.
-- `ENTRA_TENANT_ID`
-  Tenant id used for Microsoft Entra sign-in. Defaults to `common`.
-- `ENTRA_CLIENT_ID`
-  Microsoft Entra app registration client id for toolbox login.
-- `ENTRA_CLIENT_SECRET`
-  Microsoft Entra app registration client secret used for the authorization-code exchange.
-- `SESSION_TTL_HOURS`
-  Controls how long toolbox login sessions remain valid before the user needs to sign in again.
 - `MAX_CONCURRENT_RUNS`
   Limits how many PowerShell runs can execute at the same time. Extra runs stay queued until a slot opens.
 - `RUN_RETENTION_HOURS`
@@ -208,34 +194,9 @@ By default, Docker mounts:
 3. The backend transforms those values into a controlled `pwsh` invocation.
 4. The script runs and the UI polls for status updates.
 5. If the backend concurrency limit is busy, the run stays queued until a slot opens.
-6. Depending on `AUTH_MODE`, users either sign in with Microsoft Entra ID, continue without login, or access the toolbox directly with login disabled.
-7. If a remediation workflow is selected, the UI requires explicit approval confirmation before launch.
-8. If a Microsoft device-code prompt appears in stdout, the UI opens a sign-in modal.
-9. If the script generates artifacts, the backend serves them back for browsing, preview, and download.
-
-## Authentication modes
-
-The toolbox supports three access modes:
-
-- `AUTH_MODE=disabled`
-  No toolbox login is required. The app behaves like a shared internal utility and runs are marked as anonymous.
-- `AUTH_MODE=optional`
-  Users can sign in with Microsoft Entra ID or press `Continue without login`.
-- `AUTH_MODE=required`
-  Users must sign in with Microsoft Entra ID before they can access the toolbox.
-
-When users continue without login, features such as audit trail, per-user accountability, and future user-specific approval workflows are intentionally unavailable.
-
-Minimum Entra configuration for toolbox login:
-
-```env
-AUTH_MODE=optional
-APP_BASE_URL=http://localhost:5173
-ENTRA_TENANT_ID=your-tenant-id
-ENTRA_CLIENT_ID=your-app-client-id
-ENTRA_CLIENT_SECRET=your-app-client-secret
-SESSION_TTL_HOURS=12
-```
+6. If a remediation workflow is selected, the UI requires explicit approval confirmation before launch.
+7. If a Microsoft device-code prompt appears in stdout, the UI opens a sign-in modal.
+8. If the script generates artifacts, the backend serves them back for browsing, preview, and download.
 
 ## Deploy with Docker Compose
 
@@ -405,7 +366,6 @@ The frontend Vite config proxies `/api` requests to the backend during local dev
 - The backend API now exposes script listing, run creation, run status, cancellation, artifact listing, artifact download, HTML preview, and backend status endpoints.
 - Input values are validated on the backend before PowerShell execution starts.
 - Run retention is controlled by backend retention settings so old run records do not accumulate forever.
-- Remediation workflows currently use a local approval confirmation prompt in the UI rather than a multi-user approver queue.
 - CORS is restricted to configured origins, localhost, and private IPv4 ranges.
 
 ## Product direction

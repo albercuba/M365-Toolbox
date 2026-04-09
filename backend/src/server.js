@@ -2,8 +2,6 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { scriptsRouter } from "./routes/scripts.js";
-import { authRouter } from "./routes/auth.js";
-import { attachSession, requireToolboxAccess } from "./services/auth.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -46,7 +44,6 @@ function isAllowedToolboxOrigin(origin) {
 
 app.use(
   cors({
-    credentials: true,
     origin(origin, callback) {
       if (isAllowedToolboxOrigin(origin)) {
         callback(null, true);
@@ -59,7 +56,6 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
-app.use(attachSession);
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -69,8 +65,6 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
-app.use("/api", requireToolboxAccess);
 app.use("/api", scriptsRouter);
 
 app.use("/api", (_req, res) => {
