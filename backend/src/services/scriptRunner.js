@@ -519,6 +519,15 @@ export function startRun(scriptId, payload = {}, options = {}) {
     mode: script.mode,
     status: activeRunningCount() >= MAX_CONCURRENT_RUNS ? "queued" : "running",
     requestedAt: new Date().toISOString(),
+    requestedBy: options.requestedBy
+      ? {
+          id: options.requestedBy.id,
+          displayName: options.requestedBy.displayName,
+          username: options.requestedBy.username,
+          authType: options.requestedBy.authType,
+          isAnonymous: Boolean(options.requestedBy.isAnonymous)
+        }
+      : null,
     queuedAt: null,
     startedAt: null,
     finishedAt: null,

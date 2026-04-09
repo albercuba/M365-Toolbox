@@ -29,7 +29,10 @@ scriptsRouter.get("/scripts/:id", (req, res) => {
 scriptsRouter.post("/scripts/:id/run", (req, res) => {
   try {
     const { approvalConfirmed, ...payload } = req.body || {};
-    const run = startRun(req.params.id, payload, { approvalConfirmed: Boolean(approvalConfirmed) });
+    const run = startRun(req.params.id, payload, {
+      approvalConfirmed: Boolean(approvalConfirmed),
+      requestedBy: req.toolboxUser || null
+    });
     res.status(202).json(run);
   } catch (error) {
     res.status(error.statusCode || 400).json({ message: error.message });
