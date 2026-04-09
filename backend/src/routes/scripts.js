@@ -1,5 +1,16 @@
 import { Router } from "express";
-import { getRun, getRunHtml, getRuns, getScript, listScripts, startRun } from "../services/scriptRunner.js";
+import {
+  cancelRun,
+  getRun,
+  getRunArtifact,
+  getRunArtifacts,
+  getRunHtml,
+  getRuns,
+  getScript,
+  listScripts,
+  startRun
+} from "../services/scriptRunner.js";
+import { getSystemStatus } from "../services/healthStatus.js";
 
 export const scriptsRouter = Router();
 
@@ -17,10 +28,11 @@ scriptsRouter.get("/scripts/:id", (req, res) => {
 
 scriptsRouter.post("/scripts/:id/run", (req, res) => {
   try {
-    const run = startRun(req.params.id, req.body || {});
+    const { approvalConfirmed, ...payload } = req.body || {};
+    const run = startRun(req.params.id, payload, { approvalConfirmed: Boolean(approvalConfirmed) });
     res.status(202).json(run);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(error.statusCode || 400).json({ message: error.message });
   }
 });
 
@@ -38,6 +50,31 @@ scriptsRouter.get("/runs/:id", (req, res) => {
   res.json(run);
 });
 
+scriptsRouter.post("/runs/:id/cancel", (req, res) => {
+  try {
+    res.json(cancelRun(req.params.id));
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
+scriptsRouter.get("/runs/:id/artifacts", (req, res) => {
+  try {
+    res.json(getRunArtifacts(req.params.id));
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
+scriptsRouter.get("/runs/:id/artifacts/:artifactId", (req, res) => {
+  try {
+    const artifact = getRunArtifact(req.params.id, req.params.artifactId);
+    res.download(artifact.path, artifact.name);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
 scriptsRouter.get("/runs/:id/html", (req, res) => {
   const htmlReport = getRunHtml(req.params.id);
   if (!htmlReport) {
@@ -46,4 +83,12 @@ scriptsRouter.get("/runs/:id/html", (req, res) => {
   }
 
   res.type("html").send(htmlReport.content);
+});
+
+scriptsRouter.get("/status", async (_req, res, next) => {
+  try {
+    res.json(await getSystemStatus());
+  } catch (error) {
+    next(error);
+  }
 });

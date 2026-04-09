@@ -43,6 +43,14 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function formatDuration(value) {
+  if (!value && value !== 0) return "Pending";
+  const totalSeconds = Math.max(0, Math.round(value / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
 function groupScriptsByCategory(scripts) {
   return scripts.reduce((groups, script) => {
     const category = script.category || "Other";
@@ -97,6 +105,14 @@ function getFavoriteScriptIds() {
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
+  }
+}
+
+function getThemePreference() {
+  try {
+    return window.localStorage.getItem("m365-toolbox-theme") || "light";
+  } catch {
+    return "light";
   }
 }
 
@@ -179,9 +195,13 @@ export function App() {
   const [formValues, setFormValues] = useState({});
   const [runs, setRuns] = useState([]);
   const [activeRun, setActiveRun] = useState(null);
+  const [artifacts, setArtifacts] = useState([]);
   const [activeRunHtml, setActiveRunHtml] = useState("");
+  const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
   const [recentRunsOpen, setRecentRunsOpen] = useState(true);
   const [devicePromptDismissed, setDevicePromptDismissed] = useState(false);
@@ -189,18 +209,23 @@ export function App() {
   const [scriptSearch, setScriptSearch] = useState("");
   const [favoriteScriptIds, setFavoriteScriptIds] = useState(() => getFavoriteScriptIds());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [modeFilter, setModeFilter] = useState("all");
+  const [theme, setTheme] = useState(() => getThemePreference());
 
   useEffect(() => {
     const load = async () => {
-      const [scriptsResponse, runsResponse] = await Promise.all([
+      const [scriptsResponse, runsResponse, statusResponse] = await Promise.all([
         fetch(`${apiBase}/scripts`),
-        fetch(`${apiBase}/runs`)
+        fetch(`${apiBase}/runs`),
+        fetch(`${apiBase}/status`)
       ]);
 
       const scriptsData = await parseApiResponse(scriptsResponse);
       const runsData = await parseApiResponse(runsResponse);
+      const statusData = await parseApiResponse(statusResponse);
       setScripts(scriptsData);
       setRuns(runsData);
+      setStatus(statusData);
       setSelectedScript(null);
       setFormValues({});
       setExpandedCategories({});
@@ -210,7 +235,17 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!activeRun || activeRun.status !== "running") {
+    document.body.dataset.theme = theme;
+
+    try {
+      window.localStorage.setItem("m365-toolbox-theme", theme);
+    } catch {
+      // Ignore storage errors.
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (!activeRun || !["running", "queued", "canceling"].includes(activeRun.status)) {
       return undefined;
     }
 
@@ -226,10 +261,43 @@ export function App() {
   }, [activeRun]);
 
   useEffect(() => {
+    if (!activeRun?.id) {
+      setArtifacts([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const loadArtifacts = async () => {
+      try {
+        const response = await fetch(`${apiBase}/runs/${activeRun.id}/artifacts`);
+        const data = await parseApiResponse(response);
+        if (!cancelled) {
+          setArtifacts(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setArtifacts([]);
+        }
+      }
+    };
+
+    loadArtifacts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRun?.id, activeRun?.status]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadRunHtml = async () => {
-      if (!activeRun?.id || activeRun.status !== "completed" || !activeRun.artifacts?.htmlPath) {
+      if (
+        !activeRun?.id ||
+        ["running", "queued", "canceling"].includes(activeRun.status) ||
+        !activeRun.artifacts?.htmlPath
+      ) {
         setActiveRunHtml("");
         return;
       }
@@ -261,10 +329,9 @@ export function App() {
 
   useEffect(() => {
     if (activeRun?.status === "completed") {
-      setRunDetailsOpen(false);
-      setRecentRunsOpen(false);
+      setSuccess(`Completed ${activeRun.scriptName} successfully.`);
     }
-  }, [activeRun?.status]);
+  }, [activeRun?.status, activeRun?.scriptName]);
 
   useEffect(() => {
     if (activeRun?.status === "running") {
@@ -308,7 +375,9 @@ export function App() {
     setFormValues(normalizeDefaults(script.fields));
     setExpandedCategories({ [script.category || "Other"]: true });
     setError("");
+    setSuccess("");
     setActiveRun(null);
+    setArtifacts([]);
     setActiveRunHtml("");
     setRunDetailsOpen(true);
     setRecentRunsOpen(true);
@@ -317,10 +386,15 @@ export function App() {
 
   const handleOpenRun = (run) => {
     setActiveRunHtml("");
+    setArtifacts([]);
     setActiveRun(run ? { ...run } : null);
     setRunDetailsOpen(true);
     setRecentRunsOpen(true);
     setDevicePromptDismissed(false);
+    const matchingScript = scripts.find((script) => script.id === run?.scriptId);
+    if (matchingScript) {
+      setSelectedScript(matchingScript);
+    }
   };
 
   const handleChange = (fieldId, nextValue) => {
@@ -339,26 +413,35 @@ export function App() {
     event.preventDefault();
     if (!selectedScript) return;
 
+    const approvalConfirmed = !selectedScript.approvalRequired || window.confirm(
+      `This script is marked as remediation and can change tenant state.\n\nDo you want to approve and launch "${selectedScript.name}"?`
+    );
+
+    if (!approvalConfirmed) {
+      return;
+    }
+
     setSubmitting(true);
     setError("");
+    setSuccess("");
 
     try {
       const response = await fetch(`${apiBase}/scripts/${selectedScript.id}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formValues)
+        body: JSON.stringify({ ...formValues, approvalConfirmed })
       });
 
       const data = await parseApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to start run.");
       }
-
       setActiveRunHtml("");
       setActiveRun(data);
       setDevicePromptDismissed(false);
       setRunDetailsOpen(true);
       setRecentRunsOpen(true);
+      setSuccess(data.status === "queued" ? "Run queued successfully." : "Run started successfully.");
       const runsResponse = await fetch(`${apiBase}/runs`);
       setRuns(await parseApiResponse(runsResponse));
     } catch (submitError) {
@@ -368,9 +451,45 @@ export function App() {
     }
   };
 
+  const handleCancelRun = async () => {
+    if (!activeRun?.id) return;
+
+    setCanceling(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(`${apiBase}/runs/${activeRun.id}/cancel`, {
+        method: "POST"
+      });
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to cancel run.");
+      }
+      setActiveRun(data);
+      setSuccess("Run cancellation requested.");
+      const runsResponse = await fetch(`${apiBase}/runs`);
+      setRuns(await parseApiResponse(runsResponse));
+    } catch (cancelError) {
+      setError(cancelError.message);
+    } finally {
+      setCanceling(false);
+    }
+  };
+
   const devicePrompt = extractDeviceCodePrompt(activeRun?.stdout);
   const showDevicePrompt = Boolean(devicePrompt) && activeRun?.status === "running" && !devicePromptDismissed;
   const normalizedSearch = scriptSearch.trim().toLowerCase();
+  const runCountsByScriptId = runs.reduce((acc, run) => {
+    acc[run.scriptId] = (acc[run.scriptId] || 0) + 1;
+    return acc;
+  }, {});
+  const favoriteScripts = scripts.filter((script) => favoriteScriptIds.includes(script.id));
+  const recentFavoriteScripts = favoriteScripts.slice(0, 3);
+  const mostUsedScripts = [...scripts]
+    .filter((script) => runCountsByScriptId[script.id])
+    .sort((a, b) => (runCountsByScriptId[b.id] || 0) - (runCountsByScriptId[a.id] || 0))
+    .slice(0, 3);
   const filteredScripts = scripts.filter((script) => {
     const matchesSearch = !normalizedSearch || [
       script.name,
@@ -382,7 +501,8 @@ export function App() {
       .filter(Boolean)
       .some((value) => value.toLowerCase().includes(normalizedSearch));
     const matchesFavorite = !favoritesOnly || favoriteScriptIds.includes(script.id);
-    return matchesSearch && matchesFavorite;
+    const matchesMode = modeFilter === "all" || script.mode === modeFilter;
+    return matchesSearch && matchesFavorite && matchesMode;
   });
   const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
@@ -412,6 +532,9 @@ export function App() {
         <div className="topbar-logo">M365 Toolbox</div>
         <div className="topbar-title">Web-based PowerShell operations for Microsoft 365</div>
         <div className="topbar-right">
+          <button type="button" className="topbar-toggle" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
           <div className="topbar-count">{scripts.length} script{scripts.length === 1 ? "" : "s"}</div>
           <div className="topbar-count">{runs.length} run{runs.length === 1 ? "" : "s"}</div>
         </div>
@@ -430,7 +553,7 @@ export function App() {
               />
             </label>
             <div className="sidebar-filter-group">
-              <div className="sidebar-filter-label">Favorites</div>
+              <div className="sidebar-filter-label">Filters</div>
               <div className="chip-row">
                 <button
                   type="button"
@@ -438,6 +561,15 @@ export function App() {
                   onClick={() => setFavoritesOnly((current) => !current)}
                 >
                   Favorites Only
+                </button>
+                <button type="button" className={modeFilter === "all" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("all")}>
+                  All Modes
+                </button>
+                <button type="button" className={modeFilter === "read-only" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("read-only")}>
+                  Read-only
+                </button>
+                <button type="button" className={modeFilter === "remediation" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("remediation")}>
+                  Remediation
                 </button>
               </div>
             </div>
@@ -484,6 +616,10 @@ export function App() {
                           <div className="tenant-info">
                             <div className="tenant-name">{script.name}</div>
                             <div className="tenant-meta">{script.summary}</div>
+                            <div className="tenant-tags">
+                              <span className={`mini-pill ${script.mode === "remediation" ? "badge-crit" : "badge-ok"}`}>{script.mode}</span>
+                              <span className="mini-pill badge-neutral">{script.estimatedRuntimeMinutes} min</span>
+                            </div>
                           </div>
                           <button
                             type="button"
@@ -554,25 +690,30 @@ export function App() {
               <div className="flash flash-error">{error}</div>
             </div>
           ) : null}
+          {success ? (
+            <div className="flash-wrap">
+              <div className="flash flash-success">{success}</div>
+            </div>
+          ) : null}
 
           {selectedScript ? (
             <>
               <div className="dash-topstrip">
                 <div className="strip-item">
-                  <div className="strip-label">Toolbox</div>
-                  <div className="strip-value">M365 Toolbox</div>
-                </div>
-                <div className="strip-item">
                   <div className="strip-label">Script</div>
                   <div className="strip-value">{selectedScript.name}</div>
                 </div>
                 <div className="strip-item">
-                  <div className="strip-label">Category</div>
-                  <div className="strip-value">{selectedScript.category}</div>
+                  <div className="strip-label">Mode</div>
+                  <div className="strip-value">{selectedScript.mode}</div>
                 </div>
                 <div className="strip-item">
-                  <div className="strip-label">Recent Runs</div>
-                  <div className="strip-value">{runs.length}</div>
+                  <div className="strip-label">Estimated Runtime</div>
+                  <div className="strip-value">{selectedScript.estimatedRuntimeMinutes} min</div>
+                </div>
+                <div className="strip-item">
+                  <div className="strip-label">Script Runs</div>
+                  <div className="strip-value">{runCountsByScriptId[selectedScript.id] || 0}</div>
                 </div>
               </div>
 
@@ -580,8 +721,9 @@ export function App() {
                 <div className="sections">
                   <div className="card">
                     <div className="card-header">
-                      <span className="card-title">Script Overview</span>
-                      <span className="card-badge badge-neutral">{selectedScript.id}</span>
+                      <span className="card-title">Script Details</span>
+                      <span className={`card-badge ${selectedScript.mode === "remediation" ? "badge-crit" : "badge-ok"}`}>{selectedScript.mode}</span>
+                      {selectedScript.approvalRequired ? <span className="card-badge badge-warn">approval required</span> : null}
                     </div>
                     <div className="card-body">
                       <div className="method-grid">
@@ -593,8 +735,20 @@ export function App() {
                         </div>
                         <div className="method-item">
                           <div className="method-info">
-                            <div className="method-label">How To Use</div>
-                            <div className="method-count">Review the summary, confirm the filters, then run the script and authenticate when prompted.</div>
+                            <div className="method-label">Prerequisites</div>
+                            <div className="method-count">{selectedScript.prerequisites?.join(" | ")}</div>
+                          </div>
+                        </div>
+                        <div className="method-item">
+                          <div className="method-info">
+                            <div className="method-label">Permissions</div>
+                            <div className="method-count">{selectedScript.permissions?.join(" | ")}</div>
+                          </div>
+                        </div>
+                        <div className="method-item">
+                          <div className="method-info">
+                            <div className="method-label">Examples</div>
+                            <div className="method-count">{selectedScript.examples?.map((example) => example.title).join(" | ")}</div>
                           </div>
                         </div>
                       </div>
@@ -607,15 +761,18 @@ export function App() {
                       <div className="card">
                         <div className="card-header">
                           <span className="card-title">Run Script</span>
-                          <span className="card-badge badge-ok">{submitting ? "Starting" : "Ready"}</span>
+                          <span className={`card-badge ${selectedScript.mode === "remediation" ? "badge-crit" : "badge-ok"}`}>{selectedScript.mode}</span>
                         </div>
                         <div className="card-body">
+                          {selectedScript.approvalRequired ? (
+                            <div className="approval-banner">This remediation workflow requires an approval confirmation before launch.</div>
+                          ) : null}
                           <form className="settings-row" onSubmit={handleSubmit}>
                             {selectedScript.fields.map((field) => (
                               <Field key={field.id} field={field} value={formValues[field.id]} onChange={handleChange} />
                             ))}
                             <button className="add-btn" type="submit" disabled={submitting}>
-                              {submitting ? "Starting..." : "Run in Toolbox"}
+                              {submitting ? "Starting..." : selectedScript.approvalRequired ? "Approve and Run" : "Run in Toolbox"}
                             </button>
                           </form>
                         </div>
@@ -624,7 +781,7 @@ export function App() {
                       <div className={`card ${runDetailsOpen ? "" : "card-collapsed"}`}>
                         <button type="button" className="card-header card-header-button" onClick={() => setRunDetailsOpen((current) => !current)}>
                           <span className="card-title">Run Details</span>
-                          <span className={`card-badge ${activeRun ? (activeRun.status === "completed" ? "badge-ok" : activeRun.status === "failed" ? "badge-crit" : "badge-warn") : "badge-neutral"}`}>
+                          <span className={`card-badge ${activeRun ? (activeRun.status === "completed" ? "badge-ok" : activeRun.status === "failed" || activeRun.status === "canceled" || activeRun.status === "interrupted" ? "badge-crit" : "badge-warn") : "badge-neutral"}`}>
                             {activeRun ? activeRun.status : "idle"}
                           </span>
                           <span className="card-chevron">{runDetailsOpen ? "▾" : "▸"}</span>
@@ -636,6 +793,10 @@ export function App() {
                             <>
                               <div className="quick-summary-grid">
                                 <div className="quick-summary-item">
+                                  <div className="method-label">Requested</div>
+                                  <div className="method-count">{formatDate(activeRun.requestedAt)}</div>
+                                </div>
+                                <div className="quick-summary-item">
                                   <div className="method-label">Started</div>
                                   <div className="method-count">{formatDate(activeRun.startedAt)}</div>
                                 </div>
@@ -644,22 +805,53 @@ export function App() {
                                   <div className="method-count">{formatDate(activeRun.finishedAt)}</div>
                                 </div>
                                 <div className="quick-summary-item">
+                                  <div className="method-label">Duration</div>
+                                  <div className="method-count">{formatDuration(activeRun.durationMs)}</div>
+                                </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Current Step</div>
+                                  <div className="method-count">{activeRun.currentStep || "Waiting for logs"}</div>
+                                </div>
+                                <div className="quick-summary-item">
                                   <div className="method-label">Exit Code</div>
-                                  <div className="method-count">{activeRun.exitCode ?? "Running"}</div>
+                                  <div className="method-count">{activeRun.exitCode ?? "Pending"}</div>
                                 </div>
                               </div>
+                              {activeRun.errorSummary ? (
+                                <div className="flash flash-error soft">{activeRun.errorSummary}</div>
+                              ) : null}
                               <div className="manage-form-panel" style={{ marginTop: "1rem" }}>
                                 <div className="panel-toolbar">
                                   <h4>Command</h4>
-                                  <button
-                                    type="button"
-                                    className="filter-btn active-all"
-                                    onClick={() => navigator.clipboard?.writeText(activeRun.command)}
-                                  >
-                                    Copy Command
-                                  </button>
+                                  <div className="run-actions">
+                                    <button
+                                      type="button"
+                                      className="filter-btn active-all"
+                                      onClick={() => navigator.clipboard?.writeText(activeRun.command)}
+                                    >
+                                      Copy Command
+                                    </button>
+                                    {["running", "queued", "canceling"].includes(activeRun.status) ? (
+                                      <button type="button" className="filter-btn destructive" onClick={handleCancelRun} disabled={canceling}>
+                                        {canceling ? "Canceling..." : "Cancel Run"}
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 </div>
                                 <pre className="manage-response">{activeRun.command}</pre>
+                              </div>
+                              <div className="manage-form-panel">
+                                <h4>Structured Log</h4>
+                                <div className="run-log-list">
+                                  {activeRun.logs?.length ? activeRun.logs.slice(-12).reverse().map((entry) => (
+                                    <div key={entry.id} className={`run-log-entry level-${entry.level}`}>
+                                      <span className="run-log-time">{formatDate(entry.timestamp)}</span>
+                                      <span className="run-log-message">{entry.message}</span>
+                                    </div>
+                                  )) : (
+                                    <div className="empty-row compact">No structured log entries yet.</div>
+                                  )}
+                                </div>
                               </div>
                               <div className="manage-form-panel">
                                 <h4>Stdout</h4>
@@ -675,6 +867,41 @@ export function App() {
                         ) : null}
                       </div>
 
+                      <div className="card">
+                        <div className="card-header">
+                          <span className="card-title">Artifacts</span>
+                          <span className="card-badge badge-neutral">{artifacts.length}</span>
+                        </div>
+                        <div className="card-body">
+                          {artifacts.length === 0 ? (
+                            <div className="empty-row">Artifacts will appear here when a run exports HTML, CSV, XLSX, log, or text files.</div>
+                          ) : (
+                            <div className="artifact-list">
+                              {artifacts.map((artifact) => (
+                                <div key={artifact.id} className="artifact-item">
+                                  <div>
+                                    <div className="artifact-name">{artifact.name}</div>
+                                    <div className="artifact-meta">
+                                      {artifact.type.toUpperCase()} | {Math.max(1, Math.round(artifact.size / 1024))} KB | {formatDate(artifact.createdAt)}
+                                    </div>
+                                  </div>
+                                  <div className="artifact-actions">
+                                    <a className="filter-btn active-all" href={`${apiBase}/runs/${activeRun?.id}/artifacts/${encodeURIComponent(artifact.id)}`}>
+                                      Download
+                                    </a>
+                                    {artifact.type === "html" ? (
+                                      <a className="filter-btn" href={`${apiBase}/runs/${activeRun?.id}/html`} target="_blank" rel="noreferrer">
+                                        Preview
+                                      </a>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <div className={`card ${recentRunsOpen ? "" : "card-collapsed"}`}>
                         <button type="button" className="card-header card-header-button" onClick={() => setRecentRunsOpen((current) => !current)}>
                           <span className="card-title">Recent Runs</span>
@@ -684,7 +911,7 @@ export function App() {
                         {recentRunsOpen ? (
                         <div className="card-body">
                           {runs.length === 0 ? (
-                            <div className="empty-row">No runs yet.</div>
+                            <div className="empty-row">No runs yet. Launch a report to start building persistent history.</div>
                           ) : (
                             <div className="table-scroll">
                               <table>
@@ -692,7 +919,7 @@ export function App() {
                                   <tr>
                                     <th>Script</th>
                                     <th>Status</th>
-                                    <th>Started</th>
+                                    <th>Requested</th>
                                     <th>Action</th>
                                   </tr>
                                 </thead>
@@ -701,11 +928,11 @@ export function App() {
                                     <tr key={run.id}>
                                       <td>{run.scriptName}</td>
                                       <td>
-                                        <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" ? "badge-crit" : "badge-warn"}`}>
+                                        <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
                                           {run.status}
                                         </span>
                                       </td>
-                                      <td>{formatDate(run.startedAt)}</td>
+                                      <td>{formatDate(run.requestedAt || run.startedAt)}</td>
                                       <td className="table-actions">
                                         <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
                                           Open
@@ -747,24 +974,86 @@ export function App() {
               <div className="sections">
                 <div className="card">
                   <div className="card-header">
-                    <span className="card-title">Welcome</span>
+                    <span className="card-title">Dashboard</span>
                     <span className="card-badge badge-neutral">{scripts.length} scripts</span>
                   </div>
                   <div className="card-body">
                     <div className="method-grid">
                       <div className="method-item method-item-selected">
                         <div className="method-info">
-                          <div className="method-label">Choose A Script</div>
-                          <div className="method-count">Browse categories on the left, use search, or mark favorites for faster access.</div>
+                          <div className="method-label">Catalog</div>
+                          <div className="method-count">{scripts.length} scripts across {Object.keys(groupScriptsByCategory(scripts)).length} categories.</div>
+                        </div>
+                      </div>
+                      <div className="method-item">
+                        <div className="method-info">
+                          <div className="method-label">Persistent Runs</div>
+                          <div className="method-count">{runs.length} tracked runs survive backend restarts.</div>
                         </div>
                       </div>
                       <div className="method-item">
                         <div className="method-info">
                           <div className="method-label">Favorites</div>
-                          <div className="method-count">{favoriteScriptIds.length} scripts marked as favorites for faster access.</div>
+                          <div className="method-count">{favoriteScriptIds.length} saved favorites ready for quick access.</div>
+                        </div>
+                      </div>
+                      <div className="method-item">
+                        <div className="method-info">
+                          <div className="method-label">Backend Status</div>
+                          <div className="method-count">
+                            {status?.powerShell?.available ? "PowerShell ready" : "Status unavailable"} | {status?.modules?.ready ? "Modules ready" : "Module check pending"}
+                          </div>
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">Shortcuts</span>
+                    <button type="button" className="filter-btn" onClick={() => fetch(`${apiBase}/status`).then(parseApiResponse).then(setStatus).catch((loadError) => setError(loadError.message))}>
+                      Refresh Status
+                    </button>
+                  </div>
+                  <div className="card-body">
+                    <div className="shortcut-grid">
+                      <div className="shortcut-card">
+                        <div className="method-label">Recent Favorites</div>
+                        {recentFavoriteScripts.length ? recentFavoriteScripts.map((script) => (
+                          <button key={script.id} type="button" className="shortcut-link" onClick={() => handleScriptSelect(script)}>
+                            {script.name}
+                          </button>
+                        )) : <div className="empty-row compact">Mark a script as favorite to pin it here.</div>}
+                      </div>
+                      <div className="shortcut-card">
+                        <div className="method-label">Most Used</div>
+                        {mostUsedScripts.length ? mostUsedScripts.map((script) => (
+                          <button key={script.id} type="button" className="shortcut-link" onClick={() => handleScriptSelect(script)}>
+                            {script.name}
+                          </button>
+                        )) : <div className="empty-row compact">Most-used shortcuts appear after a few runs.</div>}
+                      </div>
+                      <div className="shortcut-card">
+                        <div className="method-label">Health Snapshot</div>
+                        <div className="status-list">
+                          <div>Output path: {status?.paths?.outputWritable ? "writable" : "unavailable"}</div>
+                          <div>Scripts mount: {status?.paths?.scriptsMounted ? "mounted" : "missing"}</div>
+                          <div>PowerShell: {status?.powerShell?.available ? `v${status.powerShell.version}` : "not ready"}</div>
+                          <div>Modules: {status?.modules?.ready ? "ready" : "check failed or pending"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">Start Here</span>
+                    <span className="card-badge badge-neutral">home</span>
+                  </div>
+                  <div className="card-body">
+                    <div className="empty-row">Browse categories on the left, use filters to separate read-only and remediation scripts, and open any script to see prerequisites, examples, and runtime expectations before launch.</div>
                   </div>
                 </div>
 

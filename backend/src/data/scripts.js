@@ -7,6 +7,44 @@ const tenantField = {
   helpText: "Optional. If provided, device-code sign-in is scoped to this tenant."
 };
 
+const destructiveScriptIds = new Set([
+  "m365-compromised-account-remediation"
+]);
+
+function withCommonMetadata(script) {
+  const mode = destructiveScriptIds.has(script.id) ? "remediation" : "read-only";
+  const estimatedRuntimeMinutes = script.id === "m365-compromised-account-remediation"
+    ? 8
+    : script.category === "Exchange" || script.category === "SharePoint" || script.category === "Teams"
+      ? 4
+      : 3;
+
+  return {
+    ...script,
+    mode,
+    approvalRequired: mode === "remediation",
+    prerequisites: [
+      "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+      "Microsoft 365 admin sign-in by device code when prompted",
+      script.category === "Exchange" ? "Exchange Online permissions for the chosen account" : "Microsoft Graph permissions required by the selected workflow"
+    ],
+    permissions: mode === "remediation"
+      ? ["Read tenant data", "Modify tenant state", "Generate report artifacts"]
+      : ["Read tenant data", "Generate report artifacts"],
+    estimatedRuntimeMinutes,
+    examples: [
+      {
+        title: "Default tenant-wide run",
+        description: "Use the default field values and authenticate when the device-code prompt appears."
+      },
+      {
+        title: "Scoped admin review",
+        description: "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+      }
+    ]
+  };
+}
+
 const compromisedAccountScript = {
   id: "m365-compromised-account-remediation",
   name: "M365 Compromised Account Remediation",
@@ -1000,4 +1038,4 @@ export const scripts = [
   mailflowConnectorAuditScript
   ,
   breakGlassAccountAuditScript
-];
+].map(withCommonMetadata);

@@ -35,10 +35,20 @@ The current catalog includes 44 toolbox-native scripts across categories such as
 - Resizable left sidebar for the script catalog
 - Search and category browsing in the catalog
 - Category icons in the sidebar for faster scanning
+- Read-only versus remediation mode labeling and filtering
 - Favorites toggle and favorites-only filtering
-- Recent run history in the UI
+- Dark mode toggle
+- Better dashboard home screen with quick stats and shortcuts
+- Recent favorites and most-used shortcuts on the dashboard
+- Persistent run history in the UI
+- Queue-aware execution with queued run status
+- Run cancellation from the UI
+- Structured run logs, timestamps, and clearer run-state feedback
+- Artifact browser for HTML, CSV, XLSX, text, and log downloads
 - Inline HTML report preview after successful runs
 - Device-code modal that surfaces the sign-in code and login URL
+- Approval confirmation prompt for remediation workflows
+- Backend status view for PowerShell, modules, script mount, and output path readiness
 - GitHub repository link in the sidebar footer
 
 ## Current script catalog
@@ -152,10 +162,12 @@ The backend tracks:
 - generated command line
 - stdout
 - stderr
+- structured log entries
 - run status
+- queued, running, canceling, completed, failed, canceled, and interrupted lifecycle states
 - exit code
 - timestamps
-- HTML artifact paths
+- artifact inventory for exported files
 
 By default, Docker mounts:
 
@@ -168,8 +180,10 @@ By default, Docker mounts:
 2. You select a script from the sidebar and fill in its approved input fields.
 3. The backend transforms those values into a controlled `pwsh` invocation.
 4. The script runs and the UI polls for status updates.
-5. If a Microsoft device-code prompt appears in stdout, the UI opens a sign-in modal.
-6. If the script generates an HTML report, the backend serves it back for inline preview and download.
+5. If the backend concurrency limit is busy, the run stays queued until a slot opens.
+6. If a remediation workflow is selected, the UI requires explicit approval confirmation before launch.
+7. If a Microsoft device-code prompt appears in stdout, the UI opens a sign-in modal.
+8. If the script generates artifacts, the backend serves them back for browsing, preview, and download.
 
 ## Deploy with Docker Compose
 
@@ -332,17 +346,22 @@ The frontend Vite config proxies `/api` requests to the backend during local dev
 
 ## Notes
 
-- The backend uses in-memory run tracking today, so history resets when the backend restarts.
+- Run history is persisted to a backend state file so completed runs survive backend restarts.
+- Running or queued jobs are marked as interrupted if the backend restarts before they finish.
 - Toolbox-native scripts are served only from `scripts/`; there is no external PowerShell repository mount.
 - Shared helpers such as `Shared-ToolboxReport.ps1` support common HTML dashboard rendering and output handling.
-- The backend API currently exposes script listing, run creation, run status, and HTML artifact retrieval endpoints.
+- The backend API now exposes script listing, run creation, run status, cancellation, artifact listing, artifact download, HTML preview, and backend status endpoints.
+- Input values are validated on the backend before PowerShell execution starts.
+- Run retention is controlled by backend retention settings so old run records do not accumulate forever.
 - CORS is restricted to configured origins, localhost, and private IPv4 ranges.
 
-## Next growth areas
+## Product direction
 
-- authentication and RBAC
-- persistent run history storage
-- approvals for high-impact workflows
-- richer artifact browsing for CSV, XLSX, and logs
+The current implementation focuses on safe execution, persistent run visibility, and better operator feedback. The next natural product steps are:
+
+- authentication and RBAC for multi-user environments
+- a real database-backed run store instead of file-based persistence
+- richer approval workflows with requester and approver identities
+- stronger artifact management and retention controls
 - localization when multilingual support becomes a priority
 - alternative auth flows such as certificate-based or app-based execution where appropriate

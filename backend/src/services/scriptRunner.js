@@ -3,42 +3,89 @@ import path from "node:path";
 import fs from "node:fs";
 import { v4 as uuidv4 } from "uuid";
 import { scripts } from "../data/scripts.js";
+import { createError, normalizeListValue, validatePayload } from "./validation.js";
 
 const OUTPUT_DIR = process.env.OUTPUT_DIR || path.resolve(process.cwd(), "../output");
 const TOOLBOX_SCRIPT_MOUNT_ROOT = process.env.TOOLBOX_SCRIPT_MOUNT_ROOT || path.resolve(process.cwd(), "../scripts");
+const RUN_STATE_DIR = process.env.RUN_STATE_DIR || path.join(OUTPUT_DIR, ".toolbox");
+const RUN_STATE_FILE = path.join(RUN_STATE_DIR, "runs.json");
+const MAX_CONCURRENT_RUNS = Math.max(1, Number(process.env.MAX_CONCURRENT_RUNS || 2));
+const RUN_RETENTION_HOURS = Math.max(1, Number(process.env.RUN_RETENTION_HOURS || 168));
 const runStore = new Map();
+const childStore = new Map();
+const queuedRunIds = [];
 
-function updateArtifactsFromStdout(run) {
-  if (!run?.stdout) {
+function ensureRuntimePaths() {
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  fs.mkdirSync(RUN_STATE_DIR, { recursive: true });
+}
+
+function persistRuns() {
+  ensureRuntimePaths();
+  fs.writeFileSync(
+    RUN_STATE_FILE,
+    JSON.stringify(Array.from(runStore.values()), null, 2),
+    "utf8"
+  );
+}
+
+function addLogEntry(run, stream, message) {
+  if (!message) {
     return;
   }
 
-  const htmlMatch = run.stdout.match(/\[\+\]\s+HTML dashboard exported to:\s+(.+)/i);
-  if (htmlMatch?.[1]) {
-    run.artifacts = {
-      ...run.artifacts,
-      htmlPath: htmlMatch[1].trim()
-    };
+  const clean = message.replace(/\r/g, "").trim();
+  if (!clean) {
+    return;
+  }
+
+  let level = stream === "stderr" ? "error" : "info";
+  if (/^\[\!\]/.test(clean) || /error|failed/i.test(clean)) {
+    level = "error";
+  } else if (/^\[\*\]/.test(clean) || /warn/i.test(clean)) {
+    level = "warn";
+  } else if (/^\[\+\]/.test(clean)) {
+    level = "progress";
+  }
+
+  const entry = {
+    id: uuidv4(),
+    timestamp: new Date().toISOString(),
+    stream,
+    level,
+    message: clean
+  };
+
+  run.logs.push(entry);
+  run.updatedAt = entry.timestamp;
+
+  if (level === "progress" || (stream === "stdout" && clean.length > 8)) {
+    run.currentStep = clean.replace(/^\[[^\]]+\]\s*/, "");
+  }
+
+  if (level === "error") {
+    run.errorSummary = clean;
   }
 }
 
-function ensureOutputDir() {
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
+function appendChunk(run, stream, chunk) {
+  const text = chunk.toString();
+  if (stream === "stdout") {
+    run.stdout += text;
+  } else {
+    run.stderr += text;
+  }
 
-function normalizeListValue(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
-  return String(value)
-    .split(/[\n,]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  text
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .forEach((line) => addLogEntry(run, stream, line));
 }
 
 function resolveScript(scriptId) {
   const script = scripts.find((entry) => entry.id === scriptId);
   if (!script) {
-    throw new Error(`Unknown script '${scriptId}'.`);
+    throw createError(`Unknown script '${scriptId}'.`, 404);
   }
 
   return script;
@@ -58,14 +105,11 @@ function findScriptByFileName(rootPath, fileName) {
   }
 
   const entries = fs.readdirSync(rootPath, { withFileTypes: true });
-
   for (const entry of entries) {
     const entryPath = path.posix.join(rootPath.replace(/\\/g, "/"), entry.name);
-
     if (entry.isFile() && entry.name === fileName) {
       return entryPath;
     }
-
     if (entry.isDirectory()) {
       const nestedMatch = findScriptByFileName(entryPath, fileName);
       if (nestedMatch) {
@@ -90,103 +134,78 @@ function resolveScriptPath(script) {
     return fallbackPath;
   }
 
-  throw new Error(`Script file not found in container. Expected '${configuredPath}'.`);
+  throw createError(`Script file not found in container. Expected '${configuredPath}'.`, 500);
 }
 
 function buildCompromisedAccountArgs(script, payload) {
   const timestamp = new Date().toISOString().replace(/[:]/g, "-");
-  const outputBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-compromised-account-remediation-${timestamp}`);
-  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${outputBase}.html`];
-
+  const artifactBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-compromised-account-remediation-${timestamp}`);
+  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${artifactBase}.html`];
   const upns = normalizeListValue(payload.userPrincipalName);
-  if (upns.length > 0) {
-    args.push("-UserPrincipalName", upns.join(","));
-  }
-
   const actions = normalizeListValue(payload.actions);
-  if (actions.length > 0) {
-    args.push("-Actions", actions.join(","));
-  }
 
-  if (payload.auditLogDays) {
-    args.push("-AuditLogDays", String(payload.auditLogDays));
-  }
-
-  if (payload.tenantId) {
-    args.push("-TenantId", String(payload.tenantId));
-  }
-
-  if (payload.includeGeneratedPasswordsInResults) {
-    args.push("-IncludeGeneratedPasswordsInResults");
-  }
-
-  if (payload.whatIf) {
-    args.push("-WhatIf");
-  }
+  if (upns.length > 0) args.push("-UserPrincipalName", upns.join(","));
+  if (actions.length > 0) args.push("-Actions", actions.join(","));
+  if (payload.auditLogDays) args.push("-AuditLogDays", String(payload.auditLogDays));
+  if (payload.tenantId) args.push("-TenantId", String(payload.tenantId));
+  if (payload.includeGeneratedPasswordsInResults) args.push("-IncludeGeneratedPasswordsInResults");
+  if (payload.whatIf) args.push("-WhatIf");
 
   return {
     args,
     artifacts: {
-      htmlPath: `${outputBase}.html`
+      basePath: artifactBase,
+      htmlPath: `${artifactBase}.html`,
+      files: []
     }
   };
 }
 
 function buildMfaStatusArgs(script, payload) {
-  const args = [];
   const timestamp = new Date().toISOString().replace(/[:]/g, "-");
-  const outputBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-mfa-report-${timestamp}`);
+  const artifactBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-mfa-report-${timestamp}`);
+  const args = [];
 
-  if (payload.includeGuests) {
-    args.push("-IncludeGuests");
-  }
-
-  if (payload.tenantId) {
-    args.push("-TenantId", String(payload.tenantId));
-  }
-
-  if (payload.exportHtml !== false) {
-    args.push("-ExportHtml", `${outputBase}.html`);
-  }
+  if (payload.includeGuests) args.push("-IncludeGuests");
+  if (payload.tenantId) args.push("-TenantId", String(payload.tenantId));
+  if (payload.exportHtml !== false) args.push("-ExportHtml", `${artifactBase}.html`);
 
   return {
     args,
     artifacts: {
-      htmlPath: payload.exportHtml !== false ? `${outputBase}.html` : null,
-      xlsxPath: null
+      basePath: artifactBase,
+      htmlPath: payload.exportHtml !== false ? `${artifactBase}.html` : null,
+      files: []
     }
   };
 }
 
 function buildUsageReportArgs(script, payload) {
   const timestamp = new Date().toISOString().replace(/[:]/g, "-");
-  const outputBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-usage-report-${timestamp}`);
-  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${outputBase}.html`];
+  const artifactBase = path.posix.join(OUTPUT_DIR.replace(/\\/g, "/"), `m365-usage-report-${timestamp}`);
+  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${artifactBase}.html`];
   const reports = normalizeListValue(payload.reports);
 
-  if (reports.length > 0) {
-    args.push("-Reports", reports.join(","));
-  }
-
-  if (payload.tenantId) {
-    args.push("-TenantId", String(payload.tenantId));
-  }
+  if (reports.length > 0) args.push("-Reports", reports.join(","));
+  if (payload.tenantId) args.push("-TenantId", String(payload.tenantId));
 
   return {
     args,
     artifacts: {
-      htmlPath: `${outputBase}.html`
+      basePath: artifactBase,
+      htmlPath: `${artifactBase}.html`,
+      files: []
     }
   };
 }
 
 function buildGenericHtmlArgs(script, payload) {
   const timestamp = new Date().toISOString().replace(/[:]/g, "-");
-  const outputBase = path.posix.join(
+  const artifactBase = path.posix.join(
     OUTPUT_DIR.replace(/\\/g, "/"),
     `${script.outputBaseName || script.id}-${timestamp}`
   );
-  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${outputBase}.html`];
+  const args = ["-OutputPath", OUTPUT_DIR, "-ExportHtml", `${artifactBase}.html`];
 
   for (const field of script.fields || []) {
     const rawValue = payload[field.id];
@@ -217,7 +236,9 @@ function buildGenericHtmlArgs(script, payload) {
   return {
     args,
     artifacts: {
-      htmlPath: `${outputBase}.html`
+      basePath: artifactBase,
+      htmlPath: `${artifactBase}.html`,
+      files: []
     }
   };
 }
@@ -226,30 +247,29 @@ function buildArgs(script, payload) {
   const scriptPath = resolveScriptPath(script);
   const wrapperPath = path.posix.join(TOOLBOX_SCRIPT_MOUNT_ROOT.replace(/\\/g, "/"), "Invoke-ToolboxScript.ps1");
   const runtimeScript = { ...script, scriptPath };
-  let args;
-  let artifacts = {};
+  let result;
 
   switch (script.id) {
     case "m365-compromised-account-remediation":
-      ({ args, artifacts } = buildCompromisedAccountArgs(runtimeScript, payload));
+      result = buildCompromisedAccountArgs(runtimeScript, payload);
       break;
     case "m365-check-mfa-status":
-      ({ args, artifacts } = buildMfaStatusArgs(runtimeScript, payload));
+      result = buildMfaStatusArgs(runtimeScript, payload);
       break;
     case "m365-usage-report":
-      ({ args, artifacts } = buildUsageReportArgs(runtimeScript, payload));
+      result = buildUsageReportArgs(runtimeScript, payload);
       break;
     default:
       if (script.runner === "generic-html") {
-        ({ args, artifacts } = buildGenericHtmlArgs(runtimeScript, payload));
+        result = buildGenericHtmlArgs(runtimeScript, payload);
         break;
       }
-      throw new Error(`No runner is defined for script '${script.id}'.`);
+      throw createError(`No runner is defined for script '${script.id}'.`, 500);
   }
 
   return {
     scriptPath,
-    artifacts,
+    artifacts: result.artifacts,
     args: [
       "-NoProfile",
       "-ExecutionPolicy",
@@ -258,8 +278,208 @@ function buildArgs(script, payload) {
       wrapperPath,
       "-ScriptPath",
       scriptPath,
-      ...args
+      ...result.args
     ]
+  };
+}
+
+function refreshArtifacts(run) {
+  const basePath = run.artifacts?.basePath;
+  if (!basePath) {
+    return run.artifacts?.files || [];
+  }
+
+  const dir = path.dirname(basePath);
+  const prefix = path.basename(basePath);
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
+
+  const files = fs.readdirSync(dir)
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => {
+      const fullPath = path.join(dir, name);
+      const stat = fs.statSync(fullPath);
+      return {
+        id: name,
+        name,
+        path: fullPath,
+        type: path.extname(name).slice(1).toLowerCase() || "file",
+        size: stat.size,
+        createdAt: stat.mtime.toISOString()
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  run.artifacts.files = files;
+  const htmlFile = files.find((file) => file.type === "html");
+  run.artifacts.htmlPath = htmlFile?.path || run.artifacts.htmlPath || null;
+  return files;
+}
+
+function finalizeRun(run, status, exitCode = null) {
+  refreshArtifacts(run);
+  run.status = status;
+  run.exitCode = exitCode;
+  run.finishedAt = new Date().toISOString();
+  run.updatedAt = run.finishedAt;
+  run.durationMs = run.startedAt ? new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime() : null;
+  childStore.delete(run.id);
+  persistRuns();
+  startNextQueuedRun();
+}
+
+function activeRunningCount() {
+  return Array.from(runStore.values()).filter((run) => run.status === "running" || run.status === "canceling").length;
+}
+
+function startNextQueuedRun() {
+  if (activeRunningCount() >= MAX_CONCURRENT_RUNS) {
+    return;
+  }
+
+  const nextRunId = queuedRunIds.shift();
+  if (!nextRunId) {
+    persistRuns();
+    return;
+  }
+
+  const run = runStore.get(nextRunId);
+  if (!run || run.status !== "queued") {
+    startNextQueuedRun();
+    return;
+  }
+
+  launchRun(run);
+}
+
+function launchRun(run) {
+  run.status = "running";
+  run.startedAt = new Date().toISOString();
+  run.updatedAt = run.startedAt;
+  run.currentStep = "Launching PowerShell script";
+  addLogEntry(run, "stdout", "[+] Launching PowerShell script");
+  persistRuns();
+
+  const child = spawn("pwsh", run.commandArgs, {
+    cwd: OUTPUT_DIR,
+    env: process.env
+  });
+  childStore.set(run.id, child);
+
+  child.stdout.on("data", (chunk) => {
+    appendChunk(run, "stdout", chunk);
+    persistRuns();
+  });
+
+  child.stderr.on("data", (chunk) => {
+    appendChunk(run, "stderr", chunk);
+    persistRuns();
+  });
+
+  child.on("error", (error) => {
+    appendChunk(run, "stderr", Buffer.from(error.message));
+    finalizeRun(run, "failed", 1);
+  });
+
+  child.on("close", (code) => {
+    if (run.cancelRequestedAt) {
+      finalizeRun(run, "canceled", code);
+      return;
+    }
+
+    if (code === 0) {
+      addLogEntry(run, "stdout", "[+] Script completed successfully");
+      finalizeRun(run, "completed", code);
+      return;
+    }
+
+    if (!run.errorSummary) {
+      run.errorSummary = "The script exited with an error.";
+    }
+    finalizeRun(run, "failed", code);
+  });
+}
+
+function pruneExpiredRuns() {
+  const cutoff = Date.now() - RUN_RETENTION_HOURS * 60 * 60 * 1000;
+  let changed = false;
+
+  for (const [runId, run] of runStore.entries()) {
+    const comparison = run.finishedAt || run.updatedAt || run.requestedAt;
+    if (!comparison) {
+      continue;
+    }
+
+    if (new Date(comparison).getTime() < cutoff) {
+      runStore.delete(runId);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    persistRuns();
+  }
+}
+
+function loadPersistedRuns() {
+  ensureRuntimePaths();
+  if (!fs.existsSync(RUN_STATE_FILE)) {
+    return;
+  }
+
+  try {
+    const raw = fs.readFileSync(RUN_STATE_FILE, "utf8");
+    const savedRuns = JSON.parse(raw);
+    for (const savedRun of savedRuns) {
+      const run = {
+        ...savedRun,
+        logs: Array.isArray(savedRun.logs) ? savedRun.logs : [],
+        artifacts: savedRun.artifacts || { files: [] }
+      };
+
+      if (run.status === "running" || run.status === "queued" || run.status === "canceling") {
+        run.status = "interrupted";
+        run.finishedAt = new Date().toISOString();
+        run.updatedAt = run.finishedAt;
+        run.errorSummary = "The backend restarted before this run completed.";
+        run.logs.push({
+          id: uuidv4(),
+          timestamp: run.finishedAt,
+          stream: "stderr",
+          level: "error",
+          message: "The backend restarted before this run completed."
+        });
+      }
+
+      refreshArtifacts(run);
+      runStore.set(run.id, run);
+    }
+  } catch (error) {
+    console.error("Failed to load persisted runs:", error);
+  }
+
+  pruneExpiredRuns();
+}
+
+loadPersistedRuns();
+setInterval(pruneExpiredRuns, 60 * 60 * 1000).unref();
+
+function cloneForResponse(run) {
+  refreshArtifacts(run);
+  return {
+    ...run,
+    commandArgs: undefined,
+    artifacts: {
+      ...run.artifacts,
+      files: (run.artifacts?.files || []).map((file) => ({
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        createdAt: file.createdAt
+      }))
+    }
   };
 }
 
@@ -272,79 +492,155 @@ export function getScript(scriptId) {
 }
 
 export function getRuns() {
-  return Array.from(runStore.values()).sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+  return Array.from(runStore.values())
+    .sort((a, b) => new Date(b.requestedAt || b.startedAt || 0) - new Date(a.requestedAt || a.startedAt || 0))
+    .map(cloneForResponse);
 }
 
 export function getRun(runId) {
-  return runStore.get(runId) || null;
+  const run = runStore.get(runId);
+  return run ? cloneForResponse(run) : null;
 }
 
-export function startRun(scriptId, payload = {}) {
-  ensureOutputDir();
-
+export function startRun(scriptId, payload = {}, options = {}) {
+  ensureRuntimePaths();
   const script = resolveScript(scriptId);
-  const { scriptPath, args, artifacts } = buildArgs(script, payload);
-  const runId = uuidv4();
+  const validatedPayload = validatePayload(script, payload);
+
+  if (script.approvalRequired && !options.approvalConfirmed) {
+    throw createError(`'${script.name}' is a remediation workflow. Confirm approval before launch.`, 409);
+  }
+
+  const { scriptPath, args, artifacts } = buildArgs(script, validatedPayload);
   const run = {
-    id: runId,
+    id: uuidv4(),
     scriptId,
     scriptName: script.name,
-    status: "running",
-    startedAt: new Date().toISOString(),
+    mode: script.mode,
+    status: activeRunningCount() >= MAX_CONCURRENT_RUNS ? "queued" : "running",
+    requestedAt: new Date().toISOString(),
+    queuedAt: null,
+    startedAt: null,
     finishedAt: null,
-    payload,
+    updatedAt: new Date().toISOString(),
+    payload: validatedPayload,
     command: ["pwsh", ...args].join(" "),
+    commandArgs: args,
     scriptPath,
     artifacts,
     stdout: "",
     stderr: "",
-    exitCode: null
+    logs: [],
+    currentStep: activeRunningCount() >= MAX_CONCURRENT_RUNS ? "Waiting for an execution slot" : "Preparing run",
+    errorSummary: null,
+    exitCode: null,
+    durationMs: null,
+    cancelRequestedAt: null
   };
 
-  runStore.set(runId, run);
+  addLogEntry(run, "stdout", run.status === "queued"
+    ? `[+] Queued for execution. Concurrency limit is ${MAX_CONCURRENT_RUNS}.`
+    : "[+] Run accepted by backend");
 
-  const child = spawn("pwsh", args, {
-    cwd: OUTPUT_DIR,
-    env: process.env
-  });
+  if (run.status === "queued") {
+    run.queuedAt = run.requestedAt;
+    queuedRunIds.push(run.id);
+  }
 
-  child.stdout.on("data", (chunk) => {
-    run.stdout += chunk.toString();
-  });
+  runStore.set(run.id, run);
+  persistRuns();
 
-  child.stderr.on("data", (chunk) => {
-    run.stderr += chunk.toString();
-  });
+  if (run.status === "running") {
+    launchRun(run);
+  }
 
-  child.on("error", (error) => {
-    run.status = "failed";
-    run.finishedAt = new Date().toISOString();
-    run.stderr += `\n${error.message}`;
-  });
+  return cloneForResponse(run);
+}
 
-  child.on("close", (code) => {
-    updateArtifactsFromStdout(run);
-    run.exitCode = code;
-    run.finishedAt = new Date().toISOString();
-    run.status = code === 0 ? "completed" : "failed";
-  });
+export function cancelRun(runId) {
+  const run = runStore.get(runId);
+  if (!run) {
+    throw createError("Run not found.", 404);
+  }
 
-  return run;
+  if (["completed", "failed", "canceled", "interrupted"].includes(run.status)) {
+    throw createError("This run is already finished.", 409);
+  }
+
+  if (run.status === "queued") {
+    const index = queuedRunIds.indexOf(run.id);
+    if (index >= 0) {
+      queuedRunIds.splice(index, 1);
+    }
+    run.cancelRequestedAt = new Date().toISOString();
+    addLogEntry(run, "stderr", "[!] Queued run canceled before launch");
+    finalizeRun(run, "canceled", null);
+    return cloneForResponse(run);
+  }
+
+  const child = childStore.get(run.id);
+  if (!child) {
+    throw createError("Unable to cancel this run because no active process was found.", 409);
+  }
+
+  run.cancelRequestedAt = new Date().toISOString();
+  run.status = "canceling";
+  addLogEntry(run, "stderr", "[!] Cancellation requested from UI");
+  child.kill();
+  persistRuns();
+  return cloneForResponse(run);
+}
+
+export function getRunArtifacts(runId) {
+  const run = runStore.get(runId);
+  if (!run) {
+    throw createError("Run not found.", 404);
+  }
+
+  refreshArtifacts(run);
+  persistRuns();
+  return run.artifacts.files.map((file) => ({
+    id: file.id,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    createdAt: file.createdAt
+  }));
+}
+
+export function getRunArtifact(runId, artifactId) {
+  const run = runStore.get(runId);
+  if (!run) {
+    throw createError("Run not found.", 404);
+  }
+
+  const file = refreshArtifacts(run).find((entry) => entry.id === artifactId);
+  if (!file || !fs.existsSync(file.path)) {
+    throw createError("Artifact not found for this run.", 404);
+  }
+
+  const normalizedOutputDir = path.resolve(OUTPUT_DIR);
+  const resolvedArtifactPath = path.resolve(file.path);
+  if (!resolvedArtifactPath.startsWith(normalizedOutputDir)) {
+    throw createError("Artifact path is outside the allowed output directory.", 403);
+  }
+
+  return file;
 }
 
 export function getRunHtml(runId) {
-  const run = getRun(runId);
+  const run = runStore.get(runId);
   if (!run) {
     return null;
   }
 
-  const htmlPath = run.artifacts?.htmlPath;
-  if (!htmlPath || !fs.existsSync(htmlPath)) {
+  const htmlArtifact = refreshArtifacts(run).find((file) => file.type === "html");
+  if (!htmlArtifact || !fs.existsSync(htmlArtifact.path)) {
     return null;
   }
 
   return {
-    path: htmlPath,
-    content: fs.readFileSync(htmlPath, "utf8")
+    path: htmlArtifact.path,
+    content: fs.readFileSync(htmlArtifact.path, "utf8")
   };
 }
