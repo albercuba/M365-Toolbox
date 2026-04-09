@@ -293,10 +293,11 @@ export function App() {
     let cancelled = false;
 
     const loadRunHtml = async () => {
+      const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
       if (
         !activeRun?.id ||
         ["running", "queued", "canceling"].includes(activeRun.status) ||
-        !activeRun.artifacts?.htmlPath
+        !hasHtmlArtifact
       ) {
         setActiveRunHtml("");
         return;
@@ -325,7 +326,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeRun]);
+  }, [activeRun?.id, activeRun?.status, artifacts]);
 
   useEffect(() => {
     if (activeRun?.status === "completed") {
