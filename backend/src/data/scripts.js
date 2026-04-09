@@ -1050,6 +1050,291 @@ const breakGlassAccountAuditScript = {
   fields: [tenantField]
 };
 
+const impossibleTravelReviewScript = {
+  id: "m365-impossible-travel-review",
+  name: "M365 Impossible Travel Review",
+  category: "Identity",
+  summary: "Review sign-ins that jump between countries too quickly to be expected.",
+  description:
+    "Exports an HTML dashboard highlighting rapid country changes in recent Microsoft Entra sign-ins within the selected time threshold.",
+  scriptRelativePath: "M365-ImpossibleTravelReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-impossible-travel-review",
+  outputs: "Writes an HTML impossible-travel dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "lookbackDays",
+      label: "Lookback window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 14,
+      min: 1,
+      max: 90
+    },
+    {
+      id: "maxHoursBetween",
+      label: "Maximum hours between sign-ins",
+      type: "number",
+      required: false,
+      defaultValue: 12,
+      min: 1,
+      max: 48
+    },
+    tenantField
+  ]
+};
+
+const mailboxLoginAnomalyReviewScript = {
+  id: "m365-mailbox-login-anomaly-review",
+  name: "M365 Mailbox Login Anomaly Review",
+  category: "Exchange",
+  summary: "Review mailbox-related sign-ins that use suspicious clients, fail Conditional Access, or look unusual.",
+  description:
+    "Exports an HTML dashboard of Exchange and Outlook sign-ins with anomaly signals such as legacy client usage, failures, and non-interactive mailbox access.",
+  scriptRelativePath: "M365-MailboxLoginAnomalyReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mailbox-login-anomaly-review",
+  outputs: "Writes an HTML mailbox login anomaly dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "lookbackDays",
+      label: "Lookback window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 14,
+      min: 1,
+      max: 90
+    },
+    tenantField
+  ]
+};
+
+const externalTenantTrustReviewScript = {
+  id: "m365-external-tenant-trust-review",
+  name: "M365 External Tenant Trust Review",
+  category: "Identity",
+  summary: "Review cross-tenant access partners and external guest domain concentration.",
+  description:
+    "Exports an HTML dashboard summarizing cross-tenant partner trust settings and the external domains most represented in guest access.",
+  scriptRelativePath: "M365-ExternalTenantTrustReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-external-tenant-trust-review",
+  outputs: "Writes an HTML external tenant trust dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const privilegedUserSignInReviewScript = {
+  id: "m365-privileged-user-sign-in-review",
+  name: "M365 Privileged User Sign-In Review",
+  category: "Identity",
+  summary: "Review recent sign-in visibility for privileged accounts across active directory roles.",
+  description:
+    "Exports an HTML dashboard listing privileged users, their roles, and their most recent sign-in activity.",
+  scriptRelativePath: "M365-PrivilegedUserSignInReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-privileged-user-sign-in-review",
+  outputs: "Writes an HTML privileged user sign-in dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "lookbackDays",
+      label: "Lookback window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 30,
+      min: 7,
+      max: 180
+    },
+    tenantField
+  ]
+};
+
+const inboxRuleThreatHuntScript = {
+  id: "m365-inbox-rule-threat-hunt",
+  name: "M365 Inbox Rule Threat Hunt",
+  category: "Exchange",
+  summary: "Hunt for suspicious inbox rules that forward, redirect, hide, or delete messages.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for inbox rules with threat-hunting signals.",
+  scriptRelativePath: "M365-InboxRuleThreatHunt.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-inbox-rule-threat-hunt",
+  outputs: "Writes an HTML inbox rule threat-hunt dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "maxMailboxesToInspect",
+      label: "Maximum mailboxes to inspect",
+      type: "number",
+      required: false,
+      defaultValue: 150,
+      min: 25,
+      max: 500
+    },
+    tenantField
+  ]
+};
+
+const conditionalAccessGapReviewScript = {
+  id: "m365-conditional-access-gap-review",
+  name: "M365 Conditional Access Gap Review",
+  category: "Identity",
+  summary: "Review Conditional Access policies for exclusions, missing grant controls, and non-enforced states.",
+  description:
+    "Exports an HTML dashboard highlighting Conditional Access policies that may have coverage or enforcement gaps.",
+  scriptRelativePath: "M365-ConditionalAccessGapReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-conditional-access-gap-review",
+  outputs: "Writes an HTML Conditional Access gap dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const mfaExclusionAuditScript = {
+  id: "m365-mfa-exclusion-audit",
+  name: "M365 MFA Exclusion Audit",
+  category: "Identity",
+  summary: "Audit MFA-enforcing policies that still exclude users, groups, or roles.",
+  description:
+    "Exports an HTML dashboard focused on MFA-related Conditional Access policies and their exclusion footprint.",
+  scriptRelativePath: "M365-MFAExclusionAudit.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mfa-exclusion-audit",
+  outputs: "Writes an HTML MFA exclusion dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const dormantAdminAccountReviewScript = {
+  id: "m365-dormant-admin-account-review",
+  name: "M365 Dormant Admin Account Review",
+  category: "Identity",
+  summary: "Find privileged accounts with little or no recent sign-in activity.",
+  description:
+    "Exports an HTML dashboard that highlights dormant privileged accounts based on configurable sign-in thresholds.",
+  scriptRelativePath: "M365-DormantAdminAccountReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-dormant-admin-account-review",
+  outputs: "Writes an HTML dormant admin account dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "dormantDays",
+      label: "Dormant threshold (days)",
+      type: "number",
+      required: false,
+      defaultValue: 45,
+      min: 7,
+      max: 365
+    },
+    {
+      id: "lookbackDays",
+      label: "Lookback window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 90,
+      min: 14,
+      max: 365
+    },
+    tenantField
+  ]
+};
+
+const sharedMailboxAbuseReviewScript = {
+  id: "m365-shared-mailbox-abuse-review",
+  name: "M365 Shared Mailbox Abuse Review",
+  category: "Exchange",
+  summary: "Review shared mailboxes for forwarding, risky delegates, and inbox rule abuse signals.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for shared mailbox abuse indicators.",
+  scriptRelativePath: "M365-SharedMailboxAbuseReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-shared-mailbox-abuse-review",
+  outputs: "Writes an HTML shared mailbox abuse dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "maxMailboxesToInspect",
+      label: "Maximum mailboxes to inspect",
+      type: "number",
+      required: false,
+      defaultValue: 150,
+      min: 25,
+      max: 500
+    },
+    tenantField
+  ]
+};
+
+const transportRuleThreatHuntScript = {
+  id: "m365-transport-rule-threat-hunt",
+  name: "M365 Transport Rule Threat Hunt",
+  category: "Exchange",
+  summary: "Hunt for transport rules that redirect, bypass filtering, or manipulate mail flow in risky ways.",
+  description:
+    "Connects to Exchange Online by device code and exports an HTML dashboard for transport rules with threat-hunting indicators.",
+  scriptRelativePath: "M365-TransportRuleThreatHunt.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-transport-rule-threat-hunt",
+  outputs: "Writes an HTML transport rule threat-hunt dashboard to the configured output directory.",
+  fields: [tenantField]
+};
+
+const breakGlassAccountHardeningReviewScript = {
+  id: "m365-break-glass-account-hardening-review",
+  name: "M365 Break-Glass Account Hardening Review",
+  category: "Identity",
+  summary: "Review likely emergency access accounts for MFA, state, and recent sign-in posture.",
+  description:
+    "Exports an HTML dashboard that searches for likely break-glass accounts and summarizes their hardening state.",
+  scriptRelativePath: "M365-BreakGlassAccountHardeningReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-break-glass-account-hardening-review",
+  outputs: "Writes an HTML break-glass hardening dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "accountNameHints",
+      label: "Account name hints",
+      type: "text",
+      required: false,
+      defaultValue: "breakglass,emergency",
+      placeholder: "breakglass, emergency, backupadmin"
+    },
+    tenantField
+  ]
+};
+
+const oauthAppRiskReviewScript = {
+  id: "m365-oauth-app-risk-review",
+  name: "M365 OAuth App Risk Review",
+  category: "Security",
+  summary: "Review OAuth-enabled apps for delegated grants, elevated scopes, and credential risk.",
+  description:
+    "Exports an HTML dashboard highlighting enterprise apps with delegated consent, risky scopes, and expiring credentials.",
+  scriptRelativePath: "M365-OAuthAppRiskReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-oauth-app-risk-review",
+  outputs: "Writes an HTML OAuth app risk dashboard to the configured output directory.",
+  fields: [
+    {
+      id: "daysAhead",
+      label: "Credential expiry window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 60,
+      min: 7,
+      max: 365
+    },
+    tenantField
+  ]
+};
+
 export const scripts = [
   compromisedAccountScript,
   checkMfaStatusScript,
@@ -1093,7 +1378,18 @@ export const scripts = [
   anonymousLinkExposureReportScript,
   teamsOwnershipAuditScript,
   appCredentialExpiryReportScript,
-  mailflowConnectorAuditScript
-  ,
-  breakGlassAccountAuditScript
+  mailflowConnectorAuditScript,
+  breakGlassAccountAuditScript,
+  impossibleTravelReviewScript,
+  mailboxLoginAnomalyReviewScript,
+  externalTenantTrustReviewScript,
+  privilegedUserSignInReviewScript,
+  inboxRuleThreatHuntScript,
+  conditionalAccessGapReviewScript,
+  mfaExclusionAuditScript,
+  dormantAdminAccountReviewScript,
+  sharedMailboxAbuseReviewScript,
+  transportRuleThreatHuntScript,
+  breakGlassAccountHardeningReviewScript,
+  oauthAppRiskReviewScript
 ].map(withCommonMetadata);

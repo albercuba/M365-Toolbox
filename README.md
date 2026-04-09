@@ -11,7 +11,7 @@ M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operat
 - Renders HTML reports inline in the UI and supports direct download
 - Stores favorites in the browser for faster access to common workflows
 
-The current catalog includes 44 toolbox-native scripts across categories such as Identity, Exchange, Security, SharePoint, Teams, Reporting, Licensing, Devices, Operations, Collaboration, and Incident Response.
+The current catalog includes 56 toolbox-native scripts across categories such as Identity, Exchange, Security, SharePoint, Teams, Reporting, Licensing, Devices, Operations, Collaboration, and Incident Response.
 
 ## Project layout
 
@@ -150,6 +150,30 @@ Latest additions:
   Reviews inbound and outbound Exchange Online connectors, relay paths, and TLS posture.
 - `scripts/M365-BreakGlassAccountAudit.ps1`
   Reviews emergency access accounts for privilege, MFA, and recent sign-in visibility.
+- `scripts/M365-ImpossibleTravelReview.ps1`
+  Highlights rapid country-to-country sign-in changes for the same user.
+- `scripts/M365-MailboxLoginAnomalyReview.ps1`
+  Reviews mailbox-related sign-ins with suspicious client, failure, or access patterns.
+- `scripts/M365-ExternalTenantTrustReview.ps1`
+  Summarizes cross-tenant partner trust settings and guest domain concentration.
+- `scripts/M365-PrivilegedUserSignInReview.ps1`
+  Reviews recent sign-in visibility for privileged users across directory roles.
+- `scripts/M365-InboxRuleThreatHunt.ps1`
+  Hunts for suspicious inbox rules that forward, redirect, hide, or delete messages.
+- `scripts/M365-ConditionalAccessGapReview.ps1`
+  Highlights Conditional Access policies with exclusions, missing controls, or weak enforcement.
+- `scripts/M365-MFAExclusionAudit.ps1`
+  Audits MFA-enforcing policies that still exclude users, groups, or roles.
+- `scripts/M365-DormantAdminAccountReview.ps1`
+  Finds privileged accounts with little or no recent sign-in activity.
+- `scripts/M365-SharedMailboxAbuseReview.ps1`
+  Reviews shared mailboxes for forwarding, risky delegates, and inbox rule abuse signals.
+- `scripts/M365-TransportRuleThreatHunt.ps1`
+  Flags transport rules with redirect, bypass, delete, or routing threat signals.
+- `scripts/M365-BreakGlassAccountHardeningReview.ps1`
+  Reviews likely break-glass accounts for MFA, state, and hardening posture.
+- `scripts/M365-OAuthAppRiskReview.ps1`
+  Highlights OAuth-enabled apps with delegated grants, risky scopes, and credential risk.
 
 The registry for the full catalog lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbox/backend/src/data/scripts.js), and the PowerShell entry scripts live in [scripts](/c:/VSCode/M365-Toolbox/scripts).
 
