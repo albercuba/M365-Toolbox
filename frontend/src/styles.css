@@ -1133,11 +1133,14 @@ textarea {
 }
 
 .modal-close {
-  background: transparent;
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--bg3);
   border: 1px solid var(--border);
-  color: var(--text2);
-  border-radius: var(--r);
-  padding: 0.35rem 0.65rem;
+  color: var(--text3);
+  border-radius: 5px;
+  padding: 0.38rem 0.75rem;
   cursor: pointer;
 }
 
