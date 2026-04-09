@@ -395,7 +395,6 @@ export function App() {
       if (!response.ok) {
         throw new Error(data.message || "Failed to start run.");
       }
-      setActiveRunHtml("");
       setActiveRun(data);
       setDevicePromptDismissed(false);
       setRunDetailsOpen(true);
