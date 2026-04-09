@@ -1335,6 +1335,64 @@ const oauthAppRiskReviewScript = {
   ]
 };
 
+const mailboxPhishingReviewScript = {
+  id: "m365-mailbox-phishing-review",
+  name: "M365 Mailbox Phishing Review",
+  category: "Exchange",
+  summary: "Inspect a specific mailbox for messages with phishing indicators, using Graph plus Exchange message trace context.",
+  description:
+    "Connects to Microsoft Graph and Exchange Online by device code, reviews recent messages in a target mailbox folder, scores likely phishing indicators, and enriches the findings with message trace delivery context.",
+  scriptRelativePath: "M365-MailboxPhishingReview.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-mailbox-phishing-review",
+  outputs: "Writes an HTML phishing review dashboard for the selected mailbox to the configured output directory.",
+  fields: [
+    {
+      id: "mailboxUpn",
+      label: "Mailbox UPN",
+      type: "text",
+      required: true,
+      placeholder: "user@contoso.com"
+    },
+    {
+      id: "folder",
+      label: "Mailbox folder",
+      type: "text",
+      required: false,
+      defaultValue: "inbox",
+      options: ["inbox", "junkemail", "deleteditems"]
+    },
+    {
+      id: "lookbackDays",
+      label: "Lookback window (days)",
+      type: "number",
+      required: false,
+      defaultValue: 14,
+      min: 1,
+      max: 60
+    },
+    {
+      id: "maxMessages",
+      label: "Maximum messages to inspect",
+      type: "number",
+      required: false,
+      defaultValue: 100,
+      min: 10,
+      max: 250
+    },
+    {
+      id: "subjectKeywords",
+      label: "Subject keywords",
+      type: "textarea",
+      required: false,
+      defaultValue: "password,reset,invoice,mfa,urgent,verify,login,shared document,voicemail",
+      placeholder: "password, reset, invoice, urgent"
+    },
+    tenantField
+  ]
+};
+
 export const scripts = [
   compromisedAccountScript,
   checkMfaStatusScript,
@@ -1391,5 +1449,6 @@ export const scripts = [
   sharedMailboxAbuseReviewScript,
   transportRuleThreatHuntScript,
   breakGlassAccountHardeningReviewScript,
-  oauthAppRiskReviewScript
+  oauthAppRiskReviewScript,
+  mailboxPhishingReviewScript
 ].map(withCommonMetadata);

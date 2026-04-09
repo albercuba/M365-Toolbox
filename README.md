@@ -11,7 +11,7 @@ M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operat
 - Renders HTML reports inline in the UI and supports direct download
 - Stores favorites in the browser for faster access to common workflows
 
-The current catalog includes 56 toolbox-native scripts across categories such as Identity, Exchange, Security, SharePoint, Teams, Reporting, Licensing, Devices, Operations, Collaboration, and Incident Response.
+The current catalog includes 57 toolbox-native scripts across categories such as Identity, Exchange, Security, SharePoint, Teams, Reporting, Licensing, Devices, Operations, Collaboration, and Incident Response.
 
 ## Project layout
 
@@ -174,6 +174,8 @@ Latest additions:
   Reviews likely break-glass accounts for MFA, state, and hardening posture.
 - `scripts/M365-OAuthAppRiskReview.ps1`
   Highlights OAuth-enabled apps with delegated grants, risky scopes, and credential risk.
+- `scripts/M365-MailboxPhishingReview.ps1`
+  Reviews a specific mailbox for phishing indicators and enriches the findings with Exchange message trace context.
 
 The registry for the full catalog lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbox/backend/src/data/scripts.js), and the PowerShell entry scripts live in [scripts](/c:/VSCode/M365-Toolbox/scripts).
 
