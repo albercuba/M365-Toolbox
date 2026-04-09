@@ -51,6 +51,36 @@ function formatDuration(value) {
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
+async function copyText(text) {
+  if (!text) return false;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall back to document.execCommand below.
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
 function groupScriptsByCategory(scripts) {
   return scripts.reduce((groups, script) => {
     const category = script.category || "Other";
@@ -491,7 +521,10 @@ export function App() {
                 <button
                   type="button"
                   className="device-copy-btn"
-                  onClick={() => navigator.clipboard?.writeText(devicePrompt.code)}
+                  onClick={async () => {
+                    const copied = await copyText(devicePrompt.code);
+                    setSuccess(copied ? "Device code copied." : "Unable to copy device code automatically.");
+                  }}
                   aria-label="Copy device code"
                   title="Copy device code"
                 >
@@ -804,13 +837,16 @@ export function App() {
                                 <div className="panel-toolbar">
                                   <h4>Command</h4>
                                   <div className="run-actions">
-                                    <button
-                                      type="button"
-                                      className="filter-btn active-all"
-                                      onClick={() => navigator.clipboard?.writeText(activeRun.command)}
-                                    >
-                                      Copy Command
-                                    </button>
+                                  <button
+                                    type="button"
+                                    className="filter-btn active-all"
+                                    onClick={async () => {
+                                      const copied = await copyText(activeRun.command);
+                                      setSuccess(copied ? "Command copied." : "Unable to copy command automatically.");
+                                    }}
+                                  >
+                                    Copy Command
+                                  </button>
                                     {["running", "queued", "canceling"].includes(activeRun.status) ? (
                                       <button type="button" className="filter-btn destructive" onClick={handleCancelRun} disabled={canceling}>
                                         {canceling ? "Canceling..." : "Cancel Run"}
