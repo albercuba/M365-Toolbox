@@ -532,8 +532,26 @@ export function App() {
         <div className="topbar-logo">M365 Toolbox</div>
         <div className="topbar-title">Web-based PowerShell operations for Microsoft 365</div>
         <div className="topbar-right">
-          <button type="button" className="topbar-toggle" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? "Light mode" : "Dark mode"}
+          <button
+            type="button"
+            className={`theme-switch${theme === "dark" ? " dark" : ""}`}
+            onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-pressed={theme === "dark"}
+          >
+            <span className="theme-switch-icon sun" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 6.5A5.5 5.5 0 1 0 17.5 12 5.51 5.51 0 0 0 12 6.5Zm0-3.5h1.5v2.25H12Zm0 15.75h1.5V21H12ZM3 11.25h2.25v1.5H3Zm15.75 0H21v1.5h-2.25ZM5.47 4.41l1.06-1.06 1.59 1.59-1.06 1.06Zm10.41 10.41 1.06-1.06 1.59 1.59-1.06 1.06ZM4.41 18.53l-1.06-1.06 1.59-1.59 1.06 1.06Zm10.41-10.41-1.06-1.06 1.59-1.59 1.06 1.06Z" fill="currentColor" />
+              </svg>
+            </span>
+            <span className="theme-switch-track">
+              <span className="theme-switch-thumb" />
+            </span>
+            <span className="theme-switch-icon moon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M14.73 3.2a8.84 8.84 0 0 0 0 17.6 8.5 8.5 0 0 0 6.07-2.54 9.62 9.62 0 0 1-3.02.48A9.75 9.75 0 0 1 8.04 9a9.62 9.62 0 0 1 .48-3.02A8.5 8.5 0 0 0 5.98 12a8.84 8.84 0 0 0 8.75 8.8A8.84 8.84 0 0 0 14.73 3.2Z" fill="currentColor" />
+              </svg>
+            </span>
           </button>
           <div className="topbar-count">{scripts.length} script{scripts.length === 1 ? "" : "s"}</div>
           <div className="topbar-count">{runs.length} run{runs.length === 1 ? "" : "s"}</div>
