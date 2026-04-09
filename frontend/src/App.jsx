@@ -295,6 +295,14 @@ export function App() {
   }, [activeRun?.status, activeRun?.scriptName]);
 
   useEffect(() => {
+    const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
+    if (activeRun?.id && hasHtmlArtifact) {
+      setRunDetailsOpen(false);
+      setRecentRunsOpen(false);
+    }
+  }, [activeRun?.id, artifacts]);
+
+  useEffect(() => {
     if (activeRun?.status === "running") {
       setDevicePromptDismissed(false);
     }
@@ -478,7 +486,20 @@ export function App() {
             </div>
             <div className="card-body modal-body">
               <p className="empty-sub">Open the Microsoft device login page and enter this code to continue the script run.</p>
-              <div className="device-code-box">{devicePrompt.code}</div>
+              <div className="device-code-row">
+                <div className="device-code-box">{devicePrompt.code}</div>
+                <button
+                  type="button"
+                  className="device-copy-btn"
+                  onClick={() => navigator.clipboard?.writeText(devicePrompt.code)}
+                  aria-label="Copy device code"
+                  title="Copy device code"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 9.75A2.25 2.25 0 0 1 11.25 7.5h7.5A2.25 2.25 0 0 1 21 9.75v9A2.25 2.25 0 0 1 18.75 21h-7.5A2.25 2.25 0 0 1 9 18.75Zm-6-4.5A2.25 2.25 0 0 1 5.25 3h7.5A2.25 2.25 0 0 1 15 5.25V6.5h-1.5V5.25a.75.75 0 0 0-.75-.75h-7.5a.75.75 0 0 0-.75.75v9a.75.75 0 0 0 .75.75H6.5v1.5H5.25A2.25 2.25 0 0 1 3 14.25Z" fill="currentColor" />
+                  </svg>
+                </button>
+              </div>
               <a className="filter-btn active-all" href={devicePrompt.url} target="_blank" rel="noreferrer">
                 Open Microsoft Device Login
               </a>
