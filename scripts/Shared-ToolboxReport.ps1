@@ -310,15 +310,18 @@ function Export-ToolboxHtmlReport {
     .crit{background:rgba(220,38,38,.1);color:var(--crit)}
     .neutral{background:rgba(15,124,192,.1);color:var(--accent)}
     .table-scroll{max-height:620px;overflow:auto;border:1px solid var(--border);border-radius:var(--r)}
-    table{width:100%;border-collapse:collapse;font-size:.77rem}
+    table{width:100%;border-collapse:collapse;font-size:.77rem;table-layout:fixed}
     thead{background:var(--bg3);position:sticky;top:0;z-index:1}
-    th{padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
+    th{position:relative;padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
     td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;word-break:break-word}
     tr:last-child td{border-bottom:none}
     tbody tr:hover td{background:rgba(15,124,192,.05)}
     .empty{font-family:var(--mono);font-size:.78rem;color:var(--text3);font-style:italic}
     .card-text{white-space:pre-wrap;word-break:break-word}
     a{color:var(--accent)}
+    .col-resizer{position:absolute;top:0;right:0;width:10px;height:100%;cursor:col-resize;user-select:none;touch-action:none}
+    .col-resizer::after{content:'';position:absolute;top:20%;bottom:20%;right:4px;width:2px;border-radius:999px;background:transparent;transition:background .15s ease}
+    th:hover .col-resizer::after,.col-resizer.active::after{background:var(--accent2)}
     @media(max-width:700px){.page{padding:1rem}.topbar{padding:0 1rem}.hero{grid-template-columns:repeat(2,1fr)}}
   </style>
 </head>
@@ -381,6 +384,39 @@ function Export-ToolboxHtmlReport {
     html+='</tbody></table></div>';
     return html;
   }
+  function enableResizableColumns(){
+    document.querySelectorAll('.table-scroll table').forEach(function(table){
+      const headers=table.querySelectorAll('thead th');
+      if(!headers.length){return;}
+      table.style.width='max-content';
+      table.style.minWidth='100%';
+      headers.forEach(function(header){
+        if(header.querySelector('.col-resizer')){return;}
+        const resizer=document.createElement('span');
+        resizer.className='col-resizer';
+        header.appendChild(resizer);
+        let startX=0;
+        let startWidth=0;
+        const onMove=function(event){
+          const nextWidth=Math.max(90,startWidth + (event.clientX - startX));
+          header.style.width=nextWidth + 'px';
+        };
+        const onUp=function(){
+          resizer.classList.remove('active');
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+        };
+        resizer.addEventListener('mousedown', function(event){
+          event.preventDefault();
+          startX=event.clientX;
+          startWidth=header.getBoundingClientRect().width;
+          resizer.classList.add('active');
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        });
+      });
+    });
+  }
   function renderSections(items){
     return (items||[]).map(function(section){
       let inner='';
@@ -392,6 +428,7 @@ function Export-ToolboxHtmlReport {
   document.getElementById('server-strip').innerHTML=renderStrip(DATA.stripItems);
   document.getElementById('hero').innerHTML=renderKpis(DATA.kpis);
   document.getElementById('sections').innerHTML=renderSections(DATA.sections);
+  enableResizableColumns();
   </script>
 </body>
 </html>

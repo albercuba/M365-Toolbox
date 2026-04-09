@@ -1356,9 +1356,9 @@ function Export-HtmlReport {
   .card-badge{font-size:.7rem;padding:.18rem .55rem;border-radius:4px;background:rgba(15,124,192,.1);color:var(--accent)}
   .card-body{padding:1.25rem}
   .table-scroll{max-height:620px;overflow:auto;border:1px solid var(--border);border-radius:var(--r)}
-  table{width:100%;border-collapse:collapse;font-size:.77rem}
+  table{width:100%;border-collapse:collapse;font-size:.77rem;table-layout:fixed}
   thead{background:var(--bg3);position:sticky;top:0;z-index:1}
-  th{padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
+  th{position:relative;padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
   td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;word-break:break-word}
   tr:last-child td{border-bottom:none}
   tbody tr:hover td{background:rgba(15,124,192,.05)}
@@ -1369,6 +1369,9 @@ function Export-HtmlReport {
   .neutral{background:rgba(15,124,192,.1);color:var(--accent)}
   .errors{display:grid;gap:.45rem}
   .error-item{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:.7rem .8rem;font-family:var(--mono);font-size:.72rem;color:#b91c1c}
+  .col-resizer{position:absolute;top:0;right:0;width:10px;height:100%;cursor:col-resize;user-select:none;touch-action:none}
+  .col-resizer::after{content:'';position:absolute;top:20%;bottom:20%;right:4px;width:2px;border-radius:999px;background:transparent;transition:background .15s ease}
+  th:hover .col-resizer::after,.col-resizer.active::after{background:var(--accent)}
 </style>
 </head>
 <body>
@@ -1412,6 +1415,39 @@ function detailCell(v){
   if(!details || details===status){return pill(status);}
   return pill(status) + '<div style="margin-top:.3rem">' + esc(details) + '</div>';
 }
+function enableResizableColumns(){
+  document.querySelectorAll('.table-scroll table').forEach(function(table){
+    const headers=table.querySelectorAll('thead th');
+    if(!headers.length){return;}
+    table.style.width='max-content';
+    table.style.minWidth='100%';
+    headers.forEach(function(header){
+      if(header.querySelector('.col-resizer')){return;}
+      const resizer=document.createElement('span');
+      resizer.className='col-resizer';
+      header.appendChild(resizer);
+      let startX=0;
+      let startWidth=0;
+      const onMove=function(event){
+        const nextWidth=Math.max(90,startWidth + (event.clientX - startX));
+        header.style.width=nextWidth + 'px';
+      };
+      const onUp=function(){
+        resizer.classList.remove('active');
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      resizer.addEventListener('mousedown', function(event){
+        event.preventDefault();
+        startX=event.clientX;
+        startWidth=header.getBoundingClientRect().width;
+        resizer.classList.add('active');
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    });
+  });
+}
 document.getElementById('server-strip').innerHTML=[
   ['Tenant',DATA.tenant],
   ['Targets',String(DATA.totalTargets)],
@@ -1437,6 +1473,7 @@ resultTable+='</tbody></table></div></div></div>';
 let errorsCard='';
 if(DATA.errors.length){errorsCard='<div class="card"><div class="card-header"><span class="card-title">Errors</span><span class="card-badge">'+DATA.errors.length+'</span></div><div class="card-body"><div class="errors">'+DATA.errors.map(function(error){return '<div class="error-item">'+esc(error)+'</div>';}).join('')+'</div></div></div>';}
 document.getElementById('sections').innerHTML=actionCard+resultTable+errorsCard;
+enableResizableColumns();
 </script>
 </body>
 </html>
