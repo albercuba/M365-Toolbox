@@ -560,8 +560,58 @@ textarea {
   min-width: 0;
 }
 
-.flash-wrap {
-  padding: 1rem 2rem 0;
+.toast-stack {
+  position: fixed;
+  top: calc(var(--topbar-h) + 0.9rem);
+  right: 1rem;
+  z-index: 450;
+  display: grid;
+  gap: 0.65rem;
+  width: min(360px, calc(100vw - 1.5rem));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--bg2) 92%, transparent);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+}
+
+.toast-error {
+  border-color: rgba(216, 77, 103, 0.3);
+  background: var(--crit-bg);
+  color: #a7344a;
+}
+
+.toast-success {
+  border-color: rgba(21, 154, 104, 0.3);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.toast-close {
+  border: none;
+  background: transparent;
+  color: currentColor;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.05rem;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.toast-close:hover {
+  opacity: 1;
 }
 
 .flash {
@@ -1071,11 +1121,15 @@ textarea {
 .shortcut-link {
   border: 1px solid var(--border);
   background: var(--bg2);
-  color: var(--text2);
+  color: var(--text);
   border-radius: var(--r);
   padding: 0.45rem 0.6rem;
   text-align: left;
   cursor: pointer;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .shortcut-link:hover {
@@ -1302,6 +1356,12 @@ tr:last-child td {
 }
 
 @media (max-width: 700px) {
+  .toast-stack {
+    top: calc(var(--topbar-h) + 0.7rem);
+    right: 0.75rem;
+    width: min(340px, calc(100vw - 1rem));
+  }
+
   .topbar-title,
   .topbar-count {
     display: none;
@@ -1377,6 +1437,11 @@ tr:last-child td {
 }
 
 @media (max-width: 520px) {
+  .toast-stack {
+    right: 0.5rem;
+    width: calc(100vw - 1rem);
+  }
+
   .dash-page {
     padding: 0.75rem;
   }

@@ -251,6 +251,8 @@ function Field({ field, value, onChange }) {
 
 export function App() {
   const reportCardRef = useRef(null);
+  const nextToastIdRef = useRef(0);
+  const toastTimersRef = useRef(new Map());
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [scripts, setScripts] = useState([]);
@@ -262,6 +264,7 @@ export function App() {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [toasts, setToasts] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
@@ -305,6 +308,52 @@ export function App() {
       // Ignore storage errors.
     }
   }, [theme]);
+
+  useEffect(() => () => {
+    toastTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    toastTimersRef.current.clear();
+  }, []);
+
+  const dismissToast = (toastId) => {
+    const timer = toastTimersRef.current.get(toastId);
+    if (timer) {
+      window.clearTimeout(timer);
+      toastTimersRef.current.delete(toastId);
+    }
+    setToasts((current) => current.filter((toast) => toast.id !== toastId));
+  };
+
+  const pushToast = (kind, message) => {
+    if (!message) {
+      return;
+    }
+
+    const toastId = nextToastIdRef.current++;
+    setToasts((current) => [...current, { id: toastId, kind, message }].slice(-4));
+
+    const timeoutMs = kind === "error" ? 6000 : 3200;
+    const timer = window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== toastId));
+      toastTimersRef.current.delete(toastId);
+    }, timeoutMs);
+    toastTimersRef.current.set(toastId, timer);
+  };
+
+  useEffect(() => {
+    if (!error) {
+      return;
+    }
+    pushToast("error", error);
+    setError("");
+  }, [error]);
+
+  useEffect(() => {
+    if (!success) {
+      return;
+    }
+    pushToast("success", success);
+    setSuccess("");
+  }, [success]);
 
   useEffect(() => {
     if (!activeRun || !["running", "queued", "canceling"].includes(activeRun.status)) {
@@ -552,6 +601,16 @@ export function App() {
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
   return (
     <div className="app-shell">
+      <div className="toast-stack" aria-live="polite" aria-atomic="true">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.kind}`} role="status">
+            <span>{toast.message}</span>
+            <button type="button" className="toast-close" onClick={() => dismissToast(toast.id)} aria-label="Dismiss notification">
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
       {showDevicePrompt ? (
         <div className="modal-backdrop" role="presentation">
           <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="device-auth-title">
@@ -763,17 +822,6 @@ export function App() {
         />
 
         <main className="main">
-          {error ? (
-            <div className="flash-wrap">
-              <div className="flash flash-error">{error}</div>
-            </div>
-          ) : null}
-          {success ? (
-            <div className="flash-wrap">
-              <div className="flash flash-success">{success}</div>
-            </div>
-          ) : null}
-
           {selectedScript ? (
             <>
               <div className="dash-topstrip">
