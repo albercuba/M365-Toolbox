@@ -70,6 +70,11 @@ function formatDuration(value) {
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
+function formatOutputText(value, fallback) {
+  const clean = stripAnsi(value || "").trim();
+  return clean || fallback;
+}
+
 function formatFileSize(value) {
   const size = Number(value);
   if (!Number.isFinite(size) || size <= 0) {
@@ -275,6 +280,7 @@ export function App() {
   const [activeRun, setActiveRun] = useState(null);
   const [artifacts, setArtifacts] = useState([]);
   const [status, setStatus] = useState(null);
+  const [statusUpdatedAt, setStatusUpdatedAt] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [toasts, setToasts] = useState([]);
@@ -304,6 +310,7 @@ export function App() {
       setScripts(scriptsData);
       setRuns(runsData);
       setStatus(statusData);
+      setStatusUpdatedAt(new Date().toISOString());
       setSelectedScript(null);
       setFormValues({});
       setExpandedCategories({});
@@ -591,6 +598,56 @@ export function App() {
       setError(cancelError.message);
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const handleRerun = async (run) => {
+    if (!run?.scriptId) return;
+
+    const matchingScript = scripts.find((script) => script.id === run.scriptId);
+    if (!matchingScript) {
+      setError("The original script is no longer available in the catalog.");
+      return;
+    }
+
+    const approvalConfirmed = !matchingScript.approvalRequired || window.confirm(
+      `This script is marked as remediation and can change tenant state.\n\nDo you want to approve and launch "${matchingScript.name}" again with the previous inputs?`
+    );
+
+    if (!approvalConfirmed) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      setSelectedScript(matchingScript);
+      setFormValues(normalizeDefaults(matchingScript.fields));
+      const response = await fetch(`${apiBase}/scripts/${matchingScript.id}/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...(run.payload || {}), approvalConfirmed })
+      });
+
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to re-run script.");
+      }
+
+      setFormValues({ ...(run.payload || {}) });
+      setActiveRun(data);
+      setDevicePromptDismissed(false);
+      setRunDetailsOpen(true);
+      setRecentRunsOpen(true);
+      setSuccess(data.status === "queued" ? "Run re-queued successfully." : "Run started again with the previous inputs.");
+      const runsResponse = await fetch(`${apiBase}/runs`);
+      setRuns(await parseApiResponse(runsResponse));
+    } catch (rerunError) {
+      setError(rerunError.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1019,6 +1076,16 @@ export function App() {
                                   >
                                     Copy Command
                                   </button>
+                                  {activeRun.payload ? (
+                                    <button
+                                      type="button"
+                                      className="filter-btn"
+                                      onClick={() => handleRerun(activeRun)}
+                                      disabled={submitting || ["running", "queued", "canceling"].includes(activeRun.status)}
+                                    >
+                                      Re-Run
+                                    </button>
+                                  ) : null}
                                     {["running", "queued", "canceling"].includes(activeRun.status) ? (
                                       <button type="button" className="filter-btn destructive" onClick={handleCancelRun} disabled={canceling}>
                                         {canceling ? "Canceling..." : "Cancel Run"}
@@ -1042,12 +1109,40 @@ export function App() {
                                 </div>
                               </div>
                               <div className="manage-form-panel">
-                                <h4>Stdout</h4>
-                                <pre className="manage-response">{activeRun.stdout || "No stdout yet."}</pre>
+                                <div className="panel-toolbar">
+                                  <h4>Stdout</h4>
+                                  {activeRun.stdout ? (
+                                    <button
+                                      type="button"
+                                      className="filter-btn"
+                                      onClick={async () => {
+                                        const copied = await copyText(formatOutputText(activeRun.stdout, ""));
+                                        setSuccess(copied ? "Stdout copied." : "Unable to copy stdout automatically.");
+                                      }}
+                                    >
+                                      Copy Output
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <pre className="manage-response">{formatOutputText(activeRun.stdout, "No stdout yet.")}</pre>
                               </div>
                               <div className="manage-form-panel">
-                                <h4>Stderr</h4>
-                                <pre className="manage-response">{activeRun.stderr || "No stderr."}</pre>
+                                <div className="panel-toolbar">
+                                  <h4>Stderr</h4>
+                                  {activeRun.stderr ? (
+                                    <button
+                                      type="button"
+                                      className="filter-btn"
+                                      onClick={async () => {
+                                        const copied = await copyText(formatOutputText(activeRun.stderr, ""));
+                                        setSuccess(copied ? "Error output copied." : "Unable to copy error output automatically.");
+                                      }}
+                                    >
+                                      Copy Error
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <pre className="manage-response">{formatOutputText(activeRun.stderr, "No stderr.")}</pre>
                               </div>
                             </>
                           ) : null}
@@ -1200,7 +1295,19 @@ export function App() {
                 <div className="card">
                   <div className="card-header">
                     <span className="card-title">Shortcuts</span>
-                    <button type="button" className="filter-btn" onClick={() => fetch(`${apiBase}/status`).then(parseApiResponse).then(setStatus).catch((loadError) => setError(loadError.message))}>
+                    <button
+                      type="button"
+                      className="filter-btn"
+                      onClick={() =>
+                        fetch(`${apiBase}/status`)
+                          .then(parseApiResponse)
+                          .then((data) => {
+                            setStatus(data);
+                            setStatusUpdatedAt(new Date().toISOString());
+                          })
+                          .catch((loadError) => setError(loadError.message))
+                      }
+                    >
                       Refresh Status
                     </button>
                   </div>
@@ -1229,6 +1336,7 @@ export function App() {
                           <div>Scripts mount: {status?.paths?.scriptsMounted ? "mounted" : "missing"}</div>
                           <div>PowerShell: {status?.powerShell?.available ? `v${status.powerShell.version}` : "not ready"}</div>
                           <div>Modules: {status?.modules?.ready ? "ready" : "check failed or pending"}</div>
+                          <div>Last updated: {statusUpdatedAt ? formatDate(statusUpdatedAt) : "Pending"}</div>
                         </div>
                       </div>
                     </div>
