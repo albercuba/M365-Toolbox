@@ -1043,6 +1043,7 @@ textarea {
   font-family: var(--mono);
   font-size: 0.6rem;
   color: var(--text3);
+  overflow-wrap: anywhere;
 }
 
 .artifact-actions {
@@ -1279,7 +1280,7 @@ tr:last-child td {
 
 @media (max-width: 900px) {
   :root {
-    --sidebar-w: 210px;
+    --sidebar-w: 230px;
   }
 
   .dash-page {
@@ -1294,16 +1295,24 @@ tr:last-child td {
   .table-actions {
     flex-direction: column;
   }
+
+  .report-frame {
+    min-height: 760px;
+  }
 }
 
 @media (max-width: 700px) {
-  :root {
-    --sidebar-w: 180px;
-  }
-
   .topbar-title,
   .topbar-count {
     display: none;
+  }
+
+  .topbar {
+    padding: 0 0.85rem;
+  }
+
+  .topbar-right {
+    gap: 0.5rem;
   }
 
   .layout {
@@ -1316,6 +1325,7 @@ tr:last-child td {
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border);
+    max-height: none;
   }
 
   .sidebar-resizer {
@@ -1324,5 +1334,70 @@ tr:last-child td {
 
   .main {
     margin-left: 0;
+  }
+
+  .sidebar-header,
+  .sidebar-footer {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .artifact-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .artifact-actions {
+    width: 100%;
+  }
+
+  .artifact-actions .filter-btn {
+    flex: 1 1 140px;
+    text-align: center;
+  }
+
+  .report-card-body {
+    padding: 0.35rem;
+  }
+
+  .report-frame {
+    min-height: 560px;
+    border-radius: calc(var(--r) - 2px);
+  }
+
+  .modal-backdrop {
+    padding: 1rem;
+  }
+
+  .device-code-box {
+    font-size: 1.15rem;
+    letter-spacing: 0.12em;
+    padding: 0.85rem 0.7rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .dash-page {
+    padding: 0.75rem;
+  }
+
+  .sidebar-header,
+  .sidebar-footer {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .device-code-row {
+    grid-template-columns: 1fr;
+  }
+
+  .device-copy-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 2.75rem;
+  }
+
+  .report-frame {
+    min-height: 460px;
   }
 }

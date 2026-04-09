@@ -70,6 +70,19 @@ function formatDuration(value) {
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
+function formatFileSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const exponent = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1);
+  const formatted = size / 1024 ** exponent;
+  const digits = formatted >= 10 || exponent === 0 ? 0 : 1;
+  return `${formatted.toFixed(digits)} ${units[exponent]}`;
+}
+
 async function copyText(text) {
   if (!text) return false;
 
@@ -932,7 +945,7 @@ export function App() {
                                   <div>
                                     <div className="artifact-name">{artifact.name}</div>
                                     <div className="artifact-meta">
-                                      {artifact.type.toUpperCase()} | {Math.max(1, Math.round(artifact.size / 1024))} KB | {formatDate(artifact.createdAt)}
+                                      {artifact.type.toUpperCase()} | {formatFileSize(artifact.size)} | {formatDate(artifact.createdAt)}
                                     </div>
                                   </div>
                                   <div className="artifact-actions">
