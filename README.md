@@ -18,7 +18,7 @@ The current catalog includes 44 toolbox-native scripts across categories such as
 - `backend/`
   Express API, script registry, PowerShell runner, run tracking, and HTML artifact endpoints
 - `frontend/`
-  React/Vite UI with the resizable sidebar, category icons, favorites, recent runs, and inline report preview
+  React/Vite UI with the resizable sidebar, category icons, dark mode, favorites, dashboard shortcuts, run details, and inline report preview
 - `scripts/`
   Toolbox-native PowerShell scripts, the script wrapper, and shared report helpers
 - `output/`
@@ -325,16 +325,6 @@ Notes for deployment:
 - Scripts are loaded from the host `scripts/` folder, so keep that directory in place on the machine running Docker Compose.
 - The Coolify or Portainer-friendly compose file stores artifacts in a Docker-managed volume instead of the host `output/` folder.
 
-## Run with Docker
-
-If you just want the short version:
-
-```powershell
-cd C:\VSCode\M365-Toolbox
-docker compose build
-docker compose up -d
-```
-
 ## Run locally for development
 
 Install workspace dependencies:
@@ -357,13 +347,13 @@ That starts:
 
 The frontend Vite config proxies `/api` requests to the backend during local development.
 
-## Notes
+## Implementation notes
 
 - Run history is persisted to a backend state file so completed runs survive backend restarts.
 - Running or queued jobs are marked as interrupted if the backend restarts before they finish.
 - Toolbox-native scripts are served only from `scripts/`; there is no external PowerShell repository mount.
 - Shared helpers such as `Shared-ToolboxReport.ps1` support common HTML dashboard rendering and output handling.
-- The backend API now exposes script listing, run creation, run status, cancellation, artifact listing, artifact download, HTML preview, and backend status endpoints.
+- The backend API exposes script listing, run creation, run status, cancellation, artifact listing, artifact download, HTML preview, and backend status endpoints.
 - Input values are validated on the backend before PowerShell execution starts.
 - Run retention is controlled by backend retention settings so old run records do not accumulate forever.
 - CORS is restricted to configured origins, localhost, and private IPv4 ranges.
