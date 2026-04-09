@@ -283,7 +283,41 @@ function buildArgs(script, payload) {
   };
 }
 
+function updateArtifactsFromStdout(run) {
+  if (!run?.stdout) {
+    return;
+  }
+
+  const htmlMatch = run.stdout.match(/\[\+\]\s+HTML dashboard exported to:\s+(.+)/i);
+  if (htmlMatch?.[1]) {
+    const actualHtmlPath = htmlMatch[1].trim();
+    run.artifacts.htmlPath = actualHtmlPath;
+
+    const htmlName = path.basename(actualHtmlPath);
+    const htmlDir = path.dirname(actualHtmlPath);
+    if (!Array.isArray(run.artifacts.files)) {
+      run.artifacts.files = [];
+    }
+
+    const existing = run.artifacts.files.find((file) => file.path === actualHtmlPath || file.name === htmlName);
+    if (!existing && fs.existsSync(actualHtmlPath)) {
+      const stat = fs.statSync(actualHtmlPath);
+      run.artifacts.files.push({
+        id: htmlName,
+        name: htmlName,
+        path: actualHtmlPath,
+        type: "html",
+        size: stat.size,
+        createdAt: stat.mtime.toISOString()
+      });
+    } else if (!run.artifacts.basePath && htmlDir) {
+      run.artifacts.basePath = path.join(htmlDir, path.parse(htmlName).name);
+    }
+  }
+}
+
 function refreshArtifacts(run) {
+  updateArtifactsFromStdout(run);
   const basePath = run.artifacts?.basePath;
   if (!basePath) {
     return run.artifacts?.files || [];
@@ -311,10 +345,18 @@ function refreshArtifacts(run) {
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  run.artifacts.files = files;
-  const htmlFile = files.find((file) => file.type === "html");
+  const existingFiles = Array.isArray(run.artifacts.files) ? run.artifacts.files : [];
+  const mergedFiles = [...files];
+  for (const file of existingFiles) {
+    if (!mergedFiles.some((entry) => entry.path === file.path || entry.name === file.name)) {
+      mergedFiles.push(file);
+    }
+  }
+
+  run.artifacts.files = mergedFiles;
+  const htmlFile = mergedFiles.find((file) => file.type === "html");
   run.artifacts.htmlPath = htmlFile?.path || run.artifacts.htmlPath || null;
-  return files;
+  return mergedFiles;
 }
 
 function finalizeRun(run, status, exitCode = null) {
@@ -383,6 +425,7 @@ function launchRun(run) {
   });
 
   child.on("close", (code) => {
+    updateArtifactsFromStdout(run);
     if (run.cancelRequestedAt) {
       finalizeRun(run, "canceled", code);
       return;
