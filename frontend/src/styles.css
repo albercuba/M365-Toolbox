@@ -1130,11 +1130,19 @@ textarea {
   font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.35;
+  display: grid;
+  gap: 0.2rem;
 }
 
 .shortcut-link:hover {
   border-color: var(--accent2);
   color: var(--accent);
+}
+
+.shortcut-link-meta {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text3);
 }
 
 .status-list {

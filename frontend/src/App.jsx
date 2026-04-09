@@ -124,6 +124,19 @@ function groupScriptsByCategory(scripts) {
   }, {});
 }
 
+function parseUserList(value) {
+  const entries = String(value || "")
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const unique = [...new Set(entries)];
+  return {
+    entries,
+    unique,
+    duplicates: entries.filter((item, index) => entries.indexOf(item) !== index)
+  };
+}
+
 function CategoryIcon({ category }) {
   const normalized = (category || "Other").toLowerCase();
   let path = "M12 3.5a8.5 8.5 0 1 0 8.5 8.5A8.51 8.51 0 0 0 12 3.5Zm0 4.25a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 12 7.75Zm2.25 8.5h-4.5v-1.5h.75v-2.25h-.75V11h3v3.75h1.5Z";
@@ -494,6 +507,18 @@ export function App() {
     setFormValues((current) => ({ ...current, [fieldId]: nextValue }));
   };
 
+  const handleApplyActionProfile = (profile) => {
+    if (!profile?.actions?.length) {
+      return;
+    }
+
+    setFormValues((current) => ({
+      ...current,
+      actions: [...profile.actions]
+    }));
+    setSuccess(`Applied ${profile.label} action profile.`);
+  };
+
   const handleToggleFavorite = (scriptId) => {
     setFavoriteScriptIds((current) =>
       current.includes(scriptId)
@@ -583,6 +608,9 @@ export function App() {
     .sort((a, b) => (runCountsByScriptId[b.id] || 0) - (runCountsByScriptId[a.id] || 0))
     .slice(0, 3);
   const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
+  const compromisedTargetPreview = selectedScript?.id === "m365-compromised-account-remediation"
+    ? parseUserList(formValues.userPrincipalName)
+    : null;
   const filteredScripts = scripts.filter((script) => {
     const matchesSearch = !normalizedSearch || [
       script.name,
@@ -874,6 +902,55 @@ export function App() {
                         <div className="card-body">
                           {selectedScript.approvalRequired ? (
                             <div className="approval-banner">This remediation workflow requires an approval confirmation before launch.</div>
+                          ) : null}
+                          {selectedScript.actionProfiles?.length ? (
+                            <div className="manage-form-panel">
+                              <h4>Action Profiles</h4>
+                              <div className="shortcut-grid">
+                                {selectedScript.actionProfiles.map((profile) => (
+                                  <button
+                                    key={profile.id}
+                                    type="button"
+                                    className="shortcut-link"
+                                    onClick={() => handleApplyActionProfile(profile)}
+                                  >
+                                    <strong>{profile.label}</strong>
+                                    <span className="shortcut-link-meta">{profile.description}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {selectedScript.highImpactActions?.length ? (
+                            <div className="approval-banner">
+                              High-impact actions: {selectedScript.highImpactActions.join(", ")}
+                            </div>
+                          ) : null}
+                          {compromisedTargetPreview ? (
+                            <div className="manage-form-panel">
+                              <h4>Target Preview</h4>
+                              <div className="quick-summary-grid">
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Targets Entered</div>
+                                  <div className="method-count">{compromisedTargetPreview.entries.length}</div>
+                                </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Unique Targets</div>
+                                  <div className="method-count">{compromisedTargetPreview.unique.length}</div>
+                                </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Duplicates</div>
+                                  <div className="method-count">{compromisedTargetPreview.duplicates.length || "None"}</div>
+                                </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Tenant Scope</div>
+                                  <div className="method-count">{formValues.tenantId || "Auto-detect at sign-in"}</div>
+                                </div>
+                              </div>
+                              <div className="empty-row compact" style={{ marginTop: "0.75rem" }}>
+                                Live tenant validation such as user existence, mailbox presence, guest status, and sync state is surfaced in the per-user results after the run begins.
+                              </div>
+                            </div>
                           ) : null}
                           <form className="settings-row" onSubmit={handleSubmit}>
                             {selectedScript.fields.map((field) => (

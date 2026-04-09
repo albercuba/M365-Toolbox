@@ -56,6 +56,53 @@ const compromisedAccountScript = {
   scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
   outputs:
     "Writes an HTML incident dashboard plus supporting CSV and log artifacts to the configured output directory.",
+  reviewActions: [
+    "ReviewMfaMethods",
+    "ReviewInboxRules",
+    "ReviewMailboxForwarding",
+    "ReviewMailboxDelegates",
+    "ReviewRecentSignIns",
+    "ExportAuditLog"
+  ],
+  highImpactActions: [
+    "DisableUser",
+    "ResetPassword",
+    "RemoveMfaMethods",
+    "RemoveMailboxForwarding",
+    "RemoveMailboxDelegates",
+    "DisableMailboxProtocols"
+  ],
+  actionProfiles: [
+    {
+      id: "review-only",
+      label: "Review Only",
+      description: "Collect recent sign-ins, MFA, inbox rule, forwarding, delegate, and audit evidence without changing tenant state.",
+      actions: [
+        "ReviewMfaMethods",
+        "ReviewInboxRules",
+        "ReviewMailboxForwarding",
+        "ReviewMailboxDelegates",
+        "ReviewRecentSignIns",
+        "ExportAuditLog"
+      ]
+    },
+    {
+      id: "containment",
+      label: "Containment",
+      description: "Apply a fast containment bundle for active account compromise, including sign-out, password reset, mailbox cleanup, and protocol lock-down.",
+      actions: [
+        "DisableUser",
+        "RevokeSessions",
+        "ResetPassword",
+        "RemoveMfaMethods",
+        "DisableInboxRules",
+        "RemoveMailboxForwarding",
+        "DisableSignature",
+        "DisableMailboxProtocols",
+        "ExportAuditLog"
+      ]
+    }
+  ],
   fields: [
     {
       id: "userPrincipalName",
@@ -86,11 +133,15 @@ const compromisedAccountScript = {
         "ResetPassword",
         "ReviewMfaMethods",
         "RemoveMfaMethods",
+        "ReviewInboxRules",
         "DisableInboxRules",
         "ReviewMailboxForwarding",
         "RemoveMailboxForwarding",
         "DisableSignature",
         "ReviewMailboxDelegates",
+        "RemoveMailboxDelegates",
+        "ReviewRecentSignIns",
+        "DisableMailboxProtocols",
         "ExportAuditLog"
       ]
     },
@@ -109,6 +160,13 @@ const compromisedAccountScript = {
       label: "Include generated passwords in results",
       type: "checkbox",
       defaultValue: false
+    },
+    {
+      id: "exportIncidentPackage",
+      label: "Export per-user incident package",
+      type: "checkbox",
+      defaultValue: true,
+      helpText: "Creates a predictable folder per target with supporting CSV, log, and summary files."
     },
     {
       id: "whatIf",

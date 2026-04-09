@@ -149,6 +149,7 @@ function buildCompromisedAccountArgs(script, payload) {
   if (payload.auditLogDays) args.push("-AuditLogDays", String(payload.auditLogDays));
   if (payload.tenantId) args.push("-TenantId", String(payload.tenantId));
   if (payload.includeGeneratedPasswordsInResults) args.push("-IncludeGeneratedPasswordsInResults");
+  if (payload.exportIncidentPackage) args.push("-ExportIncidentPackage");
   if (payload.whatIf) args.push("-WhatIf");
 
   return {

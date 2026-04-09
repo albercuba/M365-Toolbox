@@ -48,6 +48,7 @@ The current catalog includes 44 toolbox-native scripts across categories such as
 - Inline HTML report preview after successful runs, with the report brought into focus automatically
 - Device-code modal that surfaces the sign-in code, copy action, and login URL
 - Approval confirmation prompt for remediation workflows
+- Action profiles and high-impact action guidance for the compromised-account workflow
 - Backend status view for PowerShell, modules, script mount, and output path readiness
 - GitHub repository link in the sidebar footer
 
@@ -56,7 +57,7 @@ The current catalog includes 44 toolbox-native scripts across categories such as
 Core workflows and reporting:
 
 - `scripts/M365-CompromisedAccountRemediation.ps1`
-  Contains and investigates compromised accounts, then generates an incident dashboard.
+  Contains and investigates compromised accounts with review-only and containment profiles, recent sign-in review, optional delegate cleanup and protocol lock-down, and a richer incident dashboard.
 - `scripts/M365-MfaReport.ps1`
   Builds a tenant-wide MFA coverage report with admin-risk visibility.
 - `scripts/M365-UsageReport.ps1`

@@ -87,11 +87,15 @@ param(
         'ResetPassword',
         'ReviewMfaMethods',
         'RemoveMfaMethods',
+        'ReviewInboxRules',
         'DisableInboxRules',
         'ReviewMailboxForwarding',
         'RemoveMailboxForwarding',
         'DisableSignature',
         'ReviewMailboxDelegates',
+        'RemoveMailboxDelegates',
+        'ReviewRecentSignIns',
+        'DisableMailboxProtocols',
         'ExportAuditLog'
     )]
     [string[]]$Actions = @(
@@ -101,13 +105,16 @@ param(
         'RemoveMfaMethods',
         'DisableInboxRules',
         'RemoveMailboxForwarding',
+        'DisableMailboxProtocols',
         'DisableSignature',
         'ExportAuditLog'
     ),
     [int]$AuditLogDays = 10,
     [string]$OutputPath = (Get-Location).Path,
     [string]$ExportHtml,
-    [switch]$IncludeGeneratedPasswordsInResults
+    [switch]$IncludeGeneratedPasswordsInResults,
+    [switch]$ExportIncidentPackage,
+    [switch]$InstallMissingModules
 )
 
 Set-StrictMode -Version Latest
@@ -124,6 +131,22 @@ $script:RequiredModules = @(
     'Microsoft.Graph.Identity.DirectoryManagement',
     'Microsoft.Graph.Reports',
     'ExchangeOnlineManagement'
+)
+$script:ReviewActionSet = @(
+    'ReviewMfaMethods',
+    'ReviewInboxRules',
+    'ReviewMailboxForwarding',
+    'ReviewMailboxDelegates',
+    'ReviewRecentSignIns',
+    'ExportAuditLog'
+)
+$script:HighImpactActionSet = @(
+    'DisableUser',
+    'ResetPassword',
+    'RemoveMfaMethods',
+    'RemoveMailboxForwarding',
+    'RemoveMailboxDelegates',
+    'DisableMailboxProtocols'
 )
 
 function Write-Section {
@@ -143,6 +166,49 @@ function Add-ErrorEntry {
 
     $entry = '{0} [{1}] {2} - {3}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $User, $Action, $Message
     $script:Errors.Add($entry)
+}
+
+function New-ActionResult {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('Success', 'WhatIf', 'Skipped', 'NotApplicable', 'Partial', 'Failed')]
+        [string]$Status,
+        [string]$Details
+    )
+
+    if ($Details) {
+        return ('{0}: {1}' -f $Status, $Details)
+    }
+
+    return $Status
+}
+
+function Get-ActionStatus {
+    param([string]$Value)
+
+    if (-not $Value) {
+        return ''
+    }
+
+    if ($Value -match '^(Success|WhatIf|Skipped|NotApplicable|Partial|Failed)(?::|\b)') {
+        return $Matches[1]
+    }
+
+    return $Value
+}
+
+function Get-ActionDetails {
+    param([string]$Value)
+
+    if (-not $Value) {
+        return ''
+    }
+
+    if ($Value -match '^(Success|WhatIf|Skipped|NotApplicable|Partial|Failed):\s*(.+)$') {
+        return $Matches[2]
+    }
+
+    return $Value
 }
 
 function Initialize-OutputPath {
@@ -183,6 +249,8 @@ function Add-TimestampToPath {
 }
 
 function Ensure-Modules {
+    param([switch]$AllowInstall)
+
     Write-Host ''
     Write-Host '[*] Checking required PowerShell modules...' -ForegroundColor Cyan
 
@@ -392,6 +460,8 @@ function Get-UserContext {
             User       = $null
             Mailbox    = $null
             HasMailbox = $false
+            IsGuest    = $false
+            IsSynced   = $false
         }
     }
 
@@ -403,6 +473,8 @@ function Get-UserContext {
         User       = $user
         Mailbox    = $mailbox
         HasMailbox = ($null -ne $mailbox)
+        IsGuest    = ($user.UserType -eq 'Guest')
+        IsSynced   = [bool]$user.OnPremisesSyncEnabled
     }
 }
 
@@ -413,14 +485,14 @@ function Invoke-DisableUser {
     try {
         if ($PSCmdlet.ShouldProcess($Context.Upn, 'Disable Azure AD account')) {
             Update-MgUser -UserId $Context.Upn -AccountEnabled:$false
-            return 'Success'
+            return (New-ActionResult -Status 'Success')
         }
 
-        return 'WhatIf'
+        return (New-ActionResult -Status 'WhatIf')
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'DisableUser' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -431,14 +503,14 @@ function Invoke-RevokeSessions {
     try {
         if ($PSCmdlet.ShouldProcess($Context.Upn, 'Revoke all sign-in sessions')) {
             Revoke-MgUserSignInSession -UserId $Context.Upn | Out-Null
-            return 'Success'
+            return (New-ActionResult -Status 'Success')
         }
 
-        return 'WhatIf'
+        return (New-ActionResult -Status 'WhatIf')
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'RevokeSessions' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -465,20 +537,20 @@ function Invoke-ResetPassword {
             })
 
             return [pscustomobject]@{
-                Status   = 'Success'
+                Status   = (New-ActionResult -Status 'Success')
                 Password = if ($IncludePassword) { $password } else { '[suppressed]' }
             }
         }
 
         return [pscustomobject]@{
-            Status   = 'WhatIf'
+            Status   = (New-ActionResult -Status 'WhatIf')
             Password = '[not generated]'
         }
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'ResetPassword' -Message $_.Exception.Message
         return [pscustomobject]@{
-            Status   = 'Failed'
+            Status   = (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
             Password = $null
         }
     }
@@ -496,14 +568,14 @@ function Get-MfaReview {
         )
 
         if ($nonPasswordMethods.Count -eq 0) {
-            return 'No non-password authentication methods are registered.'
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No non-password authentication methods are registered.')
         }
 
-        return 'Registered methods: ' + ($nonPasswordMethods -join ', ')
+        return (New-ActionResult -Status 'Success' -Details ('Registered methods: ' + ($nonPasswordMethods -join ', ')))
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'ReviewMfaMethods' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -518,7 +590,7 @@ function Invoke-RemoveMfaMethods {
         )
 
         if ($methods.Count -eq 0) {
-            return 'No removable non-password methods found.'
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No removable non-password methods found.')
         }
 
         $results = [System.Collections.Generic.List[string]]::new()
@@ -540,11 +612,43 @@ function Invoke-RemoveMfaMethods {
             }
         }
 
-        return ($results -join '; ')
+        $status = if ($results -match '^Skipped ') { 'Partial' } else { 'Success' }
+        return (New-ActionResult -Status $status -Details ($results -join '; '))
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'RemoveMfaMethods' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
+    }
+}
+
+function Get-InboxRuleReview {
+    param([psobject]$Context)
+
+    if (-not $Context.HasMailbox) {
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
+    }
+
+    try {
+        $rules = @(Get-InboxRule -Mailbox $Context.Upn -ErrorAction Stop | Where-Object { $_.Enabled })
+        if ($rules.Count -eq 0) {
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No enabled inbox rules found.')
+        }
+
+        $descriptions = foreach ($rule in $rules) {
+            $targets = @($rule.ForwardTo + $rule.ForwardAsAttachmentTo + $rule.RedirectTo | Where-Object { $_ })
+            if ($targets.Count -gt 0) {
+                '{0} -> {1}' -f $rule.Name, ($targets -join ', ')
+            }
+            else {
+                [string]$rule.Name
+            }
+        }
+
+        return (New-ActionResult -Status 'Success' -Details ($descriptions -join '; '))
+    }
+    catch {
+        Add-ErrorEntry -User $Context.Upn -Action 'ReviewInboxRules' -Message $_.Exception.Message
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -553,27 +657,34 @@ function Invoke-DisableInboxRules {
     param([psobject]$Context)
 
     if (-not $Context.HasMailbox) {
-        return 'No Exchange mailbox found.'
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
     }
 
     try {
         $rules = @(Get-InboxRule -Mailbox $Context.Upn | Where-Object { $_.Enabled })
         if ($rules.Count -eq 0) {
-            return 'No enabled inbox rules found.'
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No enabled inbox rules found.')
         }
 
         $ruleNames = @($rules.Name)
+        $processed = 0
         foreach ($rule in $rules) {
             if ($PSCmdlet.ShouldProcess($Context.Upn, "Disable inbox rule '$($rule.Name)'")) {
                 Disable-InboxRule -Identity $rule.Identity -Confirm:$false
+                $processed++
             }
         }
 
-        return 'Processed rules: ' + ($ruleNames -join ', ')
+        if ($processed -eq 0) {
+            return (New-ActionResult -Status 'WhatIf' -Details ($ruleNames -join ', '))
+        }
+
+        $status = if ($processed -lt $rules.Count) { 'Partial' } else { 'Success' }
+        return (New-ActionResult -Status $status -Details ($ruleNames -join ', '))
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'DisableInboxRules' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -581,7 +692,7 @@ function Get-MailboxForwardingReview {
     param([psobject]$Context)
 
     if (-not $Context.HasMailbox) {
-        return 'No Exchange mailbox found.'
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
     }
 
     try {
@@ -599,14 +710,14 @@ function Get-MailboxForwardingReview {
         }
 
         if ($details.Count -eq 0) {
-            return 'No mailbox forwarding configuration found.'
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No mailbox forwarding configuration found.')
         }
 
-        return ($details -join '; ')
+        return (New-ActionResult -Status 'Success' -Details ($details -join '; '))
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'ReviewMailboxForwarding' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -615,20 +726,20 @@ function Invoke-RemoveMailboxForwarding {
     param([psobject]$Context)
 
     if (-not $Context.HasMailbox) {
-        return 'No Exchange mailbox found.'
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
     }
 
     try {
         if ($PSCmdlet.ShouldProcess($Context.Upn, 'Remove mailbox forwarding configuration')) {
             Set-Mailbox -Identity $Context.Upn -ForwardingSmtpAddress $null -ForwardingAddress $null -DeliverToMailboxAndForward:$false
-            return 'Success'
+            return (New-ActionResult -Status 'Success')
         }
 
-        return 'WhatIf'
+        return (New-ActionResult -Status 'WhatIf')
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'RemoveMailboxForwarding' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -637,7 +748,7 @@ function Invoke-DisableSignature {
     param([psobject]$Context)
 
     if (-not $Context.HasMailbox) {
-        return 'No Exchange mailbox found.'
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
     }
 
     try {
@@ -654,14 +765,14 @@ function Invoke-DisableSignature {
                 -DefaultSignatureOnReply '' `
                 -ErrorAction Stop
 
-            return 'Success'
+            return (New-ActionResult -Status 'Success')
         }
 
-        return 'WhatIf'
+        return (New-ActionResult -Status 'WhatIf')
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'DisableSignature' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -669,7 +780,7 @@ function Get-MailboxDelegateReview {
     param([psobject]$Context)
 
     if (-not $Context.HasMailbox) {
-        return 'No Exchange mailbox found.'
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
     }
 
     try {
@@ -703,14 +814,145 @@ function Get-MailboxDelegateReview {
         }
 
         if ($details.Count -eq 0) {
-            return 'No mailbox delegates found beyond default/system entries.'
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No mailbox delegates found beyond default/system entries.')
         }
 
-        return ($details -join '; ')
+        return (New-ActionResult -Status 'Success' -Details ($details -join '; '))
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'ReviewMailboxDelegates' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
+    }
+}
+
+function Invoke-RemoveMailboxDelegates {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param([psobject]$Context)
+
+    if (-not $Context.HasMailbox) {
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
+    }
+
+    try {
+        $removed = [System.Collections.Generic.List[string]]::new()
+
+        $fullAccess = @(
+            Get-MailboxPermission -Identity $Context.Upn |
+                Where-Object {
+                    -not $_.IsInherited -and
+                    $_.User -notmatch 'NT AUTHORITY|S-1-5-|Discovery Management|Organization Management|Exchange Servers|Exchange Trusted Subsystem|SELF'
+                }
+        )
+
+        foreach ($permission in $fullAccess) {
+            if ($PSCmdlet.ShouldProcess($Context.Upn, "Remove FullAccess delegate '$($permission.User)'")) {
+                Remove-MailboxPermission -Identity $Context.Upn -User $permission.User -AccessRights FullAccess -InheritanceType All -Confirm:$false
+                $removed.Add("FullAccess=$($permission.User)")
+            }
+        }
+
+        $sendAs = @(
+            Get-RecipientPermission -Identity $Context.Upn -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.Trustee -and
+                    $_.Trustee -notmatch 'NT AUTHORITY|S-1-5-|Discovery Management|Organization Management'
+                }
+        )
+
+        foreach ($permission in $sendAs) {
+            if ($PSCmdlet.ShouldProcess($Context.Upn, "Remove SendAs delegate '$($permission.Trustee)'")) {
+                Remove-RecipientPermission -Identity $Context.Upn -Trustee $permission.Trustee -AccessRights SendAs -Confirm:$false
+                $removed.Add("SendAs=$($permission.Trustee)")
+            }
+        }
+
+        foreach ($delegate in @($Context.Mailbox.GrantSendOnBehalfTo)) {
+            if ($PSCmdlet.ShouldProcess($Context.Upn, "Remove SendOnBehalf delegate '$delegate'")) {
+                Set-Mailbox -Identity $Context.Upn -GrantSendOnBehalfTo @{ remove = $delegate } -ErrorAction Stop
+                $removed.Add("SendOnBehalf=$delegate")
+            }
+        }
+
+        if ($removed.Count -eq 0) {
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No removable mailbox delegates found.')
+        }
+
+        $status = if ($WhatIfPreference) { 'WhatIf' } else { 'Success' }
+        return (New-ActionResult -Status $status -Details ($removed -join '; '))
+    }
+    catch {
+        Add-ErrorEntry -User $Context.Upn -Action 'RemoveMailboxDelegates' -Message $_.Exception.Message
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
+    }
+}
+
+function Get-RecentSignInReview {
+    param([psobject]$Context)
+
+    try {
+        $escapedUpn = $Context.Upn.Replace("'", "''")
+        $filter = "userPrincipalName eq '$escapedUpn'"
+        $signIns = @(
+            Get-MgAuditLogSignIn -Filter $filter -Top 12 -ErrorAction Stop |
+                Sort-Object CreatedDateTime -Descending |
+                Select-Object -First 5
+        )
+
+        if ($signIns.Count -eq 0) {
+            return (New-ActionResult -Status 'NotApplicable' -Details 'No recent sign-ins found.')
+        }
+
+        $summary = foreach ($signIn in $signIns) {
+            $location = Get-GeoLocationString -Location $signIn.Location
+            $ipAddress = if ($signIn.IpAddress) { [string]$signIn.IpAddress } else { 'No IP' }
+            $locationLabel = if ($location) { $location } else { 'No location' }
+            $clientLabel = if ($signIn.ClientAppUsed) { [string]$signIn.ClientAppUsed } else { 'Unknown client' }
+            $appLabel = if ($signIn.AppDisplayName) { [string]$signIn.AppDisplayName } else { 'Unknown app' }
+            '{0} | {1} | {2} | {3} | {4}' -f (
+                [string]$signIn.CreatedDateTime,
+                $ipAddress,
+                $locationLabel,
+                $clientLabel,
+                $appLabel
+            )
+        }
+
+        return (New-ActionResult -Status 'Success' -Details ($summary -join '; '))
+    }
+    catch {
+        Add-ErrorEntry -User $Context.Upn -Action 'ReviewRecentSignIns' -Message $_.Exception.Message
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
+    }
+}
+
+function Invoke-DisableMailboxProtocols {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param([psobject]$Context)
+
+    if (-not $Context.HasMailbox) {
+        return (New-ActionResult -Status 'NotApplicable' -Details 'No Exchange mailbox found.')
+    }
+
+    try {
+        if ($PSCmdlet.ShouldProcess($Context.Upn, 'Disable OWA, ActiveSync, POP, IMAP, and MAPI mailbox protocols')) {
+            Set-CASMailbox `
+                -Identity $Context.Upn `
+                -OWAEnabled:$false `
+                -ActiveSyncEnabled:$false `
+                -PopEnabled:$false `
+                -ImapEnabled:$false `
+                -MAPIEnabled:$false `
+                -OWAforDevicesEnabled:$false `
+                -ErrorAction Stop
+
+            return (New-ActionResult -Status 'Success' -Details 'OWA, ActiveSync, POP, IMAP, MAPI, and OWA for Devices disabled.')
+        }
+
+        return (New-ActionResult -Status 'WhatIf' -Details 'OWA, ActiveSync, POP, IMAP, MAPI, and OWA for Devices would be disabled.')
+    }
+    catch {
+        Add-ErrorEntry -User $Context.Upn -Action 'DisableMailboxProtocols' -Message $_.Exception.Message
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -718,6 +960,61 @@ function Get-SafeFileBaseName {
     param([string]$Value)
 
     return ($Value -replace '[^a-zA-Z0-9._-]', '_')
+}
+
+function Get-IncidentPackagePath {
+    param(
+        [string]$DestinationPath,
+        [string]$Upn
+    )
+
+    $safeName = Get-SafeFileBaseName -Value $Upn
+    $packagePath = Join-Path $DestinationPath ("IncidentPackage_{0}" -f $safeName)
+    if (-not (Test-Path -LiteralPath $packagePath)) {
+        New-Item -ItemType Directory -Path $packagePath -Force | Out-Null
+    }
+
+    return $packagePath
+}
+
+function Export-IncidentPackageSummary {
+    param(
+        [psobject]$Context,
+        [hashtable]$Row,
+        [string]$DestinationPath
+    )
+
+    $packagePath = Get-IncidentPackagePath -DestinationPath $DestinationPath -Upn $Context.Upn
+    $summaryPath = Join-Path $packagePath ("Summary_{0}.json" -f $script:Timestamp)
+    $summary = [pscustomobject]@{
+        UserPrincipalName = $Context.Upn
+        UserFound = $Row.UserFound
+        MailboxFound = $Row.MailboxFound
+        IsGuest = $Row.IsGuest
+        IsSynced = $Row.IsSynced
+        ReviewActions = @{
+            ReviewMfaMethods = $Row.ReviewMfaMethods
+            ReviewInboxRules = $Row.ReviewInboxRules
+            ReviewMailboxForwarding = $Row.ReviewMailboxForwarding
+            ReviewMailboxDelegates = $Row.ReviewMailboxDelegates
+            ReviewRecentSignIns = $Row.ReviewRecentSignIns
+        }
+        RemediationActions = @{
+            DisableUser = $Row.DisableUser
+            RevokeSessions = $Row.RevokeSessions
+            ResetPassword = $Row.ResetPassword
+            RemoveMfaMethods = $Row.RemoveMfaMethods
+            DisableInboxRules = $Row.DisableInboxRules
+            RemoveMailboxForwarding = $Row.RemoveMailboxForwarding
+            RemoveMailboxDelegates = $Row.RemoveMailboxDelegates
+            DisableSignature = $Row.DisableSignature
+            DisableMailboxProtocols = $Row.DisableMailboxProtocols
+        }
+        ExportAuditLog = $Row.ExportAuditLog
+    }
+
+    $summary | ConvertTo-Json -Depth 6 | Out-File -LiteralPath $summaryPath -Encoding utf8
+    return $packagePath
 }
 
 function Get-TargetDetailsString {
@@ -909,16 +1206,16 @@ function Export-ActivityLog {
         $signInResult = Export-SignInReports -Context $Context -DestinationPath $DestinationPath -StartDate $startDate -EndDate $endDate
         $messageTraceResult = Export-MessageTraceReports -Context $Context -DestinationPath $DestinationPath -StartDate $startDate -EndDate $endDate
 
-        return ('UnifiedAudit={0}; InteractiveSignIns={1}; NonInteractiveSignIns={2}; OutgoingMail={3}; IncomingMail={4}' -f `
+        return (New-ActionResult -Status 'Success' -Details ('UnifiedAudit={0}; InteractiveSignIns={1}; NonInteractiveSignIns={2}; OutgoingMail={3}; IncomingMail={4}' -f `
             $auditResult.Count,
             $signInResult.InteractiveCount,
             $signInResult.NonInteractiveCount,
             $messageTraceResult.OutgoingCount,
-            $messageTraceResult.IncomingCount)
+            $messageTraceResult.IncomingCount))
     }
     catch {
         Add-ErrorEntry -User $Context.Upn -Action 'ExportAuditLog' -Message $_.Exception.Message
-        return 'Failed'
+        return (New-ActionResult -Status 'Failed' -Details $_.Exception.Message)
     }
 }
 
@@ -929,18 +1226,25 @@ function New-ResultRow {
         UserPrincipalName       = $Upn
         UserFound               = $false
         MailboxFound            = $false
+        IsGuest                 = $false
+        IsSynced                = $false
         DisableUser             = ''
         RevokeSessions          = ''
         ResetPassword           = ''
         GeneratedPassword       = ''
         ReviewMfaMethods        = ''
         RemoveMfaMethods        = ''
+        ReviewInboxRules        = ''
         DisableInboxRules       = ''
         ReviewMailboxForwarding = ''
         RemoveMailboxForwarding = ''
         DisableSignature        = ''
         ReviewMailboxDelegates  = ''
+        RemoveMailboxDelegates  = ''
+        ReviewRecentSignIns     = ''
+        DisableMailboxProtocols = ''
         ExportAuditLog          = ''
+        IncidentPackagePath     = ''
     }
 }
 
@@ -956,11 +1260,40 @@ function Export-HtmlReport {
 
     $totalTargets = $Results.Count
     $usersFound = @($Results | Where-Object { $_.UserFound }).Count
-    $disabled = @($Results | Where-Object { $_.DisableUser -eq 'Success' }).Count
-    $sessionsRevoked = @($Results | Where-Object { $_.RevokeSessions -eq 'Success' }).Count
-    $passwordReset = @($Results | Where-Object { $_.ResetPassword -eq 'Success' }).Count
-    $mfaRemoved = @($Results | Where-Object { $_.RemoveMfaMethods -match 'Removed' }).Count
-    $auditExported = @($Results | Where-Object { $_.ExportAuditLog -and $_.ExportAuditLog -notin @('', 'Failed') }).Count
+    $disabled = @($Results | Where-Object { (Get-ActionStatus $_.DisableUser) -eq 'Success' }).Count
+    $sessionsRevoked = @($Results | Where-Object { (Get-ActionStatus $_.RevokeSessions) -eq 'Success' }).Count
+    $passwordReset = @($Results | Where-Object { (Get-ActionStatus $_.ResetPassword) -eq 'Success' }).Count
+    $mfaRemoved = @($Results | Where-Object { (Get-ActionStatus $_.RemoveMfaMethods) -in @('Success', 'Partial') }).Count
+    $auditExported = @($Results | Where-Object { (Get-ActionStatus $_.ExportAuditLog) -in @('Success', 'Partial') }).Count
+    $mailboxNotFound = @($Results | Where-Object { -not $_.MailboxFound }).Count
+    $passwordSuppressed = @($Results | Where-Object {
+        (Get-ActionStatus $_.ResetPassword) -eq 'Success' -and $_.GeneratedPassword -eq '[suppressed]'
+    }).Count
+    $auditFailed = @($Results | Where-Object { (Get-ActionStatus $_.ExportAuditLog) -eq 'Failed' }).Count
+    $contained = @($Results | Where-Object {
+        ((Get-ActionStatus $_.DisableUser) -eq 'Success' -or (Get-ActionStatus $_.RevokeSessions) -eq 'Success') -and
+        @(
+            Get-ActionStatus $_.ResetPassword,
+            Get-ActionStatus $_.RemoveMfaMethods,
+            Get-ActionStatus $_.DisableInboxRules,
+            Get-ActionStatus $_.RemoveMailboxForwarding,
+            Get-ActionStatus $_.DisableMailboxProtocols
+        ) -match 'Success|Partial'
+    }).Count
+    $needsManualFollowUp = @($Results | Where-Object {
+        -not $_.UserFound -or
+        @(
+            $_.DisableUser,
+            $_.RevokeSessions,
+            $_.ResetPassword,
+            $_.RemoveMfaMethods,
+            $_.DisableInboxRules,
+            $_.RemoveMailboxForwarding,
+            $_.RemoveMailboxDelegates,
+            $_.DisableMailboxProtocols,
+            $_.ExportAuditLog
+        ) | ForEach-Object { Get-ActionStatus $_ } | Where-Object { $_ -in @('Failed', 'Partial') }
+    }).Count
 
     $htmlData = [PSCustomObject]@{
         tenant          = if ($script:TenantLabel) { $script:TenantLabel } else { $TenantId }
@@ -972,6 +1305,14 @@ function Export-HtmlReport {
         passwordReset   = $passwordReset
         mfaRemoved      = $mfaRemoved
         auditExported   = $auditExported
+        mailboxNotFound = $mailboxNotFound
+        passwordSuppressed = $passwordSuppressed
+        auditFailed = $auditFailed
+        contained = $contained
+        needsManualFollowUp = $needsManualFollowUp
+        selectedActions = @($Actions)
+        reviewActions = @($script:ReviewActionSet)
+        highImpactActions = @($script:HighImpactActionSet)
         errors          = @($script:Errors)
         rows            = @($Results)
     } | ConvertTo-Json -Depth 6 -Compress
@@ -1039,15 +1380,63 @@ document.querySelector('.topbar-server').textContent = DATA.tenant;
 document.querySelector('.topbar-time').textContent = 'Generated: ' + DATA.reportDate;
 function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function kpi(value,label,sub,cls){return '<div class="kpi ' + cls + '"><div class="kpi-label">' + label + '</div><div class="kpi-value">' + value + '</div><div class="kpi-sub">' + sub + '</div></div>';}
-function pill(v){const text=String(v==null?'':v);let cls='neutral';if(text==='Success')cls='ok';else if(text==='Failed')cls='crit';else if(text==='WhatIf' || text.includes('WhatIf'))cls='warn';return '<span class="pill ' + cls + '">' + esc(text || '—') + '</span>';}
-document.getElementById('server-strip').innerHTML=[['Tenant',DATA.tenant],['Targets',String(DATA.totalTargets)],['Users Found',String(DATA.usersFound)],['Errors',String(DATA.errors.length)],['Generated',DATA.reportDate]].map(function(pair){return '<div class="strip-item"><span class="strip-label">'+pair[0]+'</span><span class="strip-value">'+esc(pair[1])+'</span></div>';}).join('');
-document.getElementById('hero').innerHTML=[kpi(DATA.totalTargets,'Targets','submitted UPNs','neutral'),kpi(DATA.disabled,'Disabled','accounts disabled','crit'),kpi(DATA.sessionsRevoked,'Sessions Revoked','tokens invalidated','warn'),kpi(DATA.passwordReset,'Passwords Reset','strong reset applied','ok'),kpi(DATA.mfaRemoved,'MFA Removed','methods deleted','warn'),kpi(DATA.auditExported,'Audit Exports','activity packages','neutral')].join('');
-let resultTable='<div class="card"><div class="card-header"><span class="card-title">Per-User Results</span><span class="card-badge">'+DATA.rows.length+' row(s)</span></div><div class="card-body"><div class="table-scroll"><table><thead><tr><th>UPN</th><th>User Found</th><th>Mailbox</th><th>Disable</th><th>Revoke</th><th>Reset</th><th>Review MFA</th><th>Remove MFA</th><th>Inbox Rules</th><th>Forwarding</th><th>Delegates</th><th>Audit</th></tr></thead><tbody>';
-for(const row of DATA.rows){resultTable+='<tr><td>'+esc(row.UserPrincipalName || row.UPN || '')+'</td><td>'+pill(row.UserFound)+'</td><td>'+pill(row.MailboxFound)+'</td><td>'+pill(row.DisableUser)+'</td><td>'+pill(row.RevokeSessions)+'</td><td>'+pill(row.ResetPassword)+'</td><td>'+esc(row.ReviewMfaMethods||'—')+'</td><td>'+esc(row.RemoveMfaMethods||'—')+'</td><td>'+esc(row.DisableInboxRules||'—')+'</td><td>'+esc(row.ReviewMailboxForwarding || row.RemoveMailboxForwarding || '—')+'</td><td>'+esc(row.ReviewMailboxDelegates||'—')+'</td><td>'+esc(row.ExportAuditLog||'—')+'</td></tr>';}
+function actionStatus(value){
+  const text=String(value==null?'':value);
+  const match=text.match(/^(Success|WhatIf|Skipped|NotApplicable|Partial|Failed)(?::|\b)/);
+  return match?match[1]:text;
+}
+function actionDetails(value){
+  const text=String(value==null?'':value);
+  const match=text.match(/^(Success|WhatIf|Skipped|NotApplicable|Partial|Failed):\s*(.+)$/);
+  return match?match[2]:text;
+}
+function pill(v){
+  const raw=String(v==null?'':v);
+  if(raw==='true' || raw==='false'){
+    return '<span class="pill ' + (raw==='true'?'ok':'crit') + '">' + raw + '</span>';
+  }
+  const status=actionStatus(raw);
+  let cls='neutral';
+  if(status==='Success')cls='ok';
+  else if(status==='Failed')cls='crit';
+  else if(status==='WhatIf' || status==='Skipped' || status==='Partial')cls='warn';
+  else if(status==='NotApplicable')cls='neutral';
+  return '<span class="pill ' + cls + '">' + esc(status || raw || '—') + '</span>';
+}
+function detailCell(v){
+  const raw=String(v==null?'':v);
+  if(!raw){return '—';}
+  const status=actionStatus(raw);
+  const details=actionDetails(raw);
+  if(!status || status===raw){return esc(details || raw || '—');}
+  if(!details || details===status){return pill(status);}
+  return pill(status) + '<div style="margin-top:.3rem">' + esc(details) + '</div>';
+}
+document.getElementById('server-strip').innerHTML=[
+  ['Tenant',DATA.tenant],
+  ['Targets',String(DATA.totalTargets)],
+  ['Selected Actions',DATA.selectedActions.join(', ') || 'Default'],
+  ['High Impact',DATA.highImpactActions.filter(action=>DATA.selectedActions.includes(action)).join(', ') || 'None'],
+  ['Generated',DATA.reportDate]
+].map(function(pair){return '<div class="strip-item"><span class="strip-label">'+pair[0]+'</span><span class="strip-value">'+esc(pair[1])+'</span></div>';}).join('');
+document.getElementById('hero').innerHTML=[
+  kpi(DATA.contained,'Contained','core containment applied','ok'),
+  kpi(DATA.needsManualFollowUp,'Follow-up','manual review still needed','warn'),
+  kpi(DATA.mailboxNotFound,'Mailbox Missing','targets without a mailbox','crit'),
+  kpi(DATA.passwordSuppressed,'Passwords Hidden','reset values suppressed','neutral'),
+  kpi(DATA.auditFailed,'Audit Failed','activity export failures','crit'),
+  kpi(DATA.auditExported,'Audit Exports','activity packages generated','neutral')
+].join('');
+const selectedReviewActions=DATA.selectedActions.filter(action=>DATA.reviewActions.includes(action));
+const selectedRemediationActions=DATA.selectedActions.filter(action=>!DATA.reviewActions.includes(action));
+const selectedHighImpactActions=DATA.selectedActions.filter(action=>DATA.highImpactActions.includes(action));
+let actionCard='<div class="card"><div class="card-header"><span class="card-title">Workflow Summary</span><span class="card-badge">'+DATA.selectedActions.length+' action(s)</span></div><div class="card-body"><div class="errors"><div class="error-item" style="color:var(--text)"><strong>Review actions:</strong> '+esc(selectedReviewActions.join(', ') || 'None')+'</div><div class="error-item" style="color:var(--text)"><strong>Remediation actions:</strong> '+esc(selectedRemediationActions.join(', ') || 'None')+'</div><div class="error-item" style="color:var(--text)"><strong>High-impact actions:</strong> '+esc(selectedHighImpactActions.join(', ') || 'None')+'</div></div></div></div>';
+let resultTable='<div class="card"><div class="card-header"><span class="card-title">Per-User Results</span><span class="card-badge">'+DATA.rows.length+' row(s)</span></div><div class="card-body"><div class="table-scroll"><table><thead><tr><th>UPN</th><th>User</th><th>Mailbox</th><th>Guest</th><th>Synced</th><th>Disable</th><th>Revoke</th><th>Reset</th><th>Review MFA</th><th>Remove MFA</th><th>Review Rules</th><th>Disable Rules</th><th>Forwarding</th><th>Delegates</th><th>Recent Sign-Ins</th><th>Protocols</th><th>Audit</th><th>Package</th></tr></thead><tbody>';
+for(const row of DATA.rows){resultTable+='<tr><td>'+esc(row.UserPrincipalName || row.UPN || '')+'</td><td>'+pill(String(Boolean(row.UserFound)))+'</td><td>'+pill(String(Boolean(row.MailboxFound)))+'</td><td>'+pill(String(Boolean(row.IsGuest)))+'</td><td>'+pill(String(Boolean(row.IsSynced)))+'</td><td>'+pill(row.DisableUser)+'</td><td>'+pill(row.RevokeSessions)+'</td><td>'+pill(row.ResetPassword)+'</td><td>'+detailCell(row.ReviewMfaMethods)+'</td><td>'+detailCell(row.RemoveMfaMethods)+'</td><td>'+detailCell(row.ReviewInboxRules)+'</td><td>'+detailCell(row.DisableInboxRules)+'</td><td>'+detailCell(row.ReviewMailboxForwarding || row.RemoveMailboxForwarding)+'</td><td>'+detailCell(row.ReviewMailboxDelegates || row.RemoveMailboxDelegates)+'</td><td>'+detailCell(row.ReviewRecentSignIns)+'</td><td>'+detailCell(row.DisableMailboxProtocols)+'</td><td>'+detailCell(row.ExportAuditLog)+'</td><td>'+esc(row.IncidentPackagePath || '—')+'</td></tr>';}
 resultTable+='</tbody></table></div></div></div>';
 let errorsCard='';
 if(DATA.errors.length){errorsCard='<div class="card"><div class="card-header"><span class="card-title">Errors</span><span class="card-badge">'+DATA.errors.length+'</span></div><div class="card-body"><div class="errors">'+DATA.errors.map(function(error){return '<div class="error-item">'+esc(error)+'</div>';}).join('')+'</div></div></div>';}
-document.getElementById('sections').innerHTML=resultTable+errorsCard;
+document.getElementById('sections').innerHTML=actionCard+resultTable+errorsCard;
 </script>
 </body>
 </html>
@@ -1114,6 +1503,8 @@ function Invoke-CompromisedAccountRemediation {
 
             $row.UserFound = $true
             $row.MailboxFound = $context.HasMailbox
+            $row.IsGuest = $context.IsGuest
+            $row.IsSynced = $context.IsSynced
 
             foreach ($action in $Actions) {
                 switch ($action) {
@@ -1134,6 +1525,9 @@ function Invoke-CompromisedAccountRemediation {
                     'RemoveMfaMethods' {
                         $row.RemoveMfaMethods = Invoke-RemoveMfaMethods -Context $context -WhatIf:$WhatIfPreference
                     }
+                    'ReviewInboxRules' {
+                        $row.ReviewInboxRules = Get-InboxRuleReview -Context $context
+                    }
                     'DisableInboxRules' {
                         $row.DisableInboxRules = Invoke-DisableInboxRules -Context $context -WhatIf:$WhatIfPreference
                     }
@@ -1149,10 +1543,29 @@ function Invoke-CompromisedAccountRemediation {
                     'ReviewMailboxDelegates' {
                         $row.ReviewMailboxDelegates = Get-MailboxDelegateReview -Context $context
                     }
+                    'RemoveMailboxDelegates' {
+                        $row.RemoveMailboxDelegates = Invoke-RemoveMailboxDelegates -Context $context -WhatIf:$WhatIfPreference
+                    }
+                    'ReviewRecentSignIns' {
+                        $row.ReviewRecentSignIns = Get-RecentSignInReview -Context $context
+                    }
+                    'DisableMailboxProtocols' {
+                        $row.DisableMailboxProtocols = Invoke-DisableMailboxProtocols -Context $context -WhatIf:$WhatIfPreference
+                    }
                     'ExportAuditLog' {
-                        $row.ExportAuditLog = Export-ActivityLog -Context $context -DestinationPath $resolvedOutputPath -Days $AuditLogDays
+                        $auditDestination = if ($ExportIncidentPackage) {
+                            Get-IncidentPackagePath -DestinationPath $resolvedOutputPath -Upn $context.Upn
+                        }
+                        else {
+                            $resolvedOutputPath
+                        }
+                        $row.ExportAuditLog = Export-ActivityLog -Context $context -DestinationPath $auditDestination -Days $AuditLogDays
                     }
                 }
+            }
+
+            if ($ExportIncidentPackage) {
+                $row.IncidentPackagePath = Export-IncidentPackageSummary -Context $context -Row $row -DestinationPath $resolvedOutputPath
             }
 
             $results.Add([pscustomobject]$row)
