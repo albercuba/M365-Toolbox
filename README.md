@@ -45,8 +45,8 @@ The current catalog includes 44 toolbox-native scripts across categories such as
 - Run cancellation from the UI
 - Structured run logs, timestamps, and clearer run-state feedback
 - Artifact browser for HTML, CSV, XLSX, text, and log downloads
-- Inline HTML report preview after successful runs
-- Device-code modal that surfaces the sign-in code and login URL
+- Inline HTML report preview after successful runs, with the report brought into focus automatically
+- Device-code modal that surfaces the sign-in code, copy action, and login URL
 - Approval confirmation prompt for remediation workflows
 - Backend status view for PowerShell, modules, script mount, and output path readiness
 - GitHub repository link in the sidebar footer
@@ -195,8 +195,9 @@ By default, Docker mounts:
 4. The script runs and the UI polls for status updates.
 5. If the backend concurrency limit is busy, the run stays queued until a slot opens.
 6. If a remediation workflow is selected, the UI requires explicit approval confirmation before launch.
-7. If a Microsoft device-code prompt appears in stdout, the UI opens a sign-in modal.
+7. If a Microsoft device-code prompt appears in stdout or stderr, the UI opens a sign-in modal with the code, a copy button, and a direct login link.
 8. If the script generates artifacts, the backend serves them back for browsing, preview, and download.
+9. If an HTML report is generated, the UI collapses the other run cards and scrolls the report preview into view.
 
 ## Deploy with Docker Compose
 
