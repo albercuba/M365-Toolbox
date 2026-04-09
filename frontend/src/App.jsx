@@ -196,7 +196,6 @@ export function App() {
   const [runs, setRuns] = useState([]);
   const [activeRun, setActiveRun] = useState(null);
   const [artifacts, setArtifacts] = useState([]);
-  const [activeRunHtml, setActiveRunHtml] = useState("");
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -290,45 +289,6 @@ export function App() {
   }, [activeRun?.id, activeRun?.status]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const loadRunHtml = async () => {
-      const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
-      if (
-        !activeRun?.id ||
-        ["running", "queued", "canceling"].includes(activeRun.status) ||
-        !hasHtmlArtifact
-      ) {
-        setActiveRunHtml("");
-        return;
-      }
-
-      try {
-        const response = await fetch(`${apiBase}/runs/${activeRun.id}/html`);
-        if (!response.ok) {
-          setActiveRunHtml("");
-          return;
-        }
-
-        const html = await response.text();
-        if (!cancelled) {
-          setActiveRunHtml(html);
-        }
-      } catch {
-        if (!cancelled) {
-          setActiveRunHtml("");
-        }
-      }
-    };
-
-    loadRunHtml();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeRun?.id, activeRun?.status, artifacts]);
-
-  useEffect(() => {
     if (activeRun?.status === "completed") {
       setSuccess(`Completed ${activeRun.scriptName} successfully.`);
     }
@@ -379,14 +339,12 @@ export function App() {
     setSuccess("");
     setActiveRun(null);
     setArtifacts([]);
-    setActiveRunHtml("");
     setRunDetailsOpen(true);
     setRecentRunsOpen(true);
     setDevicePromptDismissed(false);
   };
 
   const handleOpenRun = (run) => {
-    setActiveRunHtml("");
     setArtifacts([]);
     setActiveRun(run ? { ...run } : null);
     setRunDetailsOpen(true);
@@ -491,6 +449,7 @@ export function App() {
     .filter((script) => runCountsByScriptId[script.id])
     .sort((a, b) => (runCountsByScriptId[b.id] || 0) - (runCountsByScriptId[a.id] || 0))
     .slice(0, 3);
+  const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
   const filteredScripts = scripts.filter((script) => {
     const matchesSearch = !normalizedSearch || [
       script.name,
@@ -949,7 +908,7 @@ export function App() {
                         ) : null}
                       </div>
 
-                      {activeRunHtml ? (
+                      {activeRun?.id && hasHtmlArtifact ? (
                         <div className="card">
                           <div className="card-header">
                             <span className="card-title">HTML Report</span>
@@ -961,7 +920,7 @@ export function App() {
                             ) : null}
                           </div>
                           <div className="card-body report-card-body">
-                            <iframe title="MFA HTML report preview" className="report-frame" srcDoc={activeRunHtml} />
+                            <iframe title="HTML report preview" className="report-frame" src={`${apiBase}/runs/${activeRun.id}/html`} />
                           </div>
                         </div>
                       ) : null}
