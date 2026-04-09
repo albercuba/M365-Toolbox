@@ -2,18 +2,37 @@ import { useEffect, useState } from "react";
 
 const apiBase = "/api";
 
-function extractDeviceCodePrompt(stdout) {
-  if (!stdout) return null;
+function stripAnsi(value) {
+  if (!value) return "";
+  return value.replace(/\u001b\[[0-9;]*m/g, "");
+}
 
-  const match = stdout.match(
-    /To sign in, use a web browser to open the page (https:\/\/[^\s]+) and enter the code ([A-Z0-9-]+) to authenticate\./i
+function extractDeviceCodePrompt(output) {
+  const cleanOutput = stripAnsi(output);
+  if (!cleanOutput) return null;
+
+  const sentenceMatch = cleanOutput.match(
+    /To sign in,\s*use a web browser to open the page\s*(https:\/\/[^\s]+)\s*and enter the code\s*([A-Z0-9-]+)\s*to authenticate\.?/i
   );
+  if (sentenceMatch) {
+    return {
+      url: sentenceMatch[1],
+      code: sentenceMatch[2]
+    };
+  }
 
-  if (!match) return null;
+  const urlMatch = cleanOutput.match(
+    /https:\/\/(?:microsoft\.com\/devicelogin|login\.microsoft(?:online)?\.com\/device|login\.microsoftonline\.com\/common\/oauth2\/deviceauth)[^\s]*/i
+  );
+  const codeMatch = cleanOutput.match(/\b[A-Z0-9]{4,}(?:-[A-Z0-9]{4,})+\b|\b[A-Z0-9]{8,10}\b/);
+
+  if (!urlMatch && !codeMatch) {
+    return null;
+  }
 
   return {
-    url: match[1],
-    code: match[2]
+    url: urlMatch?.[0] || "https://microsoft.com/devicelogin",
+    code: codeMatch?.[0] || ""
   };
 }
 
@@ -473,8 +492,8 @@ export function App() {
     }
   };
 
-  const devicePrompt = extractDeviceCodePrompt(activeRun?.stdout);
-  const showDevicePrompt = Boolean(devicePrompt) && activeRun?.status === "running" && !devicePromptDismissed;
+  const devicePrompt = extractDeviceCodePrompt([activeRun?.stdout, activeRun?.stderr].filter(Boolean).join("\n"));
+  const showDevicePrompt = Boolean(devicePrompt?.code) && activeRun?.status === "running" && !devicePromptDismissed;
   const normalizedSearch = scriptSearch.trim().toLowerCase();
   const runCountsByScriptId = runs.reduce((acc, run) => {
     acc[run.scriptId] = (acc[run.scriptId] || 0) + 1;
