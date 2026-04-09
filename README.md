@@ -169,6 +169,19 @@ The backend tracks:
 - timestamps
 - artifact inventory for exported files
 
+Runtime controls available through environment variables:
+
+- `MAX_CONCURRENT_RUNS`
+  Limits how many PowerShell runs can execute at the same time. Extra runs stay queued until a slot opens.
+- `RUN_RETENTION_HOURS`
+  Controls how long persisted run records are kept before cleanup removes them.
+- `RUN_STATE_DIR`
+  Overrides the directory used for persisted run state files.
+- `OUTPUT_DIR`
+  Controls where generated artifacts and backend run state are written.
+- `TOOLBOX_SCRIPT_MOUNT_ROOT`
+  Controls where the backend resolves toolbox PowerShell scripts.
+
 By default, Docker mounts:
 
 - `./scripts` to `/toolbox-scripts`
@@ -307,7 +320,7 @@ docker compose up -d frontend
 
 Notes for deployment:
 
-- The backend keeps run history in memory, so restarting the backend clears the in-app run list.
+- The backend persists run history to a state file, so completed runs remain visible after backend restarts.
 - Generated artifacts remain in the host `output/` folder because it is mounted into the container.
 - Scripts are loaded from the host `scripts/` folder, so keep that directory in place on the machine running Docker Compose.
 - The Coolify or Portainer-friendly compose file stores artifacts in a Docker-managed volume instead of the host `output/` folder.
@@ -353,6 +366,7 @@ The frontend Vite config proxies `/api` requests to the backend during local dev
 - The backend API now exposes script listing, run creation, run status, cancellation, artifact listing, artifact download, HTML preview, and backend status endpoints.
 - Input values are validated on the backend before PowerShell execution starts.
 - Run retention is controlled by backend retention settings so old run records do not accumulate forever.
+- Remediation workflows currently use a local approval confirmation prompt in the UI rather than a multi-user approver queue.
 - CORS is restricted to configured origins, localhost, and private IPv4 ranges.
 
 ## Product direction
