@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const apiBase = "/api";
 
@@ -237,6 +237,7 @@ function Field({ field, value, onChange }) {
 }
 
 export function App() {
+  const reportCardRef = useRef(null);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [scripts, setScripts] = useState([]);
@@ -349,6 +350,20 @@ export function App() {
       setRunDetailsOpen(false);
       setRecentRunsOpen(false);
     }
+  }, [activeRun?.id, artifacts]);
+
+  useEffect(() => {
+    const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
+    if (!activeRun?.id || !hasHtmlArtifact) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      reportCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      reportCardRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [activeRun?.id, artifacts]);
 
   useEffect(() => {
@@ -984,7 +999,7 @@ export function App() {
                       </div>
 
                       {activeRun?.id && hasHtmlArtifact ? (
-                        <div className="card">
+                        <div className="card" ref={reportCardRef} tabIndex={-1}>
                           <div className="card-header">
                             <span className="card-title">HTML Report</span>
                             <span className="card-badge badge-ok">preview</span>
