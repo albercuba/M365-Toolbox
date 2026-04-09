@@ -794,6 +794,9 @@ textarea {
   font-size: 0.82rem;
   color: var(--accent);
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .manage-workspace {
