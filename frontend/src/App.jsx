@@ -225,7 +225,7 @@ function Field({ field, value, onChange }) {
     return (
       <div className="form-field">
         <span>{field.label}</span>
-        <div className="multiselect-grid">
+        <div className={`multiselect-grid${field.id === "actions" ? " multiselect-grid-wide" : ""}`}>
           {field.options.map((option) => (
             <label key={option} className="checkbox-field">
               <input
