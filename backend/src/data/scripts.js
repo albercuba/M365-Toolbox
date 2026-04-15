@@ -250,6 +250,13 @@ const licensingReportScript = {
       defaultValue: false,
       helpText: "Best-effort filter that excludes common free and trial SKUs from the report."
     },
+    {
+      id: "includePaidAddOns",
+      label: "Include paid add-ons",
+      type: "checkbox",
+      defaultValue: false,
+      helpText: "When paid licenses only is enabled, include paid add-ons and storage SKUs in addition to user licenses."
+    },
     tenantField
   ]
 };

@@ -4,7 +4,8 @@ param(
     [string]$OutputPath,
     [string]$ExportHtml,
     [switch]$IncludeDisabledUsers,
-    [switch]$PaidLicensesOnly
+    [switch]$PaidLicensesOnly,
+    [switch]$IncludePaidAddOns
 )
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
@@ -39,6 +40,82 @@ function Test-IsPaidSku {
     }
 
     return $true
+}
+
+function Test-IsDeniedPaidSku {
+    param(
+        [Parameter(Mandatory)]
+        $Sku
+    )
+
+    $skuPartNumber = [string]$Sku.skuPartNumber
+    if (-not $skuPartNumber) {
+        return $true
+    }
+
+    $deniedSkuPartNumbers = @(
+        'FLOW_FREE',
+        'POWER_BI_STANDARD',
+        'TEAMS_EXPLORATORY',
+        'WINDOWS_STORE',
+        'PHONESYSTEM_VIRTUALUSER'
+    )
+
+    return $skuPartNumber -in $deniedSkuPartNumbers
+}
+
+function Test-IsPaidAddOnSku {
+    param(
+        [Parameter(Mandatory)]
+        $Sku
+    )
+
+    $skuPartNumber = [string]$Sku.skuPartNumber
+    if (-not $skuPartNumber) {
+        return $false
+    }
+
+    $addOnSkuPartNumbers = @(
+        'AAD_PREMIUM',
+        'AAD_PREMIUM_P2',
+        'ATP_ENTERPRISE',
+        'ATP_ENTERPRISE_FACULTY',
+        'ATP_ENTERPRISE_GOV',
+        'EXCHANGESTANDARD',
+        'EXCHANGEENTERPRISE',
+        'INTUNE_A',
+        'MCOEV',
+        'MCOMEETADV',
+        'POWER_BI_PRO',
+        'PROJECTESSENTIALS',
+        'PROJECTPREMIUM',
+        'PROJECTPROFESSIONAL',
+        'RIGHTSMANAGEMENT',
+        'SHAREPOINTSTORAGE',
+        'VISIO_PLAN1_DEPT',
+        'VISIO_PLAN2_DEPT',
+        'WACONEDRIVESTANDARD',
+        'WIN_DEF_ATP'
+    )
+
+    return $skuPartNumber -in $addOnSkuPartNumbers
+}
+
+function Get-LicenseScopeLabel {
+    param(
+        [switch]$PaidOnly,
+        [switch]$IncludeAddOns
+    )
+
+    if (-not $PaidOnly) {
+        return "All licenses"
+    }
+
+    if ($IncludeAddOns) {
+        return "All paid SKUs including add-ons"
+    }
+
+    return "Paid user licenses only"
 }
 
 function Get-FriendlySkuName {
@@ -122,7 +199,18 @@ if (-not $IncludeDisabledUsers) {
 }
 
 $reportSkus = if ($PaidLicensesOnly) {
-    @($skus | Where-Object { Test-IsPaidSku -Sku $_ })
+    @(
+        $skus |
+            Where-Object { (Test-IsPaidSku -Sku $_) -and -not (Test-IsDeniedPaidSku -Sku $_) } |
+            Where-Object {
+                if ($IncludePaidAddOns) {
+                    $true
+                }
+                else {
+                    -not (Test-IsPaidAddOnSku -Sku $_)
+                }
+            }
+    )
 }
 else {
     @($skus)
@@ -182,21 +270,22 @@ foreach ($user in $users) {
 }
 
 $tenantName = if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" }
+$licenseScopeLabel = Get-LicenseScopeLabel -PaidOnly:$PaidLicensesOnly -IncludeAddOns:$IncludePaidAddOns
 $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "Licensing" -OutputPath $OutputPath
 
 Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Licensing Report" -Tenant $tenantName -Subtitle "License assignment and SKU consumption" -Kpis @(
     @{ label = "Users"; value = $users.Count; sub = "Scoped users"; cls = "neutral" },
-    @{ label = "Licensed"; value = $licensedUsers; sub = if ($PaidLicensesOnly) { "Users with paid licenses" } else { "Users with licenses" }; cls = "ok" },
-    @{ label = "Unlicensed"; value = $unlicensedUsers.Count; sub = if ($PaidLicensesOnly) { "Users without paid licenses" } else { "Users without licenses" }; cls = if ($unlicensedUsers.Count -gt 0) { "warn" } else { "ok" } },
-    @{ label = "SKUs"; value = $skuRows.Count; sub = if ($PaidLicensesOnly) { "Paid subscribed products" } else { "Subscribed products" }; cls = "neutral" }
+    @{ label = "Licensed"; value = $licensedUsers; sub = if ($PaidLicensesOnly) { "Users with licenses in scope" } else { "Users with licenses" }; cls = "ok" },
+    @{ label = "Unlicensed"; value = $unlicensedUsers.Count; sub = if ($PaidLicensesOnly) { "Users without licenses in scope" } else { "Users without licenses" }; cls = if ($unlicensedUsers.Count -gt 0) { "warn" } else { "ok" } },
+    @{ label = "SKUs"; value = $skuRows.Count; sub = if ($PaidLicensesOnly) { "Paid products in scope" } else { "Subscribed products" }; cls = "neutral" }
 ) -StripItems @(
     @{ label = "Tenant"; value = $tenantName },
     @{ label = "User Scope"; value = if ($IncludeDisabledUsers) { "All users" } else { "Enabled only" } },
-    @{ label = "License Scope"; value = if ($PaidLicensesOnly) { "Paid only" } else { "All licenses" } },
+    @{ label = "License Scope"; value = $licenseScopeLabel },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
     @{
-        title = if ($PaidLicensesOnly) { "Paid Subscribed SKUs" } else { "Subscribed SKUs" }
+        title = if ($PaidLicensesOnly) { "Subscribed SKUs In Scope" } else { "Subscribed SKUs" }
         badge = "$($skuRows.Count) products"
         columns = @(
             @{ key = "Product"; header = "Product" },
@@ -222,7 +311,7 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Licensing Report" -Tenant 
         rows = @($unlicensedUsers | Sort-Object DisplayName)
     },
     @{
-        title = if ($PaidLicensesOnly) { "Users With Paid Licenses" } else { "Users With Multiple Licenses" }
+        title = if ($PaidLicensesOnly) { "Users With Licenses In Scope" } else { "Users With Multiple Licenses" }
         badge = "$($licenseDetailUsers.Count) users"
         columns = @(
             @{ key = "DisplayName"; header = "Name" },
