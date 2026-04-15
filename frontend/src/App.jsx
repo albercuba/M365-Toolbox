@@ -1448,6 +1448,70 @@ export function App() {
     );
   };
 
+  const renderRecentRunsContent = () => (
+    <div className="card-body">
+      {runs.length === 0 ? (
+        <div className="empty-row">No runs yet. Launch a report to start building persistent history.</div>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Script</th>
+                <th>Status</th>
+                <th>Requested</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((run) => (
+                <tr key={run.id}>
+                  <td>{run.scriptName}</td>
+                  <td>
+                    <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
+                      {run.status}
+                    </span>
+                  </td>
+                  <td>{formatDate(run.requestedAt || run.startedAt)}</td>
+                  <td className="table-actions">
+                    <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderRecentRunsCard = ({ collapsible = false } = {}) => {
+    if (!collapsible) {
+      return (
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Recent Runs</span>
+            <span className="card-badge badge-neutral">{runs.length}</span>
+          </div>
+          {renderRecentRunsContent()}
+        </div>
+      );
+    }
+
+    return (
+      <div className={`card ${recentRunsOpen ? "" : "card-collapsed"}`}>
+        <button type="button" className="card-header card-header-button" onClick={() => setRecentRunsOpen((current) => !current)}>
+          <span className="card-title">Recent Runs</span>
+          <span className="card-badge badge-neutral">{runs.length}</span>
+          <span className="card-chevron">{recentRunsOpen ? "▾" : "▸"}</span>
+        </button>
+        {recentRunsOpen ? renderRecentRunsContent() : null}
+      </div>
+    );
+  };
+
   return (
     <div className="app-shell">
       <div className="toast-stack" aria-live="polite" aria-atomic="true">
@@ -1948,51 +2012,7 @@ export function App() {
                         </div>
                       </div>
 
-                      <div className={`card ${recentRunsOpen ? "" : "card-collapsed"}`}>
-                        <button type="button" className="card-header card-header-button" onClick={() => setRecentRunsOpen((current) => !current)}>
-                          <span className="card-title">Recent Runs</span>
-                          <span className="card-badge badge-neutral">{runs.length}</span>
-                          <span className="card-chevron">{recentRunsOpen ? "▾" : "▸"}</span>
-                        </button>
-                        {recentRunsOpen ? (
-                        <div className="card-body">
-                          {runs.length === 0 ? (
-                            <div className="empty-row">No runs yet. Launch a report to start building persistent history.</div>
-                          ) : (
-                            <div className="table-scroll">
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>Script</th>
-                                    <th>Status</th>
-                                    <th>Requested</th>
-                                    <th>Action</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {runs.map((run) => (
-                                    <tr key={run.id}>
-                                      <td>{run.scriptName}</td>
-                                      <td>
-                                        <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
-                                          {run.status}
-                                        </span>
-                                      </td>
-                                      <td>{formatDate(run.requestedAt || run.startedAt)}</td>
-                                      <td className="table-actions">
-                                        <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
-                                          Open
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                        ) : null}
-                      </div>
+                      {renderRecentRunsCard({ collapsible: true })}
 
                       {activeRun?.id && hasHtmlArtifact ? (
                         <div className="card" ref={reportCardRef} tabIndex={-1}>
@@ -2101,6 +2121,8 @@ export function App() {
                     </div>
                   </div>
                 </div>
+
+                {renderRecentRunsCard()}
 
                 <div className="card">
                   <div className="card-header">
