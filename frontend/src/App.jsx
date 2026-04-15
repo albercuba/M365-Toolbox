@@ -153,11 +153,9 @@ function escapeXml(value) {
 
 function sanitizeFileName(value) {
   return String(value || "report")
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
-    .replace(/\s+/g, "-")
+    .replace(/[^A-Za-z0-9]+/g, "-")
     .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase() || "report";
+    .replace(/^-|-$/g, "") || "report";
 }
 
 function sanitizeWorksheetName(value, usedNames) {
@@ -432,6 +430,41 @@ function createExcelExportBlob(html) {
   });
 }
 
+function parseReportTimestamp(value) {
+  const normalized = String(value || "").trim();
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+
+  if (match) {
+    const [, year, month, day, hour, minute, second = "00"] = match;
+    return {
+      datePart: `${year}-${month}-${day}`,
+      timePart: `${hour}-${minute}-${second}`
+    };
+  }
+
+  const date = normalized ? new Date(normalized) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    const fallback = new Date();
+    return {
+      datePart: fallback.toISOString().slice(0, 10),
+      timePart: fallback.toTimeString().slice(0, 8).replace(/:/g, "-")
+    };
+  }
+
+  return {
+    datePart: date.toISOString().slice(0, 10),
+    timePart: date.toTimeString().slice(0, 8).replace(/:/g, "-")
+  };
+}
+
+function buildReportExportFileName({ tenantName, scriptName, reportDate, extension }) {
+  const { datePart, timePart } = parseReportTimestamp(reportDate);
+  const tenantPart = sanitizeFileName(tenantName || "Tenant");
+  const scriptPart = sanitizeFileName(scriptName || "Report");
+  const extensionPart = String(extension || "txt").replace(/^\./, "");
+  return `${tenantPart}-${scriptPart}-${datePart}-${timePart}.${extensionPart}`;
+}
+
 function downloadBlob(blob, fileName) {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -443,7 +476,7 @@ function downloadBlob(blob, fileName) {
   window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }
 
-function prepareHtmlForPdf(html) {
+function prepareHtmlForPdf(html, fileName) {
   const printStyles = `
     <style>
       @page { margin: 12mm; }
@@ -455,16 +488,22 @@ function prepareHtmlForPdf(html) {
     </style>
   `;
 
-  if (html.includes("</head>")) {
-    return html.replace("</head>", `${printStyles}</head>`);
+  let preparedHtml = html;
+
+  if (fileName && preparedHtml.includes("<title>") && preparedHtml.includes("</title>")) {
+    preparedHtml = preparedHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeXml(fileName)}</title>`);
   }
 
-  return `${printStyles}${html}`;
+  if (preparedHtml.includes("</head>")) {
+    return preparedHtml.replace("</head>", `${printStyles}</head>`);
+  }
+
+  return `${printStyles}${preparedHtml}`;
 }
 
-function openPdfPrintDialog(html) {
+function openPdfPrintDialog(html, fileName) {
   return new Promise((resolve, reject) => {
-    const printableHtml = prepareHtmlForPdf(html);
+    const printableHtml = prepareHtmlForPdf(html, fileName);
     const blob = new Blob([printableHtml], { type: "text/html" });
     const url = window.URL.createObjectURL(blob);
     const iframe = document.createElement("iframe");
@@ -962,19 +1001,28 @@ export function App() {
 
     try {
       const html = await fetchHtmlReport(activeRun.id);
-      const reportBaseName = sanitizeFileName(
-        (artifacts.find((artifact) => artifact.type === "html")?.name || activeRun.scriptName || "report")
-          .replace(/\.[^.]+$/, "")
-      );
+      const reportData = extractReportDataFromHtml(html);
+      const fileName = buildReportExportFileName({
+        tenantName: reportData.tenant || activeRun.payload?.tenantId || "Tenant",
+        scriptName: activeRun.scriptName || reportData.title || "Report",
+        reportDate: reportData.reportDate || activeRun.finishedAt || activeRun.startedAt || activeRun.requestedAt,
+        extension: format === "excel" ? "xls" : format
+      });
+
+      if (format === "html") {
+        downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), fileName);
+        setSuccess("HTML export downloaded.");
+        return;
+      }
 
       if (format === "excel") {
-        downloadBlob(createExcelExportBlob(html), `${reportBaseName}.xml`);
+        downloadBlob(createExcelExportBlob(html), fileName);
         setSuccess("Excel export downloaded.");
         return;
       }
 
       if (format === "pdf") {
-        await openPdfPrintDialog(html);
+        await openPdfPrintDialog(html, fileName);
         setSuccess("Print dialog opened. Choose Save as PDF.");
         return;
       }
@@ -1118,7 +1166,6 @@ export function App() {
     .sort((a, b) => (runCountsByScriptId[b.id] || 0) - (runCountsByScriptId[a.id] || 0))
     .slice(0, 3);
   const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
-  const htmlArtifact = artifacts.find((artifact) => artifact.type === "html");
   const compromisedTargetPreview = selectedScript?.id === "m365-compromised-account-remediation"
     ? parseUserList(formValues.userPrincipalName)
     : null;
@@ -1146,15 +1193,14 @@ export function App() {
 
     return (
       <>
-        <a
+        <button
+          type="button"
           className="filter-btn active-all"
-          href={htmlArtifact
-            ? `${apiBase}/runs/${activeRun.id}/artifacts/${encodeURIComponent(htmlArtifact.id)}`
-            : `${apiBase}/runs/${activeRun.id}/html`}
-          download={htmlArtifact?.name || `${sanitizeFileName(activeRun.scriptName)}.html`}
+          onClick={() => handleExportReport("html")}
+          disabled={Boolean(exportingFormat)}
         >
-          HTML
-        </a>
+          {exportingFormat === "html" ? "Downloading..." : "HTML"}
+        </button>
         <button
           type="button"
           className="filter-btn"
