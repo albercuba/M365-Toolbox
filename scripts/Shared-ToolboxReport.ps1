@@ -379,7 +379,9 @@ function Export-ToolboxHtmlReport {
   }
   function renderRows(columns,rows){
     if(!rows||rows.length===0){return '<div class="empty">No records returned.</div>';}
-    let html='<div class="table-scroll"><table><thead><tr>';
+    let html='<div class="table-scroll"><table><colgroup>';
+    for(let index=0;index<columns.length;index++){html+='<col />';}
+    html+='</colgroup><thead><tr>';
     for(const col of columns){html+='<th>'+esc(col.header||col.key)+'</th>';}
     html+='</tr></thead><tbody>';
     for(const row of rows){
@@ -408,18 +410,29 @@ function Export-ToolboxHtmlReport {
   function enableResizableColumns(){
     document.querySelectorAll('.table-scroll table').forEach(function(table){
       const headers=table.querySelectorAll('thead th');
+      const columns=table.querySelectorAll('colgroup col');
       if(!headers.length){return;}
       table.style.width='max-content';
       table.style.minWidth='100%';
-      headers.forEach(function(header){
+      headers.forEach(function(header,index){
+        const column=columns[index];
+        if(column && !column.style.width){
+          column.style.width=Math.max(90,header.getBoundingClientRect().width) + 'px';
+        }
+      });
+      headers.forEach(function(header,index){
         if(header.querySelector('.col-resizer')){return;}
         const resizer=document.createElement('span');
         resizer.className='col-resizer';
         header.appendChild(resizer);
         let startX=0;
         let startWidth=0;
+        const column=columns[index];
         const onMove=function(event){
           const nextWidth=Math.max(90,startWidth + (event.clientX - startX));
+          if(column){
+            column.style.width=nextWidth + 'px';
+          }
           header.style.width=nextWidth + 'px';
         };
         const onUp=function(){
@@ -430,7 +443,7 @@ function Export-ToolboxHtmlReport {
         resizer.addEventListener('mousedown', function(event){
           event.preventDefault();
           startX=event.clientX;
-          startWidth=header.getBoundingClientRect().width;
+          startWidth=column ? column.getBoundingClientRect().width : header.getBoundingClientRect().width;
           resizer.classList.add('active');
           window.addEventListener('mousemove', onMove);
           window.addEventListener('mouseup', onUp);
