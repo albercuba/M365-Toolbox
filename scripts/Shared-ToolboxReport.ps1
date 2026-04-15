@@ -7,6 +7,26 @@ $ProgressPreference = "SilentlyContinue"
 
 $script:ToolboxTenantLabel = ""
 
+function Get-ToolboxExceptionMessage {
+    param(
+        [Parameter(Mandatory)]
+        [System.Exception]$Exception
+    )
+
+    $messages = [System.Collections.Generic.List[string]]::new()
+    $current = $Exception
+
+    while ($null -ne $current) {
+        if ($current.Message -and -not $messages.Contains($current.Message)) {
+            [void]$messages.Add($current.Message.Trim())
+        }
+
+        $current = $current.InnerException
+    }
+
+    return ($messages -join " | ")
+}
+
 function Write-SectionHeader {
     param([string]$Title)
 
@@ -113,7 +133,7 @@ function Connect-ToolboxGraph {
     }
 
     Write-Host "[*] Starting device code authentication..." -ForegroundColor Yellow
-    Write-Host "[*] When the code appears, open https://login.microsoft.com/device" -ForegroundColor Yellow
+    Write-Host "[*] When the code appears, open https://microsoft.com/devicelogin" -ForegroundColor Yellow
 
     Disconnect-MgGraph -ErrorAction SilentlyContinue
 
@@ -137,7 +157,8 @@ function Connect-ToolboxGraph {
         Write-Host "[+] Connected to Microsoft Graph" -ForegroundColor Green
     }
     catch {
-        throw "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
+        $errorMessage = Get-ToolboxExceptionMessage -Exception $_.Exception
+        throw "Failed to connect to Microsoft Graph: $errorMessage"
     }
 }
 
