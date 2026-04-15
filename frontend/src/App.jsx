@@ -142,6 +142,422 @@ function parseUserList(value) {
   };
 }
 
+function escapeXml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function sanitizeFileName(value) {
+  return String(value || "report")
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase() || "report";
+}
+
+function sanitizeWorksheetName(value, usedNames) {
+  const normalized = String(value || "Sheet")
+    .replace(/[\[\]\\/*?:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 31) || "Sheet";
+
+  let candidate = normalized;
+  let suffix = 2;
+  while (usedNames.has(candidate)) {
+    const base = normalized.slice(0, Math.max(1, 31 - String(suffix).length - 1)).trim();
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  usedNames.add(candidate);
+  return candidate;
+}
+
+function stringifyReportValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => stringifyReportValue(entry)).filter(Boolean).join("\n");
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function getSpreadsheetCellType(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return "Number";
+  }
+
+  const text = stringifyReportValue(value).trim();
+  if (!text) {
+    return "String";
+  }
+
+  if (/^-?(?:\d+|\d*\.\d+)$/.test(text) && !/^0\d+/.test(text)) {
+    return "Number";
+  }
+
+  return "String";
+}
+
+function createWorkbookCellXml(value, styleId = "Cell") {
+  const type = getSpreadsheetCellType(value);
+  const text = stringifyReportValue(value);
+  return `<Cell ss:StyleID="${styleId}"><Data ss:Type="${type}">${escapeXml(text)}</Data></Cell>`;
+}
+
+function buildWorksheetXml(sheet) {
+  const headerXml = sheet.header?.length
+    ? `<Row>${sheet.header.map((cell) => createWorkbookCellXml(cell, "Header")).join("")}</Row>`
+    : "";
+
+  const rowsXml = (sheet.rows || [])
+    .map((row) => `<Row>${row.map((cell) => createWorkbookCellXml(cell)).join("")}</Row>`)
+    .join("");
+
+  return `
+    <Worksheet ss:Name="${escapeXml(sheet.name)}">
+      <Table>
+        ${headerXml}
+        ${rowsXml}
+      </Table>
+      <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+        <FreezePanes/>
+        <FrozenNoSplit/>
+        <SplitHorizontal>1</SplitHorizontal>
+        <TopRowBottomPane>1</TopRowBottomPane>
+        <ActivePane>2</ActivePane>
+        <ProtectObjects>False</ProtectObjects>
+        <ProtectScenarios>False</ProtectScenarios>
+      </WorksheetOptions>
+    </Worksheet>
+  `;
+}
+
+function buildWorkbookXml(sheets) {
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook
+  xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Styles>
+    <Style ss:ID="Default" ss:Name="Normal">
+      <Alignment ss:Vertical="Top" ss:WrapText="1" />
+      <Font ss:FontName="Calibri" ss:Size="11" />
+    </Style>
+    <Style ss:ID="Header">
+      <Alignment ss:Vertical="Top" ss:WrapText="1" />
+      <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" />
+      <Interior ss:Color="#DCE6F1" ss:Pattern="Solid" />
+    </Style>
+    <Style ss:ID="Cell">
+      <Alignment ss:Vertical="Top" ss:WrapText="1" />
+      <Font ss:FontName="Calibri" ss:Size="11" />
+    </Style>
+  </Styles>
+  ${sheets.map((sheet) => buildWorksheetXml(sheet)).join("")}
+</Workbook>`;
+}
+
+function extractReportDataFromHtml(html) {
+  const marker = "const DATA =";
+  const start = html.indexOf(marker);
+
+  if (start < 0) {
+    throw new Error("Unable to locate the report data in the HTML export.");
+  }
+
+  const jsonStart = html.indexOf("{", start);
+  if (jsonStart < 0) {
+    throw new Error("Unable to parse the embedded report data.");
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = jsonStart; index < html.length; index += 1) {
+    const character = html[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (character === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return JSON.parse(html.slice(jsonStart, index + 1));
+      }
+    }
+  }
+
+  throw new Error("The embedded report data appears to be incomplete.");
+}
+
+function buildSummaryRows(reportData) {
+  const rows = [];
+
+  if (reportData.title) rows.push(["Title", reportData.title]);
+  if (reportData.tenant) rows.push(["Tenant", reportData.tenant]);
+  if (reportData.subtitle) rows.push(["Subtitle", reportData.subtitle]);
+  if (reportData.reportDate) rows.push(["Generated", reportData.reportDate]);
+
+  if (Array.isArray(reportData.stripItems)) {
+    reportData.stripItems.forEach((item) => {
+      rows.push([item.label || "Strip Item", item.value ?? ""]);
+    });
+  }
+
+  if (Array.isArray(reportData.kpis)) {
+    reportData.kpis.forEach((item) => {
+      rows.push([`KPI: ${item.label || "Value"}`, [item.value, item.sub].filter(Boolean).join(" | ")]);
+    });
+  }
+
+  if (Array.isArray(reportData.services)) {
+    rows.push(["Services", reportData.services.length]);
+    if (reportData.totalItems !== undefined) rows.push(["Total Items", reportData.totalItems]);
+    if (reportData.activeItems !== undefined) rows.push(["Active Items", reportData.activeItems]);
+    if (reportData.totalGB !== undefined) rows.push(["Total Used (GB)", reportData.totalGB]);
+
+    reportData.services.forEach((service) => {
+      rows.push([`${service.Name} Items`, service.TotalItems ?? ""]);
+      rows.push([`${service.Name} Active`, service.ActiveItems ?? ""]);
+      rows.push([`${service.Name} Used (GB)`, service.TotalGB ?? ""]);
+    });
+  }
+
+  return rows;
+}
+
+function buildWorkbookSheetsFromReport(reportData) {
+  const usedNames = new Set();
+  const sheets = [];
+  const summaryRows = buildSummaryRows(reportData);
+
+  sheets.push({
+    name: sanitizeWorksheetName("Summary", usedNames),
+    header: ["Field", "Value"],
+    rows: summaryRows.length ? summaryRows : [["Report", reportData.title || "M365 Report"]]
+  });
+
+  if (Array.isArray(reportData.sections)) {
+    reportData.sections.forEach((section, index) => {
+      const sheetName = sanitizeWorksheetName(section.title || `Section ${index + 1}`, usedNames);
+      if (Array.isArray(section.columns) && section.columns.length > 0) {
+        const header = section.columns.map((column) => column.header || column.key || "Value");
+        const rows = Array.isArray(section.rows)
+          ? section.rows.map((row) =>
+            section.columns.map((column) => stringifyReportValue(row?.[column.key]))
+          )
+          : [];
+
+        sheets.push({
+          name: sheetName,
+          header,
+          rows: rows.length ? rows : [header.map(() => "")]
+        });
+        return;
+      }
+
+      sheets.push({
+        name: sheetName,
+        header: ["Details"],
+        rows: [[section.text || "No tabular data in this section."]]
+      });
+    });
+  }
+
+  if (Array.isArray(reportData.services)) {
+    reportData.services.forEach((service, index) => {
+      const sheetName = sanitizeWorksheetName(service.Name || `Service ${index + 1}`, usedNames);
+      const rows = Array.isArray(service.Rows)
+        ? service.Rows.map((row) => [
+          row.DisplayName ?? "",
+          row.Principal ?? "",
+          row.UsedGB ?? "",
+          row.Url ?? ""
+        ])
+        : [];
+
+      sheets.push({
+        name: sheetName,
+        header: ["Name", "Principal", "Used (GB)", "URL"],
+        rows: rows.length ? rows : [["", "", "", ""]]
+      });
+    });
+  }
+
+  return sheets;
+}
+
+function createExcelExportBlob(html) {
+  const reportData = extractReportDataFromHtml(html);
+  const sheets = buildWorkbookSheetsFromReport(reportData);
+  return new Blob([buildWorkbookXml(sheets)], {
+    type: "application/vnd.ms-excel"
+  });
+}
+
+function downloadBlob(blob, fileName) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}
+
+function prepareHtmlForPdf(html) {
+  const printStyles = `
+    <style>
+      @page { margin: 12mm; }
+      body::before { display: none !important; }
+      .topbar { position: static !important; backdrop-filter: none !important; }
+      .page { max-width: none !important; padding: 0 !important; }
+      .table-scroll { max-height: none !important; overflow: visible !important; }
+      a { color: inherit !important; text-decoration: none !important; }
+    </style>
+  `;
+
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${printStyles}</head>`);
+  }
+
+  return `${printStyles}${html}`;
+}
+
+function openPdfPrintDialog(html) {
+  return new Promise((resolve, reject) => {
+    const printableHtml = prepareHtmlForPdf(html);
+    const blob = new Blob([printableHtml], { type: "text/html" });
+    const url = window.URL.createObjectURL(blob);
+    const iframe = document.createElement("iframe");
+
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.setAttribute("aria-hidden", "true");
+
+    let settled = false;
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        iframe.remove();
+      }, 1000);
+    };
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const fail = (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    iframe.onload = () => {
+      const printWindow = iframe.contentWindow;
+      if (!printWindow) {
+        fail(new Error("Unable to open the report for PDF export."));
+        return;
+      }
+
+      printWindow.onafterprint = finish;
+      window.setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+          window.setTimeout(finish, 1500);
+        } catch (error) {
+          fail(error);
+        }
+      }, 150);
+    };
+
+    iframe.onerror = () => {
+      fail(new Error("Unable to load the printable report."));
+    };
+
+    iframe.src = url;
+    document.body.appendChild(iframe);
+  });
+}
+
+async function fetchHtmlReport(runId) {
+  const response = await fetch(`${apiBase}/runs/${runId}/html`);
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+
+  if (!response.ok) {
+    if (contentType.includes("application/json")) {
+      try {
+        const parsed = JSON.parse(text);
+        throw new Error(parsed.message || "Failed to load the HTML report.");
+      } catch (error) {
+        if (error instanceof Error && error.message) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error(`Failed to load the HTML report (${response.status}).`);
+  }
+
+  return text;
+}
+
 function CategoryIcon({ category }) {
   const normalized = (category || "Other").toLowerCase();
   let path = "M12 3.5a8.5 8.5 0 1 0 8.5 8.5A8.51 8.51 0 0 0 12 3.5Zm0 4.25a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 12 7.75Zm2.25 8.5h-4.5v-1.5h.75v-2.25h-.75V11h3v3.75h1.5Z";
@@ -284,6 +700,7 @@ export function App() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [toasts, setToasts] = useState([]);
+  const [exportingFormat, setExportingFormat] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
@@ -534,6 +951,42 @@ export function App() {
     );
   };
 
+  const handleExportReport = async (format) => {
+    if (!activeRun?.id) {
+      return;
+    }
+
+    setExportingFormat(format);
+    setError("");
+    setSuccess("");
+
+    try {
+      const html = await fetchHtmlReport(activeRun.id);
+      const reportBaseName = sanitizeFileName(
+        (artifacts.find((artifact) => artifact.type === "html")?.name || activeRun.scriptName || "report")
+          .replace(/\.[^.]+$/, "")
+      );
+
+      if (format === "excel") {
+        downloadBlob(createExcelExportBlob(html), `${reportBaseName}.xml`);
+        setSuccess("Excel export downloaded.");
+        return;
+      }
+
+      if (format === "pdf") {
+        await openPdfPrintDialog(html);
+        setSuccess("Print dialog opened. Choose Save as PDF.");
+        return;
+      }
+
+      throw new Error("Unsupported export format requested.");
+    } catch (exportError) {
+      setError(exportError.message);
+    } finally {
+      setExportingFormat("");
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!selectedScript) return;
@@ -665,6 +1118,7 @@ export function App() {
     .sort((a, b) => (runCountsByScriptId[b.id] || 0) - (runCountsByScriptId[a.id] || 0))
     .slice(0, 3);
   const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
+  const htmlArtifact = artifacts.find((artifact) => artifact.type === "html");
   const compromisedTargetPreview = selectedScript?.id === "m365-compromised-account-remediation"
     ? parseUserList(formValues.userPrincipalName)
     : null;
@@ -684,6 +1138,48 @@ export function App() {
   });
   const scriptGroups = groupScriptsByCategory(filteredScripts);
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
+
+  const renderReportExportActions = ({ includePreview = false } = {}) => {
+    if (!activeRun?.id) {
+      return null;
+    }
+
+    return (
+      <>
+        <a
+          className="filter-btn active-all"
+          href={htmlArtifact
+            ? `${apiBase}/runs/${activeRun.id}/artifacts/${encodeURIComponent(htmlArtifact.id)}`
+            : `${apiBase}/runs/${activeRun.id}/html`}
+          download={htmlArtifact?.name || `${sanitizeFileName(activeRun.scriptName)}.html`}
+        >
+          HTML
+        </a>
+        <button
+          type="button"
+          className="filter-btn"
+          onClick={() => handleExportReport("excel")}
+          disabled={Boolean(exportingFormat)}
+        >
+          {exportingFormat === "excel" ? "Building..." : "Excel"}
+        </button>
+        <button
+          type="button"
+          className="filter-btn"
+          onClick={() => handleExportReport("pdf")}
+          disabled={Boolean(exportingFormat)}
+        >
+          {exportingFormat === "pdf" ? "Preparing..." : "PDF"}
+        </button>
+        {includePreview ? (
+          <a className="filter-btn" href={`${apiBase}/runs/${activeRun.id}/html`} target="_blank" rel="noreferrer">
+            Preview
+          </a>
+        ) : null}
+      </>
+    );
+  };
+
   return (
     <div className="app-shell">
       <div className="toast-stack" aria-live="polite" aria-atomic="true">
@@ -1169,14 +1665,13 @@ export function App() {
                                     </div>
                                   </div>
                                   <div className="artifact-actions">
-                                    <a className="filter-btn active-all" href={`${apiBase}/runs/${activeRun?.id}/artifacts/${encodeURIComponent(artifact.id)}`}>
-                                      Download
-                                    </a>
                                     {artifact.type === "html" ? (
-                                      <a className="filter-btn" href={`${apiBase}/runs/${activeRun?.id}/html`} target="_blank" rel="noreferrer">
-                                        Preview
+                                      renderReportExportActions({ includePreview: true })
+                                    ) : (
+                                      <a className="filter-btn active-all" href={`${apiBase}/runs/${activeRun?.id}/artifacts/${encodeURIComponent(artifact.id)}`}>
+                                        Download
                                       </a>
-                                    ) : null}
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -1236,11 +1731,7 @@ export function App() {
                           <div className="card-header">
                             <span className="card-title">HTML Report</span>
                             <span className="card-badge badge-ok">preview</span>
-                            {activeRun?.id ? (
-                              <a className="filter-btn active-all" href={`${apiBase}/runs/${activeRun.id}/html`} download={`m365-mfa-report-${activeRun.id}.html`}>
-                                Download
-                              </a>
-                            ) : null}
+                            {renderReportExportActions()}
                           </div>
                           <div className="card-body report-card-body">
                             <iframe title="HTML report preview" className="report-frame" src={`${apiBase}/runs/${activeRun.id}/html`} />
