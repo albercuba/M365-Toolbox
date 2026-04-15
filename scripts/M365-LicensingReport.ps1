@@ -142,7 +142,7 @@ $skuRows = foreach ($sku in $reportSkus) {
 }
 
 $unlicensedUsers = [System.Collections.Generic.List[object]]::new()
-$multiLicenseUsers = [System.Collections.Generic.List[object]]::new()
+$licenseDetailUsers = [System.Collections.Generic.List[object]]::new()
 $licensedUsers = 0
 
 foreach ($user in $users) {
@@ -162,8 +162,15 @@ foreach ($user in $users) {
         })
     }
 
-    if ($assignedLicenses.Count -gt 1) {
-        [void]$multiLicenseUsers.Add([pscustomobject]@{
+    $shouldIncludeInLicenseSection = if ($PaidLicensesOnly) {
+        $assignedLicenses.Count -gt 0
+    }
+    else {
+        $assignedLicenses.Count -gt 1
+    }
+
+    if ($shouldIncludeInLicenseSection) {
+        [void]$licenseDetailUsers.Add([pscustomobject]@{
             DisplayName       = [string]$user.displayName
             UserPrincipalName = [string]$user.userPrincipalName
             LicenseCount      = $assignedLicenses.Count
@@ -213,15 +220,15 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Licensing Report" -Tenant 
         rows = @($unlicensedUsers | Sort-Object DisplayName)
     },
     @{
-        title = if ($PaidLicensesOnly) { "Users With Multiple Paid Licenses" } else { "Users With Multiple Licenses" }
-        badge = "$($multiLicenseUsers.Count) users"
+        title = if ($PaidLicensesOnly) { "Users With Paid Licenses" } else { "Users With Multiple Licenses" }
+        badge = "$($licenseDetailUsers.Count) users"
         columns = @(
             @{ key = "DisplayName"; header = "Name" },
             @{ key = "UserPrincipalName"; header = "UPN" },
             @{ key = "LicenseCount"; header = "Count" },
             @{ key = "Licenses"; header = "Licenses" }
         )
-        rows = @($multiLicenseUsers | Sort-Object LicenseCount -Descending)
+        rows = @($licenseDetailUsers | Sort-Object LicenseCount -Descending, DisplayName)
     }
 )
 
