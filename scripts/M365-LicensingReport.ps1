@@ -3,7 +3,8 @@ param(
     [string]$TenantId,
     [string]$OutputPath,
     [string]$ExportHtml,
-    [switch]$IncludeDisabledUsers
+    [switch]$IncludeDisabledUsers,
+    [switch]$PaidLicensesOnly
 )
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
@@ -11,6 +12,34 @@ param(
 Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("User.Read.All", "Directory.Read.All", "Organization.Read.All")
 Resolve-ToolboxTenantLabel
+
+function Test-IsPaidSku {
+    param(
+        [Parameter(Mandatory)]
+        $Sku
+    )
+
+    $skuPartNumber = [string]$Sku.skuPartNumber
+    if (-not $skuPartNumber) {
+        return $false
+    }
+
+    $freeOrTrialPatterns = @(
+        'FREE',
+        'TRIAL',
+        'VIRAL',
+        'EXPLORATORY',
+        'DEVELOPER'
+    )
+
+    foreach ($pattern in $freeOrTrialPatterns) {
+        if ($skuPartNumber -match $pattern) {
+            return $false
+        }
+    }
+
+    return $true
+}
 
 Write-SectionHeader "COLLECTING LICENSING DATA"
 
@@ -24,8 +53,15 @@ if (-not $IncludeDisabledUsers) {
     $users = @($users | Where-Object { $_.accountEnabled -eq $true })
 }
 
+$reportSkus = if ($PaidLicensesOnly) {
+    @($skus | Where-Object { Test-IsPaidSku -Sku $_ })
+}
+else {
+    @($skus)
+}
+
 $skuMap = @{}
-$skuRows = foreach ($sku in $skus) {
+$skuRows = foreach ($sku in $reportSkus) {
     $skuMap[[string]$sku.skuId] = [string]$sku.skuPartNumber
     [pscustomobject]@{
         Sku            = [string]$sku.skuPartNumber
@@ -42,7 +78,7 @@ $multiLicenseUsers = [System.Collections.Generic.List[object]]::new()
 $licensedUsers = 0
 
 foreach ($user in $users) {
-    $assignedLicenses = @($user.assignedLicenses)
+    $assignedLicenses = @($user.assignedLicenses | Where-Object { $skuMap.ContainsKey([string]$_.skuId) })
     $licenseNames = @($assignedLicenses | ForEach-Object { $skuMap[[string]$_.skuId] } | Where-Object { $_ })
 
     if ($assignedLicenses.Count -gt 0) {
@@ -73,16 +109,17 @@ $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "Licensing" -OutputP
 
 Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Licensing Report" -Tenant $tenantName -Subtitle "License assignment and SKU consumption" -Kpis @(
     @{ label = "Users"; value = $users.Count; sub = "Scoped users"; cls = "neutral" },
-    @{ label = "Licensed"; value = $licensedUsers; sub = "Users with licenses"; cls = "ok" },
-    @{ label = "Unlicensed"; value = $unlicensedUsers.Count; sub = "Users without licenses"; cls = if ($unlicensedUsers.Count -gt 0) { "warn" } else { "ok" } },
-    @{ label = "SKUs"; value = $skuRows.Count; sub = "Subscribed products"; cls = "neutral" }
+    @{ label = "Licensed"; value = $licensedUsers; sub = if ($PaidLicensesOnly) { "Users with paid licenses" } else { "Users with licenses" }; cls = "ok" },
+    @{ label = "Unlicensed"; value = $unlicensedUsers.Count; sub = if ($PaidLicensesOnly) { "Users without paid licenses" } else { "Users without licenses" }; cls = if ($unlicensedUsers.Count -gt 0) { "warn" } else { "ok" } },
+    @{ label = "SKUs"; value = $skuRows.Count; sub = if ($PaidLicensesOnly) { "Paid subscribed products" } else { "Subscribed products" }; cls = "neutral" }
 ) -StripItems @(
     @{ label = "Tenant"; value = $tenantName },
     @{ label = "User Scope"; value = if ($IncludeDisabledUsers) { "All users" } else { "Enabled only" } },
+    @{ label = "License Scope"; value = if ($PaidLicensesOnly) { "Paid only" } else { "All licenses" } },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
     @{
-        title = "Subscribed SKUs"
+        title = if ($PaidLicensesOnly) { "Paid Subscribed SKUs" } else { "Subscribed SKUs" }
         badge = "$($skuRows.Count) products"
         columns = @(
             @{ key = "Sku"; header = "SKU" },
@@ -107,7 +144,7 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Licensing Report" -Tenant 
         rows = @($unlicensedUsers | Sort-Object DisplayName)
     },
     @{
-        title = "Users With Multiple Licenses"
+        title = if ($PaidLicensesOnly) { "Users With Multiple Paid Licenses" } else { "Users With Multiple Licenses" }
         badge = "$($multiLicenseUsers.Count) users"
         columns = @(
             @{ key = "DisplayName"; header = "Name" },

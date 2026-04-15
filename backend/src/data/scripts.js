@@ -243,6 +243,13 @@ const licensingReportScript = {
       type: "checkbox",
       defaultValue: false
     },
+    {
+      id: "paidLicensesOnly",
+      label: "Only paid licenses",
+      type: "checkbox",
+      defaultValue: false,
+      helpText: "Best-effort filter that excludes common free and trial SKUs from the report."
+    },
     tenantField
   ]
 };
