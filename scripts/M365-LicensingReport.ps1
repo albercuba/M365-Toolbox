@@ -230,7 +230,12 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Licensing Report" -Tenant 
             @{ key = "LicenseCount"; header = "Count" },
             @{ key = "Licenses"; header = "Licenses" }
         )
-        rows = @($licenseDetailUsers | Sort-Object LicenseCount -Descending, DisplayName)
+        rows = @(
+            $licenseDetailUsers |
+                Sort-Object `
+                    @{ Expression = "LicenseCount"; Descending = $true },
+                    @{ Expression = "DisplayName"; Descending = $false }
+        )
     }
 )
 
