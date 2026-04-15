@@ -197,83 +197,278 @@ function stringifyReportValue(value) {
   return String(value);
 }
 
-function getSpreadsheetCellType(value) {
+function isSpreadsheetNumber(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
-    return "Number";
+    return true;
   }
 
   const text = stringifyReportValue(value).trim();
-  if (!text) {
-    return "String";
-  }
-
-  if (/^-?(?:\d+|\d*\.\d+)$/.test(text) && !/^0\d+/.test(text)) {
-    return "Number";
-  }
-
-  return "String";
+  return Boolean(text) && /^-?(?:\d+|\d*\.\d+)$/.test(text) && !/^0\d+/.test(text);
 }
 
-function createWorkbookCellXml(value, styleId = "Cell") {
-  const type = getSpreadsheetCellType(value);
-  const text = stringifyReportValue(value);
-  return `<Cell ss:StyleID="${styleId}"><Data ss:Type="${type}">${escapeXml(text)}</Data></Cell>`;
+function getColumnLabel(columnIndex) {
+  let value = columnIndex + 1;
+  let label = "";
+
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    value = Math.floor((value - 1) / 26);
+  }
+
+  return label;
 }
 
-function buildWorksheetXml(sheet) {
-  const headerXml = sheet.header?.length
-    ? `<Row>${sheet.header.map((cell) => createWorkbookCellXml(cell, "Header")).join("")}</Row>`
-    : "";
+function createWorksheetCellXml(value, rowIndex, columnIndex, styleIndex = 0) {
+  const cellReference = `${getColumnLabel(columnIndex)}${rowIndex}`;
 
-  const rowsXml = (sheet.rows || [])
-    .map((row) => `<Row>${row.map((cell) => createWorkbookCellXml(cell)).join("")}</Row>`)
+  if (isSpreadsheetNumber(value)) {
+    return `<c r="${cellReference}" s="${styleIndex}"><v>${escapeXml(stringifyReportValue(value))}</v></c>`;
+  }
+
+  return `<c r="${cellReference}" s="${styleIndex}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(stringifyReportValue(value))}</t></is></c>`;
+}
+
+function buildXlsxWorksheetXml(sheet) {
+  const allRows = [];
+
+  if (sheet.header?.length) {
+    allRows.push(sheet.header.map((value) => ({ value, styleIndex: 1 })));
+  }
+
+  (sheet.rows || []).forEach((row) => {
+    allRows.push(row.map((value) => ({ value, styleIndex: 0 })));
+  });
+
+  const rowXml = allRows
+    .map((cells, rowIndex) => {
+      const cellsXml = cells
+        .map((cell, columnIndex) => createWorksheetCellXml(cell.value, rowIndex + 1, columnIndex, cell.styleIndex))
+        .join("");
+
+      return `<row r="${rowIndex + 1}">${cellsXml}</row>`;
+    })
     .join("");
 
-  return `
-    <Worksheet ss:Name="${escapeXml(sheet.name)}">
-      <Table>
-        ${headerXml}
-        ${rowsXml}
-      </Table>
-      <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
-        <FreezePanes/>
-        <FrozenNoSplit/>
-        <SplitHorizontal>1</SplitHorizontal>
-        <TopRowBottomPane>1</TopRowBottomPane>
-        <ActivePane>2</ActivePane>
-        <ProtectObjects>False</ProtectObjects>
-        <ProtectScenarios>False</ProtectScenarios>
-      </WorksheetOptions>
-    </Worksheet>
-  `;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetFormatPr defaultRowHeight="15"/>
+  <sheetData>${rowXml}</sheetData>
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>`;
 }
 
-function buildWorkbookXml(sheets) {
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook
-  xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:x="urn:schemas-microsoft-com:office:excel"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:html="http://www.w3.org/TR/REC-html40">
-  <Styles>
-    <Style ss:ID="Default" ss:Name="Normal">
-      <Alignment ss:Vertical="Top" ss:WrapText="1" />
-      <Font ss:FontName="Calibri" ss:Size="11" />
-    </Style>
-    <Style ss:ID="Header">
-      <Alignment ss:Vertical="Top" ss:WrapText="1" />
-      <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" />
-      <Interior ss:Color="#DCE6F1" ss:Pattern="Solid" />
-    </Style>
-    <Style ss:ID="Cell">
-      <Alignment ss:Vertical="Top" ss:WrapText="1" />
-      <Font ss:FontName="Calibri" ss:Size="11" />
-    </Style>
-  </Styles>
-  ${sheets.map((sheet) => buildWorksheetXml(sheet)).join("")}
-</Workbook>`;
+function buildXlsxWorkbookXml(sheets) {
+  const sheetXml = sheets
+    .map((sheet, index) => `<sheet name="${escapeXml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`)
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>${sheetXml}</sheets>
+</workbook>`;
+}
+
+function buildXlsxWorkbookRelsXml(sheets) {
+  const sheetRels = sheets
+    .map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`)
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${sheetRels}
+  <Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+}
+
+function buildXlsxStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font>
+      <sz val="11"/>
+      <name val="Calibri"/>
+      <family val="2"/>
+    </font>
+    <font>
+      <b/>
+      <sz val="11"/>
+      <name val="Calibri"/>
+      <family val="2"/>
+    </font>
+  </fonts>
+  <fills count="2">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+  </fills>
+  <borders count="1">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  </cellStyleXfs>
+  <cellXfs count="2">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1">
+      <alignment vertical="top" wrapText="1"/>
+    </xf>
+    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyAlignment="1">
+      <alignment vertical="top" wrapText="1"/>
+    </xf>
+  </cellXfs>
+  <cellStyles count="1">
+    <cellStyle name="Normal" xfId="0" builtinId="0"/>
+  </cellStyles>
+</styleSheet>`;
+}
+
+function buildXlsxContentTypesXml(sheets) {
+  const worksheetOverrides = sheets
+    .map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  ${worksheetOverrides}
+</Types>`;
+}
+
+function buildXlsxRootRelsXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+}
+
+function createCrc32Table() {
+  const table = new Uint32Array(256);
+
+  for (let index = 0; index < 256; index += 1) {
+    let crc = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 1) ? (0xedb88320 ^ (crc >>> 1)) : (crc >>> 1);
+    }
+    table[index] = crc >>> 0;
+  }
+
+  return table;
+}
+
+const CRC32_TABLE = createCrc32Table();
+
+function computeCrc32(bytes) {
+  let crc = 0xffffffff;
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    crc = CRC32_TABLE[(crc ^ bytes[index]) & 0xff] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function toUtf8Bytes(value) {
+  return new TextEncoder().encode(value);
+}
+
+function concatUint8Arrays(chunks) {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+
+  chunks.forEach((chunk) => {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  });
+
+  return combined;
+}
+
+function setUint16(view, offset, value) {
+  view.setUint16(offset, value, true);
+}
+
+function setUint32(view, offset, value) {
+  view.setUint32(offset, value >>> 0, true);
+}
+
+function getDosDateTime(value) {
+  const date = value instanceof Date && !Number.isNaN(value.getTime()) ? value : new Date();
+  const year = Math.max(1980, date.getFullYear());
+  const dosDate = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+
+  return { dosDate, dosTime };
+}
+
+function createStoredZip(files) {
+  const localChunks = [];
+  const centralChunks = [];
+  let offset = 0;
+
+  files.forEach((file) => {
+    const nameBytes = toUtf8Bytes(file.name);
+    const dataBytes = file.data instanceof Uint8Array ? file.data : toUtf8Bytes(file.data);
+    const { dosDate, dosTime } = getDosDateTime(file.lastModified);
+    const crc32 = computeCrc32(dataBytes);
+
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+    setUint32(localView, 0, 0x04034b50);
+    setUint16(localView, 4, 20);
+    setUint16(localView, 6, 0);
+    setUint16(localView, 8, 0);
+    setUint16(localView, 10, dosTime);
+    setUint16(localView, 12, dosDate);
+    setUint32(localView, 14, crc32);
+    setUint32(localView, 18, dataBytes.length);
+    setUint32(localView, 22, dataBytes.length);
+    setUint16(localView, 26, nameBytes.length);
+    setUint16(localView, 28, 0);
+    localHeader.set(nameBytes, 30);
+
+    localChunks.push(localHeader, dataBytes);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+    setUint32(centralView, 0, 0x02014b50);
+    setUint16(centralView, 4, 20);
+    setUint16(centralView, 6, 20);
+    setUint16(centralView, 8, 0);
+    setUint16(centralView, 10, 0);
+    setUint16(centralView, 12, dosTime);
+    setUint16(centralView, 14, dosDate);
+    setUint32(centralView, 16, crc32);
+    setUint32(centralView, 20, dataBytes.length);
+    setUint32(centralView, 24, dataBytes.length);
+    setUint16(centralView, 28, nameBytes.length);
+    setUint16(centralView, 30, 0);
+    setUint16(centralView, 32, 0);
+    setUint16(centralView, 34, 0);
+    setUint16(centralView, 36, 0);
+    setUint32(centralView, 38, 0);
+    setUint32(centralView, 42, offset);
+    centralHeader.set(nameBytes, 46);
+
+    centralChunks.push(centralHeader);
+    offset += localHeader.length + dataBytes.length;
+  });
+
+  const centralDirectory = concatUint8Arrays(centralChunks);
+  const endOfCentralDirectory = new Uint8Array(22);
+  const endView = new DataView(endOfCentralDirectory.buffer);
+  setUint32(endView, 0, 0x06054b50);
+  setUint16(endView, 4, 0);
+  setUint16(endView, 6, 0);
+  setUint16(endView, 8, files.length);
+  setUint16(endView, 10, files.length);
+  setUint32(endView, 12, centralDirectory.length);
+  setUint32(endView, 16, offset);
+  setUint16(endView, 20, 0);
+
+  return concatUint8Arrays([...localChunks, centralDirectory, endOfCentralDirectory]);
 }
 
 function extractReportDataFromHtml(html) {
@@ -425,8 +620,35 @@ function buildWorkbookSheetsFromReport(reportData) {
 function createExcelExportBlob(html) {
   const reportData = extractReportDataFromHtml(html);
   const sheets = buildWorkbookSheetsFromReport(reportData);
-  return new Blob([buildWorkbookXml(sheets)], {
-    type: "application/vnd.ms-excel"
+  const workbookFiles = [
+    {
+      name: "[Content_Types].xml",
+      data: buildXlsxContentTypesXml(sheets)
+    },
+    {
+      name: "_rels/.rels",
+      data: buildXlsxRootRelsXml()
+    },
+    {
+      name: "xl/workbook.xml",
+      data: buildXlsxWorkbookXml(sheets)
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      data: buildXlsxWorkbookRelsXml(sheets)
+    },
+    {
+      name: "xl/styles.xml",
+      data: buildXlsxStylesXml()
+    },
+    ...sheets.map((sheet, index) => ({
+      name: `xl/worksheets/sheet${index + 1}.xml`,
+      data: buildXlsxWorksheetXml(sheet)
+    }))
+  ];
+
+  return new Blob([createStoredZip(workbookFiles)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
 }
 
@@ -1006,7 +1228,7 @@ export function App() {
         tenantName: reportData.tenant || activeRun.payload?.tenantId || "Tenant",
         scriptName: activeRun.scriptName || reportData.title || "Report",
         reportDate: reportData.reportDate || activeRun.finishedAt || activeRun.startedAt || activeRun.requestedAt,
-        extension: format === "excel" ? "xls" : format
+        extension: format === "excel" ? "xlsx" : format
       });
 
       if (format === "html") {
