@@ -21,19 +21,44 @@ function Get-DirectoryObjectLabel {
         return ""
     }
 
-    if ($DirectoryObject.userPrincipalName) {
-        return "{0} ({1})" -f [string]$DirectoryObject.displayName, [string]$DirectoryObject.userPrincipalName
+    $displayName = if ($DirectoryObject.PSObject.Properties.Name -contains 'displayName') {
+        [string]$DirectoryObject.displayName
+    }
+    else {
+        ""
     }
 
-    if ($DirectoryObject.mail) {
-        return "{0} ({1})" -f [string]$DirectoryObject.displayName, [string]$DirectoryObject.mail
+    $userPrincipalName = if ($DirectoryObject.PSObject.Properties.Name -contains 'userPrincipalName') {
+        [string]$DirectoryObject.userPrincipalName
+    }
+    else {
+        ""
     }
 
-    if ($DirectoryObject.displayName) {
-        return [string]$DirectoryObject.displayName
+    if ($userPrincipalName) {
+        return "{0} ({1})" -f $displayName, $userPrincipalName
     }
 
-    return [string]$DirectoryObject.id
+    $mail = if ($DirectoryObject.PSObject.Properties.Name -contains 'mail') {
+        [string]$DirectoryObject.mail
+    }
+    else {
+        ""
+    }
+
+    if ($mail) {
+        return "{0} ({1})" -f $displayName, $mail
+    }
+
+    if ($displayName) {
+        return $displayName
+    }
+
+    if ($DirectoryObject.PSObject.Properties.Name -contains 'id') {
+        return [string]$DirectoryObject.id
+    }
+
+    return ""
 }
 
 $groups = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups?`$filter=groupTypes/any(c:c eq 'Unified')&`$select=id,displayName,createdDateTime,renewedDateTime,visibility&`$top={0}" -f $MaxGroupsToInspect))
