@@ -14,19 +14,60 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING GROUP LIFECYCLE DATA"
 
+function Get-DirectoryObjectLabel {
+    param($DirectoryObject)
+
+    if (-not $DirectoryObject) {
+        return ""
+    }
+
+    if ($DirectoryObject.userPrincipalName) {
+        return "{0} ({1})" -f [string]$DirectoryObject.displayName, [string]$DirectoryObject.userPrincipalName
+    }
+
+    if ($DirectoryObject.mail) {
+        return "{0} ({1})" -f [string]$DirectoryObject.displayName, [string]$DirectoryObject.mail
+    }
+
+    if ($DirectoryObject.displayName) {
+        return [string]$DirectoryObject.displayName
+    }
+
+    return [string]$DirectoryObject.id
+}
+
 $groups = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups?`$filter=groupTypes/any(c:c eq 'Unified')&`$select=id,displayName,createdDateTime,renewedDateTime,visibility&`$top={0}" -f $MaxGroupsToInspect))
+$detailRows = [System.Collections.Generic.List[object]]::new()
 $rows = foreach ($group in $groups) {
-    $owners = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/owners?`$select=id" -f $group.id))
-    $members = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/members?`$select=id" -f $group.id))
+    $owners = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/owners?`$select=id,displayName,userPrincipalName,mail" -f $group.id))
+    $members = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/members?`$select=id,displayName,userPrincipalName,mail" -f $group.id))
+    $groupName = [string]$group.displayName
+
+    foreach ($owner in $owners) {
+        [void]$detailRows.Add([pscustomobject]@{
+            Group      = $groupName
+            MemberName = Get-DirectoryObjectLabel -DirectoryObject $owner
+            Role       = "Owner"
+        })
+    }
+
+    foreach ($member in $members) {
+        [void]$detailRows.Add([pscustomobject]@{
+            Group      = $groupName
+            MemberName = Get-DirectoryObjectLabel -DirectoryObject $member
+            Role       = "Member"
+        })
+    }
 
     [pscustomobject]@{
-        GroupName  = [string]$group.displayName
-        Visibility = [string]$group.visibility
-        Owners     = $owners.Count
-        Members    = $members.Count
-        Created    = if ($group.createdDateTime) { (Get-Date $group.createdDateTime).ToString("yyyy-MM-dd") } else { "" }
-        Renewed    = if ($group.renewedDateTime) { (Get-Date $group.renewedDateTime).ToString("yyyy-MM-dd") } else { "Never" }
-        OwnerState = if ($owners.Count -eq 0) { "Ownerless" } else { "Owned" }
+        GroupName    = $groupName
+        GroupFilter  = $groupName
+        Visibility   = [string]$group.visibility
+        Owners       = $owners.Count
+        Members      = $members.Count
+        Created      = if ($group.createdDateTime) { (Get-Date $group.createdDateTime).ToString("yyyy-MM-dd") } else { "" }
+        Renewed      = if ($group.renewedDateTime) { (Get-Date $group.renewedDateTime).ToString("yyyy-MM-dd") } else { "Never" }
+        OwnerState   = if ($owners.Count -eq 0) { "Ownerless" } else { "Owned" }
     }
 }
 
@@ -44,8 +85,14 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Group Lifecycle Report" -T
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
     @{
+        id = "group-lifecycle-summary"
         title = "Group Lifecycle"
         badge = "$($rows.Count) groups"
+        rowAction = @{
+            targetSectionId = "group-lifecycle-details"
+            sourceKey = "GroupFilter"
+            ariaLabel = "Open group lifecycle details for this group"
+        }
         columns = @(
             @{ key = "GroupName"; header = "Group" },
             @{ key = "Visibility"; header = "Visibility"; type = "pill" },
@@ -56,6 +103,20 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Group Lifecycle Report" -T
             @{ key = "OwnerState"; header = "Owner State"; type = "pill" }
         )
         rows = @($rows | Sort-Object Members -Descending)
+    },
+    @{
+        id = "group-lifecycle-details"
+        title = "Group Lifecycle Details"
+        badge = "$($detailRows.Count) assignment(s)"
+        filterKey = "Group"
+        filterLabel = "Group Filter"
+        filterPlaceholder = "Type a Group name"
+        columns = @(
+            @{ key = "Group"; header = "Group" },
+            @{ key = "MemberName"; header = "Member Name" },
+            @{ key = "Role"; header = "Role"; type = "pill" }
+        )
+        rows = @($detailRows | Sort-Object Group, Role, MemberName)
     }
 )
 
