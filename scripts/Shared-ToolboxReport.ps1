@@ -357,7 +357,7 @@ function Export-ToolboxHtmlReport {
     .card-title{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);flex:1}
     .card-badge{font-size:.7rem;padding:.18rem .55rem;border-radius:4px;background:rgba(15,124,192,.1);color:var(--accent)}
     .card-body{padding:1.25rem}
-    .card-text{font-size:.92rem;color:var(--text2)}
+    .card-text{font-family:var(--mono);font-size:.78rem;color:var(--text2)}
     .table-filter{display:grid;gap:.35rem;margin-bottom:.8rem}
     .table-filter-label{font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
     .table-filter-input{width:100%;max-width:320px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg3);color:var(--text);font-family:var(--mono);font-size:.74rem;padding:.55rem .7rem;outline:none}
