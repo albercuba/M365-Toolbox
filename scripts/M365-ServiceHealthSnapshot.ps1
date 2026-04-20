@@ -17,22 +17,24 @@ $health = @(Get-MgServiceAnnouncementHealthOverview -All -ErrorAction Stop)
 $issues = @(Get-MgServiceAnnouncementIssue -All -ErrorAction Stop)
 
 $healthRows = foreach ($item in $health) {
+    $lastModifiedDateTime = Get-DirectoryObjectValue -DirectoryObject $item -Name 'lastModifiedDateTime'
     [pscustomobject]@{
-        Service     = [string]$item.service
-        Status      = [string]$item.status
-        Feature     = [string]$item.feature
-        LastUpdated = if ($item.lastModifiedDateTime) { (Get-Date $item.lastModifiedDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
+        Service     = [string](Get-DirectoryObjectValue -DirectoryObject $item -Name 'service')
+        Status      = [string](Get-DirectoryObjectValue -DirectoryObject $item -Name 'status')
+        Feature     = [string](Get-DirectoryObjectValue -DirectoryObject $item -Name 'feature')
+        LastUpdated = if ($lastModifiedDateTime) { (Get-Date $lastModifiedDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
     }
 }
 
 $issueRows = foreach ($issue in $issues) {
+    $startDateTime = Get-DirectoryObjectValue -DirectoryObject $issue -Name 'startDateTime'
     [pscustomobject]@{
-        Id             = [string]$issue.id
-        Service        = [string]$issue.service
-        Classification = [string]$issue.classification
-        Status         = [string]$issue.status
-        Title          = [string]$issue.title
-        StartTime      = if ($issue.startDateTime) { (Get-Date $issue.startDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
+        Id             = [string](Get-DirectoryObjectValue -DirectoryObject $issue -Name 'id')
+        Service        = [string](Get-DirectoryObjectValue -DirectoryObject $issue -Name 'service')
+        Classification = [string](Get-DirectoryObjectValue -DirectoryObject $issue -Name 'classification')
+        Status         = [string](Get-DirectoryObjectValue -DirectoryObject $issue -Name 'status')
+        Title          = [string](Get-DirectoryObjectValue -DirectoryObject $issue -Name 'title')
+        StartTime      = if ($startDateTime) { (Get-Date $startDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
     }
 }
 
