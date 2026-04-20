@@ -534,7 +534,17 @@ const mailboxPermissionAuditScript = {
   runner: "generic-html",
   outputBaseName: "m365-mailbox-permission-audit",
   outputs: "Writes an HTML mailbox permission dashboard to the configured output directory.",
-  fields: [tenantField]
+  fields: [
+    {
+      id: "mailboxIdentity",
+      label: "Mailbox Filter",
+      type: "textarea",
+      required: false,
+      placeholder: "shared@contoso.com, user@contoso.com",
+      helpText: "Optional. Comma or newline separated mailbox display names, aliases, primary SMTP addresses, or UPNs."
+    },
+    tenantField
+  ]
 };
 
 const externalSharingLinksReportScript = {
