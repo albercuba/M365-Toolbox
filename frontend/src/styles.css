@@ -804,7 +804,7 @@ textarea {
 }
 
 .run-banner {
-  margin: 1rem 1rem 0;
+  margin: 1rem 1rem 1rem;
   padding: 1rem 1.1rem;
   border: 1px solid var(--border2);
   border-radius: var(--r2);
@@ -1488,7 +1488,7 @@ tr:last-child td {
   }
 
   .run-banner {
-    margin: 0.75rem 0.75rem 0;
+    margin: 0.75rem 0.75rem 1rem;
   }
 
   .table-actions {
@@ -1549,6 +1549,7 @@ tr:last-child td {
   .run-banner {
     margin-left: 0.75rem;
     margin-right: 0.75rem;
+    margin-bottom: 1rem;
   }
 
   .sidebar-header,
