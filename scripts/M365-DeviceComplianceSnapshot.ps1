@@ -7,13 +7,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.DeviceManagement")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("DeviceManagementManagedDevices.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING DEVICE COMPLIANCE DATA"
 
-$devices = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$top=999')
+$devices = @(Get-MgDeviceManagementManagedDevice -All -Property "deviceName,userPrincipalName,operatingSystem,complianceState,managedDeviceOwnerType,lastSyncDateTime" -ErrorAction Stop)
 $rows = foreach ($device in $devices) {
     [pscustomobject]@{
         DeviceName      = [string]$device.deviceName
