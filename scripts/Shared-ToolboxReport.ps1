@@ -358,6 +358,10 @@ function Export-ToolboxHtmlReport {
     .card-badge{font-size:.7rem;padding:.18rem .55rem;border-radius:4px;background:rgba(15,124,192,.1);color:var(--accent)}
     .card-body{padding:1.25rem}
     .card-text{font-size:.92rem;color:var(--text2)}
+    .table-filter{display:grid;gap:.35rem;margin-bottom:.8rem}
+    .table-filter-label{font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+    .table-filter-input{width:100%;max-width:320px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg3);color:var(--text);font-family:var(--mono);font-size:.74rem;padding:.55rem .7rem;outline:none}
+    .table-filter-input:focus{border-color:var(--accent2)}
     .pill{display:inline-block;padding:.12rem .45rem;border-radius:4px;font-size:.7rem}
     .badge-stack{display:flex;flex-wrap:wrap;gap:.35rem}
     .ok{background:rgba(21,128,61,.1);color:var(--ok)}
@@ -397,6 +401,7 @@ function Export-ToolboxHtmlReport {
   document.querySelector('.topbar-time').textContent = 'Generated: ' + DATA.reportDate;
   document.title = DATA.title + (DATA.tenant ? ' - ' + DATA.tenant : '');
   function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function attr(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
   function pillClass(v){
     const text=String(v==null?'':v).toLowerCase();
     if(text.includes('success')||text.includes('ok')||text.includes('enabled')||text.includes('registered')||text==='yes'){return 'ok';}
@@ -411,15 +416,20 @@ function Export-ToolboxHtmlReport {
   function renderKpis(items){
     return (items||[]).map(function(item){const cls=item.cls||'neutral';return '<div class="kpi '+cls+'"><div class="kpi-label">'+esc(item.label)+'</div><div class="kpi-value">'+esc(item.value)+'</div><div class="kpi-sub">'+esc(item.sub||'')+'</div></div>';}).join('');
   }
-  function renderRows(columns,rows){
+  function renderRows(columns,rows,section){
     if(!rows||rows.length===0){return '<div class="empty">No records returned.</div>';}
-    let html='<div class="table-scroll"><table><colgroup>';
+    let html='';
+    if(section && section.filterKey){
+      html+='<div class="table-filter"><label class="table-filter-label" for="table-filter-'+attr(section.id||section.title||'section')+'">'+esc(section.filterLabel||'Filter')+'</label><input id="table-filter-'+attr(section.id||section.title||'section')+'" class="table-filter-input" type="search" placeholder="'+attr(section.filterPlaceholder||'Type to filter rows')+'" data-filter-key="'+attr(section.filterKey)+'" autocomplete="off" /></div>';
+    }
+    html+='<div class="table-scroll"><table><colgroup>';
     for(let index=0;index<columns.length;index++){html+='<col />';}
     html+='</colgroup><thead><tr>';
     for(const col of columns){html+='<th>'+esc(col.header||col.key)+'</th>';}
     html+='</tr></thead><tbody>';
     for(const row of rows){
-      html+='<tr>';
+      const filterValue=section&&section.filterKey?String(row[section.filterKey]==null?'':row[section.filterKey]).toLowerCase():'';
+      html+='<tr'+(section&&section.filterKey?' data-filter-value="'+attr(filterValue)+'"':'')+'>';
       for(const col of columns){
         const raw=row[col.key];
         if(col.type==='pill'){html+='<td><span class="pill '+pillClass(raw)+'">'+esc(raw||'—')+'</span></td>';continue;}
@@ -485,17 +495,33 @@ function Export-ToolboxHtmlReport {
       });
     });
   }
+  function enableTableFilters(){
+    document.querySelectorAll('.table-filter-input').forEach(function(input){
+      const tableScroll=input.closest('.card-body').querySelector('.table-scroll');
+      const rows=tableScroll?tableScroll.querySelectorAll('tbody tr'):[];
+      const applyFilter=function(){
+        const query=input.value.trim().toLowerCase();
+        rows.forEach(function(row){
+          const haystack=row.getAttribute('data-filter-value')||'';
+          row.style.display=!query||haystack.includes(query)?'':'none';
+        });
+      };
+      input.addEventListener('input', applyFilter);
+      applyFilter();
+    });
+  }
   function renderSections(items){
     return (items||[]).map(function(section){
       let inner='';
       if(section.text){inner='<div class="card-text">'+esc(section.text)+'</div>';}
-      if(section.columns){inner=renderRows(section.columns,section.rows||[]);}
+      if(section.columns){inner=renderRows(section.columns,section.rows||[],section);}
       return '<div class="card"><div class="card-header"><span class="card-title">'+esc(section.title)+'</span>'+(section.badge?'<span class="card-badge">'+esc(section.badge)+'</span>':'')+'</div><div class="card-body">'+inner+'</div></div>';
     }).join('');
   }
   document.getElementById('server-strip').innerHTML=renderStrip(DATA.stripItems);
   document.getElementById('hero').innerHTML=renderKpis(DATA.kpis);
   document.getElementById('sections').innerHTML=renderSections(DATA.sections);
+  enableTableFilters();
   enableResizableColumns();
   </script>
 </body>

@@ -72,7 +72,6 @@ try {
                 Mailbox        = $mailboxLabel
                 Delegate       = [string]$permission.User
                 PermissionType = "Full Access"
-                AccessSource   = "Get-ExoMailboxPermission"
             })
         }
 
@@ -81,7 +80,6 @@ try {
                 Mailbox        = $mailboxLabel
                 Delegate       = [string]$permission.Trustee
                 PermissionType = "Send As"
-                AccessSource   = "Get-RecipientPermission"
             })
         }
 
@@ -120,13 +118,16 @@ try {
             rows = @($rows | Sort-Object FullAccess -Descending)
         },
         @{
+            id = "mailbox-permission-details"
             title = "Mailbox Permission Details"
             badge = "$($detailRows.Count) assignment(s)"
+            filterKey = "Mailbox"
+            filterLabel = "Mailbox Filter"
+            filterPlaceholder = "Type a mailbox name or UPN to filter this table"
             columns = @(
                 @{ key = "Mailbox"; header = "Mailbox" },
                 @{ key = "Delegate"; header = "Delegate" },
-                @{ key = "PermissionType"; header = "Permission Type"; type = "pill" },
-                @{ key = "AccessSource"; header = "Access Source" }
+                @{ key = "PermissionType"; header = "Permission Type"; type = "pill" }
             )
             rows = @($detailRows | Sort-Object Mailbox, PermissionType, Delegate)
         }
