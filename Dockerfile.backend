@@ -9,7 +9,7 @@ RUN apt-get update \
     && apt-get install -y powershell libgdiplus libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pwsh -NoLogo -NoProfile -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module Microsoft.Graph.Authentication,Microsoft.Graph.Users,Microsoft.Graph.Identity.SignIns,Microsoft.Graph.DirectoryObjects,Microsoft.Graph.Identity.DirectoryManagement,Microsoft.Graph.Reports,Microsoft.Graph.Sites,Microsoft.Graph.DeviceManagement,ExchangeOnlineManagement,ImportExcel -Scope AllUsers -Force -AllowClobber"
+RUN pwsh -NoLogo -NoProfile -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module Microsoft.Graph -RequiredVersion 2.36.1 -Scope AllUsers -Force -AllowClobber; Install-Module ExchangeOnlineManagement,ImportExcel -Scope AllUsers -Force -AllowClobber"
 
 WORKDIR /app
 
