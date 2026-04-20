@@ -130,7 +130,7 @@ try {
             badge = "$($detailRows.Count) assignment(s)"
             filterKey = "Mailbox"
             filterLabel = "Mailbox Filter"
-            filterPlaceholder = "Type a mailbox name or UPN to filter this table"
+            filterPlaceholder = "Type a Mailbox name or UPN"
             columns = @(
                 @{ key = "Mailbox"; header = "Mailbox" },
                 @{ key = "Delegate"; header = "Delegate" },
