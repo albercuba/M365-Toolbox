@@ -7,14 +7,14 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Devices.ServiceAnnouncement")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("ServiceHealth.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING SERVICE HEALTH DATA"
 
-$health = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/admin/serviceAnnouncement/healthOverviews')
-$issues = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/admin/serviceAnnouncement/issues')
+$health = @(Get-MgServiceAnnouncementHealthOverview -All -ErrorAction Stop)
+$issues = @(Get-MgServiceAnnouncementIssue -All -ErrorAction Stop)
 
 $healthRows = foreach ($item in $health) {
     [pscustomobject]@{
