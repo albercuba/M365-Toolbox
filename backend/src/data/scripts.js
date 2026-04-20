@@ -551,9 +551,9 @@ const externalSharingLinksReportScript = {
   id: "m365-external-sharing-links-report",
   name: "M365 External Sharing Links Report",
   category: "SharePoint",
-  summary: "Review SharePoint external sharing posture and active sites with shared-content exposure.",
+  summary: "Review SharePoint external sharing posture and site-level sharing link counts.",
   description:
-    "Exports an HTML dashboard that combines SharePoint sharing settings with active site inventory for the selected usage period.",
+    "Exports an HTML dashboard that combines SharePoint sharing settings, site inventory, and per-site sharing link counts for the selected usage period.",
   scriptRelativePath: "M365-ExternalSharingLinksReport.ps1",
   scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
   runner: "generic-html",

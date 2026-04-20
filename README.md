@@ -92,7 +92,7 @@ Audit, hygiene, and operations reports:
 - `scripts/M365-MailboxPermissionAudit.ps1`
   Audits Full Access and Send As delegation across mailboxes.
 - `scripts/M365-ExternalSharingLinksReport.ps1`
-  Reviews SharePoint external sharing posture and active sites.
+  Reviews SharePoint external sharing posture and site-level sharing link counts.
 - `scripts/M365-DistributionGroupAudit.ps1`
   Audits distribution group ownership, membership, and external sender exposure.
 - `scripts/M365-ServiceHealthSnapshot.ps1`
