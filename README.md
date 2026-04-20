@@ -292,7 +292,7 @@ Default production ports:
 The production compose file supports these environment overrides:
 
 - `FRONTEND_ORIGIN`
-  Public frontend URL used by backend CORS validation
+  Public frontend URL used by backend CORS validation, for example `https://m365toolbox.domain.com`
 - `FRONTEND_PORT`
   Host port mapped to the frontend container, default `8080`
 - `BACKEND_PORT`
@@ -322,7 +322,7 @@ Why this variant is different:
 Recommended variables for Coolify or Portainer:
 
 - `FRONTEND_ORIGIN`
-  Set this to the public URL of the deployed frontend, for example `https://toolbox.example.com`
+  Set this to the public URL of the deployed frontend, for example `https://toolbox.example.com`. The backend normalizes the value to its origin, so an optional trailing slash or pasted path is tolerated.
 - `FRONTEND_PORT`
   Optional host port override if you are not using a platform-managed proxy
 

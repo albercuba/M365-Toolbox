@@ -6,8 +6,30 @@ import { scriptsRouter } from "./routes/scripts.js";
 const app = express();
 const port = Number(process.env.PORT || 3001);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "";
+
+function normalizeConfiguredOrigin(origin) {
+  const trimmedOrigin = origin.trim();
+  if (!trimmedOrigin) {
+    return "";
+  }
+
+  try {
+    const url = new URL(trimmedOrigin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "";
+    }
+
+    return url.origin;
+  } catch {
+    return trimmedOrigin.replace(/\/+$/, "");
+  }
+}
+
 const allowedOrigins = frontendOrigin
-  ? frontendOrigin.split(",").map((origin) => origin.trim()).filter(Boolean)
+  ? frontendOrigin
+      .split(",")
+      .map((origin) => normalizeConfiguredOrigin(origin))
+      .filter(Boolean)
   : [];
 
 function isAllowedToolboxOrigin(origin) {
@@ -15,12 +37,14 @@ function isAllowedToolboxOrigin(origin) {
     return true;
   }
 
-  if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+  const normalizedOrigin = normalizeConfiguredOrigin(origin);
+
+  if (allowedOrigins.length === 0 || allowedOrigins.includes(normalizedOrigin)) {
     return true;
   }
 
   try {
-    const url = new URL(origin);
+    const url = new URL(normalizedOrigin);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return false;
     }
