@@ -20,9 +20,14 @@ try { $settings = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsof
 $siteUsage = @(Import-GraphCsvReport -RequestUri ("https://graph.microsoft.com/v1.0/reports/getSharePointSiteUsageDetail(period='{0}')" -f $ReportPeriod))
 
 $rows = foreach ($site in $siteUsage) {
+    $ownerValue = [string](Get-DirectoryObjectValue -DirectoryObject $site -Name 'OwnerDisplayName')
+    if (-not $ownerValue) {
+        $ownerValue = [string](Get-DirectoryObjectValue -DirectoryObject $site -Name 'Owner Display Name')
+    }
+
     [pscustomobject]@{
         SiteUrl      = [string]$site.'Site URL'
-        Owner        = [string]$site.OwnerDisplayName
+        Owner        = $ownerValue
         StorageGB    = if ($site.'Storage Used (Byte)') { [math]::Round(([double]$site.'Storage Used (Byte)') / 1GB, 2) } else { 0 }
         ActiveFiles  = [string]$site.'Active File Count'
         LastActivity = [string]$site.'Last Activity Date'
