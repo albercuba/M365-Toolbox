@@ -14,6 +14,48 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING GROUP LIFECYCLE DATA"
 
+function Get-DirectoryObjectValue {
+    param(
+        [Parameter(Mandatory)]
+        $DirectoryObject,
+
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    if ($null -eq $DirectoryObject) {
+        return $null
+    }
+
+    $property = $DirectoryObject.PSObject.Properties |
+        Where-Object { $_.Name -ieq $Name } |
+        Select-Object -First 1
+    if ($property) {
+        return $property.Value
+    }
+
+    if ($DirectoryObject -is [System.Collections.IDictionary]) {
+        foreach ($key in $DirectoryObject.Keys) {
+            if ([string]$key -ieq $Name) {
+                return $DirectoryObject[$key]
+            }
+        }
+    }
+
+    $additionalProperties = $DirectoryObject.PSObject.Properties |
+        Where-Object { $_.Name -eq 'AdditionalProperties' } |
+        Select-Object -First 1
+    if ($additionalProperties -and $additionalProperties.Value -is [System.Collections.IDictionary]) {
+        foreach ($key in $additionalProperties.Value.Keys) {
+            if ([string]$key -ieq $Name) {
+                return $additionalProperties.Value[$key]
+            }
+        }
+    }
+
+    return $null
+}
+
 function Get-DirectoryObjectLabel {
     param($DirectoryObject)
 
@@ -21,30 +63,14 @@ function Get-DirectoryObjectLabel {
         return ""
     }
 
-    $displayName = if ($DirectoryObject.PSObject.Properties.Name -contains 'displayName') {
-        [string]$DirectoryObject.displayName
-    }
-    else {
-        ""
-    }
-
-    $userPrincipalName = if ($DirectoryObject.PSObject.Properties.Name -contains 'userPrincipalName') {
-        [string]$DirectoryObject.userPrincipalName
-    }
-    else {
-        ""
-    }
+    $displayName = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'displayName')
+    $userPrincipalName = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'userPrincipalName')
 
     if ($userPrincipalName) {
         return "{0} ({1})" -f $displayName, $userPrincipalName
     }
 
-    $mail = if ($DirectoryObject.PSObject.Properties.Name -contains 'mail') {
-        [string]$DirectoryObject.mail
-    }
-    else {
-        ""
-    }
+    $mail = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'mail')
 
     if ($mail) {
         return "{0} ({1})" -f $displayName, $mail
@@ -54,8 +80,9 @@ function Get-DirectoryObjectLabel {
         return $displayName
     }
 
-    if ($DirectoryObject.PSObject.Properties.Name -contains 'id') {
-        return [string]$DirectoryObject.id
+    $id = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'id')
+    if ($id) {
+        return $id
     }
 
     return ""
