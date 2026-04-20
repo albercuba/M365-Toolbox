@@ -13,7 +13,26 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING DEVICE COMPLIANCE DATA"
 
-$devices = @(Get-MgDeviceManagementManagedDevice -All -Property "deviceName,userPrincipalName,operatingSystem,complianceState,managedDeviceOwnerType,lastSyncDateTime" -ErrorAction Stop)
+$devices = @()
+$collectionWarnings = @()
+
+try {
+    $devices = @(Get-MgDeviceManagementManagedDevice -All -Property "deviceName,userPrincipalName,operatingSystem,complianceState,managedDeviceOwnerType,lastSyncDateTime" -ErrorAction Stop)
+}
+catch {
+    $errorMessage = Get-ToolboxExceptionMessage -Exception $_.Exception
+    if ($errorMessage -match 'Request not applicable to target tenant') {
+        $collectionWarnings += "Managed devices are not available for this tenant. This usually means Intune or Microsoft Endpoint Manager is not enabled, licensed, or configured for the connected tenant."
+    }
+    else {
+        $collectionWarnings += "Managed devices query failed: $errorMessage"
+    }
+}
+
+foreach ($warningMessage in $collectionWarnings) {
+    Write-Warning "  [!] $warningMessage"
+}
+
 $rows = foreach ($device in $devices) {
     [pscustomobject]@{
         DeviceName      = [string]$device.deviceName
@@ -37,6 +56,11 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Device Compliance Snapshot
     @{ label = "Tenant"; value = $tenantName },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
+    @{
+        title = "Collection Status"
+        badge = if ($collectionWarnings.Count -gt 0) { "Warning" } else { "Healthy" }
+        text = if ($collectionWarnings.Count -gt 0) { ($collectionWarnings -join "`n") } else { "Managed device data was collected successfully." }
+    },
     @{
         title = "Managed Devices"
         badge = "$($rows.Count) devices"
