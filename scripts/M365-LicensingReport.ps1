@@ -10,7 +10,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users", "Microsoft.Graph.Identity.DirectoryManagement")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("User.Read.All", "Directory.Read.All", "Organization.Read.All")
 Resolve-ToolboxTenantLabel
 
@@ -188,11 +188,8 @@ function Get-FriendlySkuName {
 
 Write-SectionHeader "COLLECTING LICENSING DATA"
 
-$userUri = 'https://graph.microsoft.com/v1.0/users?$select=id,displayName,userPrincipalName,accountEnabled,department,usageLocation,assignedLicenses&$top=999'
-$skuUri = 'https://graph.microsoft.com/v1.0/subscribedSkus'
-
-$users = @(Invoke-GraphCollection -Uri $userUri)
-$skus = @(Invoke-GraphCollection -Uri $skuUri)
+$users = @(Get-MgUser -All -Property Id,DisplayName,UserPrincipalName,AccountEnabled,Department,UsageLocation,AssignedLicenses -ErrorAction Stop)
+$skus = @(Get-MgSubscribedSku -All -Property SkuId,SkuPartNumber,ConsumedUnits,PrepaidUnits -ErrorAction Stop)
 
 if (-not $IncludeDisabledUsers) {
     $users = @($users | Where-Object { $_.accountEnabled -eq $true })
