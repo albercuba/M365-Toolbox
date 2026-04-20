@@ -1265,7 +1265,7 @@ textarea {
 .shortcut-link {
   border: 1px solid var(--border);
   background: var(--bg2);
-  color: var(--text);
+  color: var(--text3);
   border-radius: var(--r);
   padding: 0.45rem 0.6rem;
   text-align: left;
