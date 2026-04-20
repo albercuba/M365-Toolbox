@@ -262,7 +262,6 @@ function Normalize-DelimitedValue {
 
 function Get-DirectoryObjectValue {
     param(
-        [Parameter(Mandatory)]
         $DirectoryObject,
 
         [Parameter(Mandatory)]
