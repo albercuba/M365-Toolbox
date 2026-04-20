@@ -33,16 +33,18 @@ foreach ($warningMessage in $collectionWarnings) {
     Write-Warning "  [!] $warningMessage"
 }
 
-$rows = foreach ($device in $devices) {
-    [pscustomobject]@{
-        DeviceName      = [string]$device.deviceName
-        UserPrincipal   = [string]$device.userPrincipalName
-        OS              = [string]$device.operatingSystem
-        ComplianceState = [string]$device.complianceState
-        Ownership       = [string]$device.managedDeviceOwnerType
-        LastSync        = if ($device.lastSyncDateTime) { (Get-Date $device.lastSyncDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
+$rows = @(
+    foreach ($device in $devices) {
+        [pscustomobject]@{
+            DeviceName      = [string]$device.deviceName
+            UserPrincipal   = [string]$device.userPrincipalName
+            OS              = [string]$device.operatingSystem
+            ComplianceState = [string]$device.complianceState
+            Ownership       = [string]$device.managedDeviceOwnerType
+            LastSync        = if ($device.lastSyncDateTime) { (Get-Date $device.lastSyncDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
+        }
     }
-}
+)
 
 $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "DeviceCompliance" -OutputPath $OutputPath
 $tenantName = if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" }
