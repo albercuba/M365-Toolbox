@@ -9,7 +9,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Reports")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Sites.Read.All", "Reports.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 

@@ -238,7 +238,24 @@ function Import-GraphCsvReport {
     $tempFile = [System.IO.Path]::GetTempFileName()
 
     try {
-        Invoke-MgGraphRequest -Method GET -Uri $RequestUri -OutputFilePath $tempFile -ErrorAction Stop | Out-Null
+        if ($RequestUri -match "/reports/getSharePointSiteUsageDetail\(period='([^']+)'\)") {
+            Get-MgReportSharePointSiteUsageDetail -Period $matches[1] -OutFile $tempFile -ErrorAction Stop | Out-Null
+        }
+        elseif ($RequestUri -match "/reports/getSharePointSiteUsageDetail\(date=([0-9-]+)\)") {
+            Get-MgReportSharePointSiteUsageDetail -Date ([datetime]$matches[1]) -OutFile $tempFile -ErrorAction Stop | Out-Null
+        }
+        elseif ($RequestUri -match "/reports/getOneDriveUsageAccountDetail\(period='([^']+)'\)") {
+            Get-MgReportOneDriveUsageAccountDetail -Period $matches[1] -OutFile $tempFile -ErrorAction Stop | Out-Null
+        }
+        elseif ($RequestUri -match "/reports/getOneDriveUsageAccountDetail\(date=([0-9-]+)\)") {
+            Get-MgReportOneDriveUsageAccountDetail -Date ([datetime]$matches[1]) -OutFile $tempFile -ErrorAction Stop | Out-Null
+        }
+        elseif ($RequestUri -match "/reports/getMailboxUsageDetail\(period='([^']+)'\)") {
+            Get-MgReportMailboxUsageDetail -Period $matches[1] -OutFile $tempFile -ErrorAction Stop | Out-Null
+        }
+        else {
+            Invoke-MgGraphRequest -Method GET -Uri $RequestUri -OutputFilePath $tempFile -ErrorAction Stop | Out-Null
+        }
         $rawContent = [System.IO.File]::ReadAllText($tempFile, [System.Text.Encoding]::UTF8)
         $rawContent = $rawContent -replace "^[^R]*Report Refresh Date", "Report Refresh Date"
         return @($rawContent | ConvertFrom-Csv)
