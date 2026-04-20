@@ -245,6 +245,23 @@ function Normalize-DelimitedValue {
     )
 }
 
+function Get-GeoLocationString {
+    param($Location)
+
+    if (-not $Location) {
+        return ''
+    }
+
+    $parts = @()
+    foreach ($name in @('City', 'State', 'CountryOrRegion')) {
+        if ($Location.PSObject.Properties.Name -contains $name -and $Location.$name) {
+            $parts += [string]$Location.$name
+        }
+    }
+
+    return ($parts -join ', ')
+}
+
 function ConvertTo-ReportJson {
     param([object]$Value)
 
