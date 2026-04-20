@@ -8,24 +8,60 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Reports")
-Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Reports.Read.All", "Directory.Read.All")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Reports", "Microsoft.Graph.Sites")
+Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Reports.Read.All", "Directory.Read.All", "Sites.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING ANONYMOUS LINK EXPOSURE"
+
+function Get-SiteUsageValue {
+    param(
+        [Parameter(Mandatory)]
+        $Row,
+
+        [Parameter(Mandatory)]
+        [string[]]$Names
+    )
+
+    foreach ($name in $Names) {
+        $value = Get-DirectoryObjectValue -DirectoryObject $Row -Name $name
+        if ($null -ne $value -and [string]$value -ne '') {
+            return $value
+        }
+    }
+
+    return $null
+}
 
 $settings = $null
 try { $settings = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/admin/sharepoint/settings' -ErrorAction Stop } catch {}
 
 $sites = @(Import-GraphCsvReport -RequestUri ("https://graph.microsoft.com/v1.0/reports/getSharePointSiteUsageDetail(period='{0}')" -f $ReportPeriod))
+$siteUrlCache = @{}
 $rows = foreach ($site in $sites) {
+    $siteId = [string](Get-SiteUsageValue -Row $site -Names @('Site Id', 'SiteId'))
+    $siteUrl = [string](Get-SiteUsageValue -Row $site -Names @('Site URL', 'SiteUrl'))
+    if (-not $siteUrl -and $siteId) {
+        if (-not $siteUrlCache.ContainsKey($siteId)) {
+            try {
+                $siteLookup = Get-MgSite -SiteId $siteId -Property WebUrl -ErrorAction Stop
+                $siteUrlCache[$siteId] = [string]$siteLookup.WebUrl
+            }
+            catch {
+                $siteUrlCache[$siteId] = ''
+            }
+        }
+
+        $siteUrl = [string]$siteUrlCache[$siteId]
+    }
+
     [pscustomobject]@{
-        SiteUrl      = [string]$site.'Site URL'
-        Owner        = [string]$site.'Owner Display Name'
-        FileCount    = [int]($site.'File Count')
-        ActiveFiles  = [int]($site.'Active File Count')
+        SiteUrl      = $siteUrl
+        Owner        = [string](Get-SiteUsageValue -Row $site -Names @('Owner Display Name', 'OwnerDisplayName', 'Owner Principal Name'))
+        FileCount    = [int](Get-SiteUsageValue -Row $site -Names @('File Count', 'FileCount'))
+        ActiveFiles  = [int](Get-SiteUsageValue -Row $site -Names @('Active File Count', 'ActiveFileCount'))
         StorageGB    = if ($site.'Storage Used (Byte)') { [math]::Round(([double]$site.'Storage Used (Byte)') / 1GB, 2) } else { 0 }
-        LastActivity = [string]$site.'Last Activity Date'
+        LastActivity = [string](Get-SiteUsageValue -Row $site -Names @('Last Activity Date', 'LastActivityDate'))
     }
 }
 
@@ -60,7 +96,7 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Anonymous Link Exposure Re
         title = "Site Footprint"
         badge = "$($rows.Count) sites"
         columns = @(
-            @{ key = "SiteUrl"; header = "Site URL" },
+            @{ key = "SiteUrl"; header = "Site URL"; type = "link" },
             @{ key = "Owner"; header = "Owner" },
             @{ key = "StorageGB"; header = "Storage (GB)" },
             @{ key = "FileCount"; header = "Files" },
