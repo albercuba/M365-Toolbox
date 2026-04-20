@@ -2176,6 +2176,16 @@ export function App() {
               <div className="sections">
                 <div className="card">
                   <div className="card-header">
+                    <span className="card-title">Start Here</span>
+                    <span className="card-badge badge-neutral">home</span>
+                  </div>
+                  <div className="card-body">
+                    <div className="empty-row">Browse categories on the left, use filters to separate read-only and remediation scripts, and open any script to see prerequisites, examples, and runtime expectations before launch.</div>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="card-header">
                     <span className="card-title">Dashboard</span>
                     <span className="card-badge badge-neutral">{scripts.length} scripts</span>
                   </div>
@@ -2263,16 +2273,6 @@ export function App() {
                 </div>
 
                 {renderRecentRunsCard()}
-
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">Start Here</span>
-                    <span className="card-badge badge-neutral">home</span>
-                  </div>
-                  <div className="card-body">
-                    <div className="empty-row">Browse categories on the left, use filters to separate read-only and remediation scripts, and open any script to see prerequisites, examples, and runtime expectations before launch.</div>
-                  </div>
-                </div>
 
               </div>
             </div>
