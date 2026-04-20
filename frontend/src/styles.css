@@ -1411,6 +1411,11 @@ textarea {
   background: var(--bg2);
 }
 
+.recent-runs-scroll {
+  max-height: 272px;
+  overflow-y: auto;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

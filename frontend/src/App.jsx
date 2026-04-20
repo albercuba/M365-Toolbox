@@ -1552,7 +1552,7 @@ export function App() {
       {runs.length === 0 ? (
         <div className="empty-row">No runs yet. Launch a report to start building persistent history.</div>
       ) : (
-        <div className="table-scroll">
+        <div className="table-scroll recent-runs-scroll">
           <table>
             <thead>
               <tr>
@@ -1589,19 +1589,7 @@ export function App() {
     </div>
   );
 
-  const renderRecentRunsCard = ({ collapsible = false } = {}) => {
-    if (!collapsible) {
-      return (
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Recent Runs</span>
-            <span className="card-badge badge-neutral">{runs.length}</span>
-          </div>
-          {renderRecentRunsContent()}
-        </div>
-      );
-    }
-
+  const renderRecentRunsCard = () => {
     return (
       <div className={`card ${recentRunsOpen ? "" : "card-collapsed"}`}>
         <button type="button" className="card-header card-header-button" onClick={() => setRecentRunsOpen((current) => !current)}>
@@ -2164,7 +2152,7 @@ export function App() {
                         </div>
                       </div>
 
-                      {renderRecentRunsCard({ collapsible: true })}
+                      {renderRecentRunsCard()}
 
                       {activeRun?.id && hasHtmlArtifact ? (
                         <div className="card" ref={reportCardRef} tabIndex={-1}>
