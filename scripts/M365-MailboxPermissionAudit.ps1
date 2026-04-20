@@ -86,6 +86,7 @@ try {
         [void]$rows.Add([pscustomobject]@{
             DisplayName       = [string]$mailbox.DisplayName
             UserPrincipalName = [string]$mailbox.UserPrincipalName
+            MailboxFilter     = $mailboxLabel
             FullAccess        = $mailboxPerms.Count
             SendAs            = $recipientPerms.Count
             Exposure          = if (($mailboxPerms.Count + $recipientPerms.Count) -gt 3) { "Elevated" } elseif (($mailboxPerms.Count + $recipientPerms.Count) -gt 0) { "Delegated" } else { "Direct Owner Only" }
@@ -106,8 +107,14 @@ try {
         @{ label = "Mailbox Filter"; value = if ($requestedMailboxFilters.Count -gt 0) { $requestedMailboxFilters -join ", " } else { "All user and shared mailboxes" } }
     ) -Sections @(
         @{
+            id = "mailbox-permission-summary"
             title = "Mailbox Permission Summary"
             badge = "$($rows.Count) mailboxes"
+            rowAction = @{
+                targetSectionId = "mailbox-permission-details"
+                sourceKey = "MailboxFilter"
+                ariaLabel = "Open mailbox permission details for this mailbox"
+            }
             columns = @(
                 @{ key = "DisplayName"; header = "Mailbox" },
                 @{ key = "UserPrincipalName"; header = "UPN" },

@@ -375,6 +375,8 @@ function Export-ToolboxHtmlReport {
     td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;word-break:break-word}
     tr:last-child td{border-bottom:none}
     tbody tr:hover td{background:rgba(15,124,192,.05)}
+    tbody tr.table-row-action{cursor:pointer}
+    tbody tr.table-row-action td:first-child{text-decoration:underline;text-underline-offset:.18em}
     .empty{font-family:var(--mono);font-size:.78rem;color:var(--text3);font-style:italic}
     .card-text{white-space:pre-wrap;word-break:break-word}
     a{color:var(--accent)}
@@ -429,7 +431,13 @@ function Export-ToolboxHtmlReport {
     html+='</tr></thead><tbody>';
     for(const row of rows){
       const filterValue=section&&section.filterKey?String(row[section.filterKey]==null?'':row[section.filterKey]).toLowerCase():'';
-      html+='<tr'+(section&&section.filterKey?' data-filter-value="'+attr(filterValue)+'"':'')+'>';
+      const actionValue=section&&section.rowAction?String(row[section.rowAction.sourceKey]==null?'':row[section.rowAction.sourceKey]):'';
+      const rowClass=section&&section.rowAction?' class="table-row-action"':'';
+      const filterAttr=section&&section.filterKey?' data-filter-value="'+attr(filterValue)+'"':'';
+      const actionAttrs=section&&section.rowAction
+        ? ' data-action-target="'+attr(section.rowAction.targetSectionId||'')+'" data-action-filter="'+attr(actionValue)+'" tabindex="0" role="button" aria-label="'+attr(section.rowAction.ariaLabel||'Filter details for this row')+'"'
+        : '';
+      html+='<tr'+rowClass+filterAttr+actionAttrs+'>';
       for(const col of columns){
         const raw=row[col.key];
         if(col.type==='pill'){html+='<td><span class="pill '+pillClass(raw)+'">'+esc(raw||'—')+'</span></td>';continue;}
@@ -510,18 +518,42 @@ function Export-ToolboxHtmlReport {
       applyFilter();
     });
   }
+  function setSectionFilter(targetSectionId, value){
+    const input=document.getElementById('table-filter-'+targetSectionId);
+    if(!input){return;}
+    input.value=value||'';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus({ preventScroll: true });
+    const targetCard=input.closest('.card');
+    if(targetCard){targetCard.scrollIntoView({ behavior:'smooth', block:'start' });}
+  }
+  function enableRowActions(){
+    document.querySelectorAll('tr[data-action-target]').forEach(function(row){
+      const activate=function(){
+        setSectionFilter(row.getAttribute('data-action-target'), row.getAttribute('data-action-filter')||'');
+      };
+      row.addEventListener('click', activate);
+      row.addEventListener('keydown', function(event){
+        if(event.key==='Enter' || event.key===' '){
+          event.preventDefault();
+          activate();
+        }
+      });
+    });
+  }
   function renderSections(items){
     return (items||[]).map(function(section){
       let inner='';
       if(section.text){inner='<div class="card-text">'+esc(section.text)+'</div>';}
       if(section.columns){inner=renderRows(section.columns,section.rows||[],section);}
-      return '<div class="card"><div class="card-header"><span class="card-title">'+esc(section.title)+'</span>'+(section.badge?'<span class="card-badge">'+esc(section.badge)+'</span>':'')+'</div><div class="card-body">'+inner+'</div></div>';
+      return '<div class="card"'+(section.id?' id="'+attr(section.id)+'"':'')+'><div class="card-header"><span class="card-title">'+esc(section.title)+'</span>'+(section.badge?'<span class="card-badge">'+esc(section.badge)+'</span>':'')+'</div><div class="card-body">'+inner+'</div></div>';
     }).join('');
   }
   document.getElementById('server-strip').innerHTML=renderStrip(DATA.stripItems);
   document.getElementById('hero').innerHTML=renderKpis(DATA.kpis);
   document.getElementById('sections').innerHTML=renderSections(DATA.sections);
   enableTableFilters();
+  enableRowActions();
   enableResizableColumns();
   </script>
 </body>
