@@ -15,6 +15,15 @@ const runStore = new Map();
 const childStore = new Map();
 const queuedRunIds = [];
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function markRunActivity(run, timestamp = nowIso()) {
+  run.updatedAt = timestamp;
+  run.lastActivityAt = timestamp;
+}
+
 function ensureRuntimePaths() {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   fs.mkdirSync(RUN_STATE_DIR, { recursive: true });
@@ -50,14 +59,14 @@ function addLogEntry(run, stream, message) {
 
   const entry = {
     id: uuidv4(),
-    timestamp: new Date().toISOString(),
+    timestamp: nowIso(),
     stream,
     level,
     message: clean
   };
 
   run.logs.push(entry);
-  run.updatedAt = entry.timestamp;
+  markRunActivity(run, entry.timestamp);
 
   if (level === "progress" || (stream === "stdout" && clean.length > 8)) {
     run.currentStep = clean.replace(/^\[[^\]]+\]\s*/, "");
@@ -364,8 +373,8 @@ function finalizeRun(run, status, exitCode = null) {
   refreshArtifacts(run);
   run.status = status;
   run.exitCode = exitCode;
-  run.finishedAt = new Date().toISOString();
-  run.updatedAt = run.finishedAt;
+  run.finishedAt = nowIso();
+  markRunActivity(run, run.finishedAt);
   run.durationMs = run.startedAt ? new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime() : null;
   childStore.delete(run.id);
   persistRuns();
@@ -398,9 +407,9 @@ function startNextQueuedRun() {
 
 function launchRun(run) {
   run.status = "running";
-  run.startedAt = new Date().toISOString();
-  run.updatedAt = run.startedAt;
-  run.currentStep = "Launching PowerShell script";
+  run.startedAt = nowIso();
+  markRunActivity(run, run.startedAt);
+  run.currentStep = "Preparing PowerShell environment";
   addLogEntry(run, "stdout", "[+] Launching PowerShell script");
   persistRuns();
 
@@ -482,10 +491,14 @@ function loadPersistedRuns() {
         artifacts: savedRun.artifacts || { files: [] }
       };
 
+      if (!run.lastActivityAt) {
+        run.lastActivityAt = run.updatedAt || run.finishedAt || run.startedAt || run.requestedAt || nowIso();
+      }
+
       if (run.status === "running" || run.status === "queued" || run.status === "canceling") {
         run.status = "interrupted";
-        run.finishedAt = new Date().toISOString();
-        run.updatedAt = run.finishedAt;
+        run.finishedAt = nowIso();
+        markRunActivity(run, run.finishedAt);
         run.errorSummary = "The backend restarted before this run completed.";
         run.logs.push({
           id: uuidv4(),
@@ -509,10 +522,29 @@ function loadPersistedRuns() {
 loadPersistedRuns();
 setInterval(pruneExpiredRuns, 60 * 60 * 1000).unref();
 
+function getQueuePosition(runId) {
+  const queueIndex = queuedRunIds.indexOf(runId);
+  return queueIndex >= 0 ? queueIndex + 1 : null;
+}
+
 function cloneForResponse(run) {
   refreshArtifacts(run);
+  const queuePosition = run.status === "queued" ? getQueuePosition(run.id) : null;
+  const queueSize = queuedRunIds.length;
+  let currentStep = run.currentStep;
+
+  if (run.status === "queued" && queuePosition) {
+    currentStep = `Waiting for execution slot (${queuePosition} of ${queueSize} in queue)`;
+  } else if (run.status === "canceling") {
+    currentStep = "Stopping PowerShell script";
+  }
+
   return {
     ...run,
+    currentStep,
+    lastActivityAt: run.lastActivityAt || run.updatedAt || run.requestedAt,
+    queuePosition,
+    queueSize,
     commandArgs: undefined,
     artifacts: {
       ...run.artifacts,
@@ -562,11 +594,12 @@ export function startRun(scriptId, payload = {}, options = {}) {
     scriptName: script.name,
     mode: script.mode,
     status: activeRunningCount() >= MAX_CONCURRENT_RUNS ? "queued" : "running",
-    requestedAt: new Date().toISOString(),
+    requestedAt: nowIso(),
     queuedAt: null,
     startedAt: null,
     finishedAt: null,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso(),
+    lastActivityAt: null,
     payload: validatedPayload,
     command: ["pwsh", ...args].join(" "),
     commandArgs: args,
@@ -582,6 +615,8 @@ export function startRun(scriptId, payload = {}, options = {}) {
     cancelRequestedAt: null
   };
 
+  run.lastActivityAt = run.updatedAt;
+
   addLogEntry(run, "stdout", run.status === "queued"
     ? `[+] Queued for execution. Concurrency limit is ${MAX_CONCURRENT_RUNS}.`
     : "[+] Run accepted by backend");
@@ -589,6 +624,7 @@ export function startRun(scriptId, payload = {}, options = {}) {
   if (run.status === "queued") {
     run.queuedAt = run.requestedAt;
     queuedRunIds.push(run.id);
+    run.currentStep = `Waiting for execution slot (${getQueuePosition(run.id)} of ${queuedRunIds.length} in queue)`;
   }
 
   runStore.set(run.id, run);
@@ -616,7 +652,8 @@ export function cancelRun(runId) {
     if (index >= 0) {
       queuedRunIds.splice(index, 1);
     }
-    run.cancelRequestedAt = new Date().toISOString();
+    run.cancelRequestedAt = nowIso();
+    markRunActivity(run, run.cancelRequestedAt);
     addLogEntry(run, "stderr", "[!] Queued run canceled before launch");
     finalizeRun(run, "canceled", null);
     return cloneForResponse(run);
@@ -627,8 +664,9 @@ export function cancelRun(runId) {
     throw createError("Unable to cancel this run because no active process was found.", 409);
   }
 
-  run.cancelRequestedAt = new Date().toISOString();
+  run.cancelRequestedAt = nowIso();
   run.status = "canceling";
+  markRunActivity(run, run.cancelRequestedAt);
   addLogEntry(run, "stderr", "[!] Cancellation requested from UI");
   child.kill();
   persistRuns();

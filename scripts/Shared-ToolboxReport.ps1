@@ -37,6 +37,15 @@ function Write-SectionHeader {
     Write-Host $line -ForegroundColor Cyan
 }
 
+function Write-ProgressStep {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Message
+    )
+
+    Write-Host "[+] $Message" -ForegroundColor Cyan
+}
+
 function Add-TimestampToPath {
     param(
         [string]$Path,
@@ -74,6 +83,7 @@ function Assert-GraphModules {
         [string[]]$RequiredModules = @("Microsoft.Graph.Authentication")
     )
 
+    Write-ProgressStep "Checking required PowerShell modules"
     Write-Host ""
     Write-Host "[*] Checking required PowerShell modules..." -ForegroundColor Cyan
 
@@ -124,6 +134,7 @@ function Connect-ToolboxGraph {
     )
 
     Write-SectionHeader "CONNECTING TO MICROSOFT GRAPH"
+    Write-ProgressStep "Preparing Microsoft Graph device sign-in"
 
     if ($TenantId) {
         Write-Host "[*] Requested tenant: $TenantId"
@@ -154,6 +165,7 @@ function Connect-ToolboxGraph {
         if ($context -and $context.TenantId) {
             $script:ToolboxTenantLabel = [string]$context.TenantId
         }
+        Write-ProgressStep "Connected to Microsoft Graph"
         Write-Host "[+] Connected to Microsoft Graph" -ForegroundColor Green
     }
     catch {
@@ -163,6 +175,7 @@ function Connect-ToolboxGraph {
 }
 
 function Resolve-ToolboxTenantLabel {
+    Write-ProgressStep "Resolving tenant label"
     try {
         $domainResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/domains" -ErrorAction Stop
         $domains = @($domainResponse.value)
@@ -192,6 +205,7 @@ function Invoke-GraphCollection {
         [string]$Uri
     )
 
+    Write-ProgressStep "Requesting Microsoft Graph collection data"
     $items = [System.Collections.Generic.List[object]]::new()
     $nextLink = $Uri
 
@@ -220,6 +234,7 @@ function Import-GraphCsvReport {
         [string]$RequestUri
     )
 
+    Write-ProgressStep "Downloading Microsoft Graph CSV report"
     $tempFile = [System.IO.Path]::GetTempFileName()
 
     try {
@@ -287,6 +302,8 @@ function Export-ToolboxHtmlReport {
     if ($directory) {
         New-Item -ItemType Directory -Path $directory -Force | Out-Null
     }
+
+    Write-ProgressStep "Exporting HTML dashboard"
 
     $payload = @{
         title      = $Title

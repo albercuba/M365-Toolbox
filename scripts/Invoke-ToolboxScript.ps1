@@ -200,6 +200,7 @@ try {
         throw "Script file not found: $ScriptPath"
     }
 
+    Write-Host "[+] Inspecting script prerequisites..." -ForegroundColor Cyan
     $requiredModules = Get-RequiredModuleNames -Path $ScriptPath
     Install-MissingModules -ModuleNames $requiredModules
 
@@ -210,6 +211,8 @@ try {
     $childArguments = Get-ChildPowerShellArguments -TargetScriptPath $ScriptPath `
         -NamedArguments $namedArguments -PositionalArguments $positionalArguments
 
+    Write-Host "[+] PowerShell environment ready." -ForegroundColor Green
+    Write-Host "[+] Starting script execution..." -ForegroundColor Cyan
     & pwsh @childArguments
 
     if ($LASTEXITCODE) {

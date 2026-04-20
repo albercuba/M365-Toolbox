@@ -70,6 +70,54 @@ function formatDuration(value) {
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
+function formatRelativeTime(value, nowMs = Date.now()) {
+  if (!value) return "Pending";
+
+  const timestamp = typeof value === "number" ? value : new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) {
+    return "Pending";
+  }
+
+  const diffSeconds = Math.max(0, Math.round((nowMs - timestamp) / 1000));
+  if (diffSeconds < 5) return "just now";
+  if (diffSeconds < 60) return `${diffSeconds}s ago`;
+
+  const minutes = Math.floor(diffSeconds / 60);
+  const seconds = diffSeconds % 60;
+  if (minutes < 60) {
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${String(remainingMinutes).padStart(2, "0")}m ago`;
+}
+
+function getLiveDurationMs(run, nowMs = Date.now()) {
+  if (!run) {
+    return null;
+  }
+
+  if (run.durationMs !== null && run.durationMs !== undefined && !["running", "queued", "canceling"].includes(run.status)) {
+    return run.durationMs;
+  }
+
+  const anchor = run.startedAt || run.requestedAt;
+  if (!anchor) {
+    return run.durationMs ?? null;
+  }
+
+  return Math.max(0, nowMs - new Date(anchor).getTime());
+}
+
+function formatEstimatedRuntime(minutes) {
+  if (!minutes) {
+    return "Varies by tenant size";
+  }
+
+  return minutes === 1 ? "Usually about 1 minute" : `Usually about ${minutes} minutes`;
+}
+
 function formatOutputText(value, fallback) {
   const clean = stripAnsi(value || "").trim();
   return clean || fallback;
@@ -964,6 +1012,7 @@ export function App() {
   const [exportingFormat, setExportingFormat] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
   const [recentRunsOpen, setRecentRunsOpen] = useState(true);
   const [devicePromptDismissed, setDevicePromptDismissed] = useState(false);
@@ -973,6 +1022,7 @@ export function App() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [modeFilter, setModeFilter] = useState("all");
   const [theme, setTheme] = useState(() => getThemePreference());
+  const activeRunIsBusy = Boolean(activeRun && ["running", "queued", "canceling"].includes(activeRun.status));
 
   useEffect(() => {
     const load = async () => {
@@ -1068,6 +1118,18 @@ export function App() {
 
     return () => window.clearInterval(timer);
   }, [activeRun]);
+
+  useEffect(() => {
+    if (!activeRunIsBusy) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [activeRunIsBusy]);
 
   useEffect(() => {
     if (!activeRun?.id) {
@@ -1376,6 +1438,34 @@ export function App() {
 
   const devicePrompt = extractDeviceCodePrompt([activeRun?.stdout, activeRun?.stderr].filter(Boolean).join("\n"));
   const showDevicePrompt = Boolean(devicePrompt?.code) && activeRun?.status === "running" && !devicePromptDismissed;
+  const activeScriptDefinition = activeRun
+    ? scripts.find((script) => script.id === activeRun.scriptId) || selectedScript
+    : selectedScript;
+  const activeRunDurationMs = activeRun ? getLiveDurationMs(activeRun, nowMs) : null;
+  const activeRunLastActivityMs = activeRun?.lastActivityAt
+    ? Math.max(0, nowMs - new Date(activeRun.lastActivityAt).getTime())
+    : null;
+  const activeRunHeartbeatVisible = activeRun?.status === "running" && activeRunLastActivityMs !== null && activeRunLastActivityMs >= 20_000;
+  const activeRunBannerVisible = Boolean(activeRun && ["running", "queued", "canceling"].includes(activeRun.status));
+  const activeRunQueueLabel = activeRun?.status === "queued" && activeRun.queuePosition
+    ? `Position ${activeRun.queuePosition} of ${activeRun.queueSize || activeRun.queuePosition}`
+    : activeRun?.status === "queued"
+      ? "Waiting for queue update"
+      : activeRun?.status === "canceling"
+        ? "Stop requested"
+        : "Active now";
+  const activeRunBannerTitle = activeRun?.status === "queued"
+    ? "Run queued"
+    : activeRun?.status === "canceling"
+      ? "Canceling run"
+      : "Run in progress";
+  const activeRunHeartbeatText = activeRun?.status === "queued"
+    ? "This run is waiting for a free execution slot. You can leave the page open while the queue advances."
+    : activeRun?.status === "canceling"
+      ? "Waiting for PowerShell to stop cleanly. Some commands take a little time to exit."
+      : activeRunHeartbeatVisible
+        ? "Still running. Some Microsoft 365, Graph, and Exchange queries can take a few minutes before the next output appears."
+        : "";
   const normalizedSearch = scriptSearch.trim().toLowerCase();
   const runCountsByScriptId = runs.reduce((acc, run) => {
     acc[run.scriptId] = (acc[run.scriptId] || 0) + 1;
@@ -1471,6 +1561,9 @@ export function App() {
                     <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
                       {run.status}
                     </span>
+                    {run.status === "queued" && run.queuePosition ? (
+                      <div className="table-subtext">Queue {run.queuePosition} of {run.queueSize || run.queuePosition}</div>
+                    ) : null}
                   </td>
                   <td>{formatDate(run.requestedAt || run.startedAt)}</td>
                   <td className="table-actions">
@@ -1720,6 +1813,47 @@ export function App() {
         />
 
         <main className="main">
+          {activeRunBannerVisible ? (
+            <div className={`run-banner ${activeRun?.status === "queued" ? "tone-warn" : activeRun?.status === "canceling" ? "tone-crit" : "tone-active"}`}>
+              <div className="run-banner-head">
+                <div className="run-banner-title-wrap">
+                  <span className={`run-banner-spinner${activeRun?.status === "canceling" ? " canceling" : ""}`} aria-hidden="true" />
+                  <div>
+                    <div className="run-banner-eyebrow">{activeRun?.scriptName || "Script run"}</div>
+                    <div className="run-banner-title">{activeRunBannerTitle}</div>
+                  </div>
+                </div>
+                <span className={`pill ${activeRun?.status === "canceling" ? "badge-crit" : "badge-warn"}`}>
+                  {activeRun?.status}
+                </span>
+              </div>
+              <div className="run-banner-grid">
+                <div className="run-banner-item">
+                  <div className="method-label">Current Step</div>
+                  <div className="method-count">{activeRun?.currentStep || "Waiting for logs"}</div>
+                </div>
+                <div className="run-banner-item">
+                  <div className="method-label">Elapsed</div>
+                  <div className="method-count">{formatDuration(activeRunDurationMs)}</div>
+                </div>
+                <div className="run-banner-item">
+                  <div className="method-label">Last Activity</div>
+                  <div className="method-count">{formatRelativeTime(activeRun?.lastActivityAt, nowMs)}</div>
+                </div>
+                <div className="run-banner-item">
+                  <div className="method-label">{activeRun?.status === "queued" ? "Queue" : "Runtime Hint"}</div>
+                  <div className="method-count">
+                    {activeRun?.status === "queued"
+                      ? activeRunQueueLabel
+                      : formatEstimatedRuntime(activeScriptDefinition?.estimatedRuntimeMinutes)}
+                  </div>
+                </div>
+              </div>
+              {activeRunHeartbeatText ? (
+                <div className="run-banner-note">{activeRunHeartbeatText}</div>
+              ) : null}
+            </div>
+          ) : null}
           {selectedScript ? (
             <>
               <div className="dash-topstrip">
@@ -1773,6 +1907,9 @@ export function App() {
                           {selectedScript.approvalRequired ? (
                             <div className="approval-banner">This remediation workflow requires an approval confirmation before launch.</div>
                           ) : null}
+                          <div className="runtime-hint">
+                            {formatEstimatedRuntime(selectedScript.estimatedRuntimeMinutes)}. Larger tenants, Exchange-heavy reports, and first-time module activity can take longer.
+                          </div>
                           {selectedScript.actionProfiles?.length ? (
                             <div className="manage-form-panel">
                               <h4>Action Profiles</h4>
@@ -1861,12 +1998,28 @@ export function App() {
                                 </div>
                                 <div className="quick-summary-item">
                                   <div className="method-label">Duration</div>
-                                  <div className="method-count">{formatDuration(activeRun.durationMs)}</div>
+                                  <div className="method-count">{formatDuration(activeRunDurationMs)}</div>
                                 </div>
                                 <div className="quick-summary-item">
                                   <div className="method-label">Current Step</div>
                                   <div className="method-count">{activeRun.currentStep || "Waiting for logs"}</div>
                                 </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Last Activity</div>
+                                  <div className="method-count">{formatRelativeTime(activeRun.lastActivityAt, nowMs)}</div>
+                                </div>
+                                {activeRun.status === "queued" ? (
+                                  <div className="quick-summary-item">
+                                    <div className="method-label">Queue</div>
+                                    <div className="method-count">{activeRunQueueLabel}</div>
+                                  </div>
+                                ) : null}
+                                {activeRun.status !== "queued" ? (
+                                  <div className="quick-summary-item">
+                                    <div className="method-label">Runtime Hint</div>
+                                    <div className="method-count">{formatEstimatedRuntime(activeScriptDefinition?.estimatedRuntimeMinutes)}</div>
+                                  </div>
+                                ) : null}
                                 <div className="quick-summary-item">
                                   <div className="method-label">Exit Code</div>
                                   <div className="method-count">{activeRun.exitCode ?? "Pending"}</div>
@@ -1874,6 +2027,9 @@ export function App() {
                               </div>
                               {activeRun.errorSummary ? (
                                 <div className="flash flash-error soft">{activeRun.errorSummary}</div>
+                              ) : null}
+                              {!activeRun.errorSummary && activeRunHeartbeatText ? (
+                                <div className="flash soft">{activeRunHeartbeatText}</div>
                               ) : null}
                               <div className="manage-form-panel" style={{ marginTop: "1rem" }}>
                                 <div className="panel-toolbar">
