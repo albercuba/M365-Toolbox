@@ -9,22 +9,22 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns", "Microsoft.Graph.DirectoryObjects")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns", "Microsoft.Graph.Identity.DirectoryManagement")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("RoleManagement.Read.Directory", "AuditLog.Read.All", "Directory.Read.All", "User.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING DORMANT ADMIN DATA"
 
-$roles = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/directoryRoles")
+$roles = @(Get-MgDirectoryRole -All -ErrorAction Stop)
 $membersByUser = @{}
 foreach ($role in $roles) {
-    foreach ($member in @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/directoryRoles/{0}/members" -f $role.id))) {
+    foreach ($member in @(Get-MgDirectoryRoleMemberAsUser -DirectoryRoleId $role.Id -All -ErrorAction Stop)) {
         $upn = [string]$member.userPrincipalName
         if (-not $upn) { continue }
         if (-not $membersByUser.ContainsKey($upn)) {
             $membersByUser[$upn] = [System.Collections.Generic.List[string]]::new()
         }
-        [void]$membersByUser[$upn].Add([string]$role.displayName)
+        [void]$membersByUser[$upn].Add([string]$role.DisplayName)
     }
 }
 

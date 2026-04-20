@@ -7,7 +7,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.Governance")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("RoleManagement.Read.Directory", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
@@ -15,7 +15,7 @@ Write-SectionHeader "COLLECTING ELIGIBLE ROLE ASSIGNMENTS"
 
 $items = @()
 $warningMessage = $null
-try { $items = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/roleManagement/directory/roleEligibilityScheduleInstances?$select=id,principalId,roleDefinitionId,startDateTime,endDateTime,memberType&$top=999') } catch { $warningMessage = $_.Exception.Message; Write-Warning "  [!] Eligible role assignments could not be retrieved. $warningMessage" }
+try { $items = @(Get-MgRoleManagementDirectoryRoleEligibilityScheduleInstance -All -Property Id,PrincipalId,RoleDefinitionId,StartDateTime,EndDateTime,MemberType -ErrorAction Stop) } catch { $warningMessage = $_.Exception.Message; Write-Warning "  [!] Eligible role assignments could not be retrieved. $warningMessage" }
 
 $roleCache = @{}
 $principalCache = @{}

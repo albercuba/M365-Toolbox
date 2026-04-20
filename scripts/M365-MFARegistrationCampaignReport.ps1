@@ -8,32 +8,20 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("User.Read.All", "Directory.Read.All", "AuditLog.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING MFA CAMPAIGN DATA"
 
-$users = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/users?`$select=id,displayName,userPrincipalName,department,country,jobTitle,accountEnabled,signInActivity&`$top={0}" -f $MaxUsersToInspect))
+$users = @(Get-MgUser -All -Property Id,DisplayName,UserPrincipalName,Department,Country,JobTitle,AccountEnabled,SignInActivity -ErrorAction Stop | Select-Object -First $MaxUsersToInspect)
 $rows = [System.Collections.Generic.List[object]]::new()
 
 foreach ($user in $users) {
     if (-not $user.userPrincipalName) { continue }
     $methods = @()
-    try { $methods = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/users/{0}/authentication/methods" -f $user.id)) } catch {}
-
-    $methodNames = @(
-        foreach ($method in $methods) {
-            switch -Regex ([string]$method.'@odata.type') {
-                'microsoftAuthenticatorAuthenticationMethod' { 'Authenticator App'; break }
-                'phoneAuthenticationMethod' { 'Phone'; break }
-                'fido2AuthenticationMethod' { 'FIDO2 Key'; break }
-                'softwareOathAuthenticationMethod' { 'Software OATH'; break }
-                'emailAuthenticationMethod' { 'Email OTP'; break }
-                'windowsHelloForBusinessAuthenticationMethod' { 'Windows Hello'; break }
-            }
-        }
-    )
+    try { $methods = @(Get-MgUserAuthenticationMethod -UserId $user.Id -ErrorAction Stop) } catch {}
+    $methodNames = @($methods | ForEach-Object { Get-GraphAuthMethodLabel -Method $_ } | Where-Object { $_ -and $_ -ne 'Password' })
 
     $lastSignIn = $null
     if ($user.signInActivity -and $user.signInActivity.lastSignInDateTime) { $lastSignIn = Get-Date $user.signInActivity.lastSignInDateTime }

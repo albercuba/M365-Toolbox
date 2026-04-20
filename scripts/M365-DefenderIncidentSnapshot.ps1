@@ -7,13 +7,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Security")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("SecurityIncident.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING DEFENDER INCIDENTS"
 
-$incidents = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/security/incidents?$top=200')
+$incidents = @(Get-MgSecurityIncident -All -ErrorAction Stop)
 $rows = foreach ($incident in $incidents) {
     [pscustomobject]@{
         IncidentId = [string]$incident.incidentNumber

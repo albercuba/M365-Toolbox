@@ -7,13 +7,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Application.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING PRIVILEGED APP DATA"
 
-$servicePrincipals = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/servicePrincipals?$select=id,displayName,appId,publisherName,passwordCredentials,keyCredentials&$top=999')
+$servicePrincipals = @(Get-MgServicePrincipal -All -Property Id,DisplayName,AppId,PublisherName,PasswordCredentials,KeyCredentials -ErrorAction Stop)
 $rows = foreach ($sp in $servicePrincipals) {
     $passwordCount = @($sp.passwordCredentials).Count
     $keyCount = @($sp.keyCredentials).Count

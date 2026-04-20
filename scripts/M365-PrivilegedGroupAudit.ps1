@@ -7,17 +7,17 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Groups")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Group.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING PRIVILEGED GROUP DATA"
 
 $groupNames = @("Company Administrator","Privileged Role Administrator","Helpdesk Administrator","User Administrator","Exchange Administrator","SharePoint Administrator","Teams Administrator")
-$groups = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/groups?$select=id,displayName,mailEnabled,securityEnabled,visibility&$top=999')
+$groups = @(Get-MgGroup -All -Property Id,DisplayName,MailEnabled,SecurityEnabled,Visibility -ErrorAction Stop)
 $rows = foreach ($group in $groups | Where-Object { $_.displayName -in $groupNames }) {
-    $owners = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/owners?`$select=id" -f $group.id))
-    $members = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/members?`$select=id" -f $group.id))
+    $owners = @(Get-MgGroupOwner -GroupId $group.Id -All -ErrorAction Stop)
+    $members = @(Get-MgGroupMember -GroupId $group.Id -All -ErrorAction Stop)
     [pscustomobject]@{
         Group      = [string]$group.displayName
         Visibility = [string]$group.visibility

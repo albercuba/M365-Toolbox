@@ -8,18 +8,18 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns", "Microsoft.Graph.DirectoryObjects")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns", "Microsoft.Graph.Identity.DirectoryManagement")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("RoleManagement.Read.Directory", "AuditLog.Read.All", "Directory.Read.All", "User.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING PRIVILEGED USER SIGN-INS"
 
-$roles = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/directoryRoles")
+$roles = @(Get-MgDirectoryRole -All -ErrorAction Stop)
 $privilegedRows = [System.Collections.Generic.List[object]]::new()
 $membersByUser = @{}
 
 foreach ($role in $roles) {
-    $members = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/directoryRoles/{0}/members" -f $role.id))
+    $members = @(Get-MgDirectoryRoleMemberAsUser -DirectoryRoleId $role.Id -All -ErrorAction Stop)
     foreach ($member in $members) {
         $upn = [string]$member.userPrincipalName
         if (-not $upn) { continue }

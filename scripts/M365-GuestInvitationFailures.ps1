@@ -14,7 +14,7 @@ Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING GUEST INVITATION FAILURES"
 
-$guests = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/users?`$filter=userType eq 'Guest'&`$select=id,displayName,userPrincipalName,mail,createdDateTime,externalUserState,externalUserStateChangeDateTime,signInActivity&`$top=999")
+$guests = @(Get-MgUser -Filter "userType eq 'Guest'" -All -Property Id,DisplayName,UserPrincipalName,Mail,CreatedDateTime,ExternalUserState,ExternalUserStateChangeDateTime,SignInActivity -ErrorAction Stop)
 $staleCutoff = (Get-Date).AddDays(-1 * $StaleDays)
 
 $rows = foreach ($guest in $guests) {

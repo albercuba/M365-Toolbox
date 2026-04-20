@@ -178,7 +178,7 @@ function Get-MessageTraceContext {
     return @($traceRows)
 }
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Mail")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Mail.Read", "User.Read.All")
 Resolve-ToolboxTenantLabel
 Connect-ToolboxExchange -Tenant $TenantId
@@ -189,8 +189,7 @@ try {
     $keywords = Normalize-KeywordList -Value $SubjectKeywords
     $tenantDomain = Get-TenantPrimaryDomain
     $filterStart = (Get-Date).AddDays(-1 * $LookbackDays).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    $messageUri = "https://graph.microsoft.com/v1.0/users/$MailboxUpn/mailFolders/$Folder/messages?`$top=$MaxMessages&`$orderby=receivedDateTime desc&`$filter=receivedDateTime ge $filterStart&`$select=id,subject,receivedDateTime,from,hasAttachments,bodyPreview,webLink,internetMessageId,internetMessageHeaders"
-    $messages = @(Invoke-GraphCollection -Uri $messageUri)
+    $messages = @(Get-MgUserMailFolderMessage -UserId $MailboxUpn -MailFolderId $Folder -Top $MaxMessages -Sort "receivedDateTime desc" -Filter "receivedDateTime ge $filterStart" -Property Id,Subject,ReceivedDateTime,From,HasAttachments,BodyPreview,WebLink,InternetMessageId,InternetMessageHeaders -ErrorAction Stop)
     $traceStart = (Get-Date).AddDays(-1 * $LookbackDays)
     $traceEnd = Get-Date
     $messageTrace = @(Get-MessageTraceContext -Mailbox $MailboxUpn -StartDate $traceStart -EndDate $traceEnd)

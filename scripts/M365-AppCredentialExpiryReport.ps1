@@ -8,14 +8,14 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Application.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING APP CREDENTIAL EXPIRY DATA"
 
 $threshold = (Get-Date).AddDays($DaysAhead)
-$applications = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/applications?$select=id,displayName,appId,passwordCredentials,keyCredentials&$top=999')
+$applications = @(Get-MgApplication -All -Property Id,DisplayName,AppId,PasswordCredentials,KeyCredentials -ErrorAction Stop)
 $rows = [System.Collections.Generic.List[object]]::new()
 
 foreach ($app in $applications) {

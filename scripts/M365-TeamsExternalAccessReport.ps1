@@ -8,21 +8,21 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Groups")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Group.Read.All", "User.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING TEAMS EXTERNAL ACCESS DATA"
 
-$teams = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups?`$filter=resourceProvisioningOptions/Any(x:x eq 'Team')&`$select=id,displayName,visibility,createdDateTime&`$top={0}" -f $MaxTeamsToInspect))
+$teams = @(Get-MgGroup -All -Filter "resourceProvisioningOptions/Any(x:x eq 'Team')" -Property Id,DisplayName,Visibility,CreatedDateTime -ErrorAction Stop | Select-Object -First $MaxTeamsToInspect)
 $teamRows = [System.Collections.Generic.List[object]]::new()
 $totalGuestMembers = 0
 $teamsWithGuests = 0
 $teamsWithoutOwners = 0
 
 foreach ($team in $teams) {
-    $members = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/members/microsoft.graph.user?`$select=id,displayName,userPrincipalName,userType" -f $team.id))
-    $owners = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/owners?`$select=id" -f $team.id))
+    $members = @(Get-MgGroupMemberAsUser -GroupId $team.Id -All -ErrorAction Stop)
+    $owners = @(Get-MgGroupOwner -GroupId $team.Id -All -ErrorAction Stop)
     $guestMembers = @($members | Where-Object { $_.userType -eq "Guest" })
 
     if ($guestMembers.Count -gt 0) {

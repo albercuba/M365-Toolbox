@@ -8,7 +8,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Security")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("SecurityEvents.Read.All")
 Resolve-ToolboxTenantLabel
 
@@ -19,10 +19,8 @@ $score = $null
 $controls = @()
 
 try {
-    $scoreResponse = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/security/secureScores?$top=1' -ErrorAction Stop
-    $score = @($scoreResponse.value | Sort-Object createdDateTime -Descending | Select-Object -First 1)[0]
-    $controlResponse = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/security/secureScoreControlProfiles?`$top={0}" -f $TopActions) -ErrorAction Stop
-    $controls = @($controlResponse.value)
+    $score = @(Get-MgSecuritySecureScore -All -ErrorAction Stop | Sort-Object CreatedDateTime -Descending | Select-Object -First 1)[0]
+    $controls = @(Get-MgSecuritySecureScoreControlProfile -All -ErrorAction Stop | Select-Object -First $TopActions)
 }
 catch {
     $secureScoreWarning = $_.Exception.Message

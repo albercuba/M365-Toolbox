@@ -7,13 +7,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Policy.Read.All", "Directory.Read.All", "User.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING CROSS-TENANT TRUST DATA"
 
-$partnerPolicies = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/policies/crossTenantAccessPolicy/partners")
+$partnerPolicies = @(Get-MgPolicyCrossTenantAccessPolicyPartner -All -ErrorAction Stop)
 $guests = @(Get-MgUser -Filter "userType eq 'Guest'" -All -Property Id,DisplayName,UserPrincipalName,Mail,ExternalUserState)
 
 $guestDomains = $guests |

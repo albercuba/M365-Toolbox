@@ -7,7 +7,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Policy.Read.All")
 Resolve-ToolboxTenantLabel
 
@@ -16,7 +16,7 @@ Write-SectionHeader "COLLECTING CROSS-TENANT ACCESS DATA"
 $policy = $null
 $policyWarning = $null
 try {
-    $policy = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/policies/crossTenantAccessPolicy' -ErrorAction Stop
+    $policy = Get-MgPolicyCrossTenantAccessPolicy -ErrorAction Stop
 }
 catch {
     $policy = $null

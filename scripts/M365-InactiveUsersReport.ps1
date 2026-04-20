@@ -9,14 +9,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("User.Read.All", "AuditLog.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING INACTIVE USER DATA"
 
-$uri = 'https://graph.microsoft.com/v1.0/users?$select=id,displayName,userPrincipalName,accountEnabled,department,createdDateTime,signInActivity,assignedLicenses&$top=999'
-$users = @(Invoke-GraphCollection -Uri $uri)
+$users = @(Get-MgUser -All -Property Id,DisplayName,UserPrincipalName,AccountEnabled,Department,CreatedDateTime,SignInActivity,AssignedLicenses -ErrorAction Stop)
 if (-not $IncludeDisabledUsers) {
     $users = @($users | Where-Object { $_.accountEnabled -eq $true })
 }

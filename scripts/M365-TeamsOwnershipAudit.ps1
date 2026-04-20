@@ -8,16 +8,16 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Groups")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Group.Read.All", "Directory.Read.All", "User.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING TEAMS OWNERSHIP DATA"
 
-$teams = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups?`$filter=resourceProvisioningOptions/Any(x:x eq 'Team')&`$select=id,displayName,visibility,createdDateTime&`$top={0}" -f $MaxTeamsToInspect))
+$teams = @(Get-MgGroup -All -Filter "resourceProvisioningOptions/Any(x:x eq 'Team')" -Property Id,DisplayName,Visibility,CreatedDateTime -ErrorAction Stop | Select-Object -First $MaxTeamsToInspect)
 $rows = foreach ($team in $teams) {
-    $owners = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/owners/microsoft.graph.user?`$select=id,displayName,userPrincipalName" -f $team.id))
-    $members = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/members/microsoft.graph.user?`$select=id,userType" -f $team.id))
+    $owners = @(Get-MgGroupOwnerAsUser -GroupId $team.Id -All -ErrorAction Stop)
+    $members = @(Get-MgGroupMemberAsUser -GroupId $team.Id -All -ErrorAction Stop)
     $guestMembers = @($members | Where-Object { $_.userType -eq "Guest" })
     [pscustomobject]@{
         TeamName      = [string]$team.displayName

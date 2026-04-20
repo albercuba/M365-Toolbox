@@ -8,15 +8,15 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Application.Read.All", "DelegatedPermissionGrant.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING OAUTH APP RISK DATA"
 
-$servicePrincipals = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/servicePrincipals?$select=id,displayName,appId,publisherName,appOwnerOrganizationId,accountEnabled")
-$grants = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/oauth2PermissionGrants")
-$applications = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/applications?$select=id,appId,displayName,passwordCredentials,keyCredentials")
+$servicePrincipals = @(Get-MgServicePrincipal -All -Property Id,DisplayName,AppId,PublisherName,AppOwnerOrganizationId,AccountEnabled -ErrorAction Stop)
+$grants = @(Get-MgOauth2PermissionGrant -All -ErrorAction Stop)
+$applications = @(Get-MgApplication -All -Property Id,AppId,DisplayName,PasswordCredentials,KeyCredentials -ErrorAction Stop)
 $applicationByAppId = @{}
 foreach ($application in $applications) {
     $applicationByAppId[[string]$application.appId] = $application

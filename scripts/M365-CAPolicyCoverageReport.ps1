@@ -8,7 +8,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns", "Microsoft.Graph.Users", "Microsoft.Graph.Groups", "Microsoft.Graph.Applications")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Policy.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
@@ -55,7 +55,7 @@ function Get-CaUserNames {
 
         if (-not $userNameCache.ContainsKey($id)) {
             try {
-                $user = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/users/{0}?`$select=displayName,userPrincipalName" -f $id) -ErrorAction Stop
+                $user = Get-MgUser -UserId $id -Property DisplayName,UserPrincipalName -ErrorAction Stop
                 $label = if ($user.userPrincipalName) {
                     "{0} ({1})" -f [string]$user.displayName, [string]$user.userPrincipalName
                 }
@@ -93,7 +93,7 @@ function Get-CaGroupNames {
 
         if (-not $groupNameCache.ContainsKey($id)) {
             try {
-                $group = Invoke-MgGraphRequest -Method GET -Uri ("https://graph.microsoft.com/v1.0/groups/{0}?`$select=displayName" -f $id) -ErrorAction Stop
+                $group = Get-MgGroup -GroupId $id -Property DisplayName -ErrorAction Stop
                 if ($group.displayName) {
                     $groupNameCache[$id] = [string]$group.displayName
                 }
@@ -144,7 +144,7 @@ function Get-CaAppNames {
 
         if (-not $appNameCache.ContainsKey($id)) {
             try {
-                $servicePrincipals = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appId eq '{0}'&`$select=displayName,appId" -f $id))
+                $servicePrincipals = @(Get-MgServicePrincipal -Filter ("appId eq '{0}'" -f $id) -Property DisplayName,AppId -ErrorAction Stop)
                 $servicePrincipal = @($servicePrincipals | Select-Object -First 1)[0]
                 if ($servicePrincipal.displayName) {
                     $appNameCache[$id] = [string]$servicePrincipal.displayName

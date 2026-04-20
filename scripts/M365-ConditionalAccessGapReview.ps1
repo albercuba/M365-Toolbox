@@ -7,13 +7,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Policy.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING CONDITIONAL ACCESS POLICY GAPS"
 
-$policies = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies")
+$policies = @(Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop)
 $rows = foreach ($policy in $policies) {
     $signals = [System.Collections.Generic.List[string]]::new()
     if ([string]$policy.state -ne 'enabled') { [void]$signals.Add("Policy state is $($policy.state)") }

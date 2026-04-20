@@ -7,24 +7,24 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("User.Read.All", "UserAuthenticationMethod.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING PASSWORD RESET READINESS"
 
-$users = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/users?$select=id,displayName,userPrincipalName,accountEnabled&$top=500')
+$users = @(Get-MgUser -All -Property Id,DisplayName,UserPrincipalName,AccountEnabled -ErrorAction Stop)
 $rows = foreach ($user in $users) {
     $methods = @()
     try {
-        $methods = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/users/{0}/authentication/methods" -f $user.id))
+        $methods = @(Get-MgUserAuthenticationMethod -UserId $user.Id -ErrorAction Stop)
     }
     catch {
         $methods = @()
     }
 
-    $methodNames = @($methods | ForEach-Object { [string]$_.'@odata.type' -replace '^#microsoft.graph\.', '' })
-    $resetReady = @($methodNames | Where-Object { $_ -match 'phone|email|softwareOath|microsoftAuthenticator' }).Count -gt 0
+    $methodNames = @($methods | ForEach-Object { Get-GraphAuthMethodLabel -Method $_ } | Where-Object { $_ -and $_ -ne 'Password' })
+    $resetReady = @($methodNames | Where-Object { $_ -match 'Phone|Email OTP|Software OATH|Authenticator App' }).Count -gt 0
 
     [pscustomobject]@{
         DisplayName       = [string]$user.displayName

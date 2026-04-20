@@ -7,14 +7,14 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Application.Read.All", "DelegatedPermissionGrant.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING APP CONSENT DATA"
 
-$servicePrincipals = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/servicePrincipals?$select=id,displayName,appId,publisherName,appOwnerOrganizationId&$top=999')
-$grants = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/oauth2PermissionGrants?$top=999')
+$servicePrincipals = @(Get-MgServicePrincipal -All -Property Id,DisplayName,AppId,PublisherName,AppOwnerOrganizationId -ErrorAction Stop)
+$grants = @(Get-MgOauth2PermissionGrant -All -ErrorAction Stop)
 $assignmentRows = [System.Collections.Generic.List[object]]::new()
 
 foreach ($sp in $servicePrincipals) {

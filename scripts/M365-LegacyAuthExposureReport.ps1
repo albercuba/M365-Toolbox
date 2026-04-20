@@ -8,14 +8,14 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Reports")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("AuditLog.Read.All", "User.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING LEGACY AUTH EXPOSURE"
 
 $cutoff = (Get-Date).ToUniversalTime().AddDays(-1 * $LookbackDays).ToString("yyyy-MM-ddTHH:mm:ssZ")
-$signIns = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/auditLogs/signIns?`$filter=createdDateTime ge {0}&`$select=userPrincipalName,appDisplayName,clientAppUsed,createdDateTime,conditionalAccessStatus,ipAddress&`$top=999" -f $cutoff))
+$signIns = @(Get-MgAuditLogSignIn -Filter "createdDateTime ge $cutoff" -All -Property UserPrincipalName,AppDisplayName,ClientAppUsed,CreatedDateTime,ConditionalAccessStatus,IpAddress -ErrorAction Stop)
 $legacyClients = @("imap","pop","smtp","mapi","exchange active sync","other clients","autodiscover","exchange web services")
 
 $rows = foreach ($entry in $signIns) {

@@ -8,14 +8,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Users")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("User.Read.All", "Directory.Read.All", "AuditLog.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING GUEST ACCESS DATA"
 
-$guestUri = 'https://graph.microsoft.com/v1.0/users?$filter=userType eq ''Guest''&$select=id,displayName,userPrincipalName,mail,accountEnabled,createdDateTime,externalUserState,signInActivity&$top=999'
-$guests = @(Invoke-GraphCollection -Uri $guestUri)
+$guests = @(Get-MgUser -Filter "userType eq 'Guest'" -All -Property Id,DisplayName,UserPrincipalName,Mail,AccountEnabled,CreatedDateTime,ExternalUserState,SignInActivity -ErrorAction Stop)
 $staleCutoff = (Get-Date).AddDays(-1 * $StaleDays)
 
 $domainGroups = $guests |

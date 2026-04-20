@@ -260,6 +260,128 @@ function Normalize-DelimitedValue {
     )
 }
 
+function Get-DirectoryObjectValue {
+    param(
+        [Parameter(Mandatory)]
+        $DirectoryObject,
+
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    if ($null -eq $DirectoryObject) {
+        return $null
+    }
+
+    $property = $DirectoryObject.PSObject.Properties |
+        Where-Object { $_.Name -ieq $Name } |
+        Select-Object -First 1
+    if ($property) {
+        return $property.Value
+    }
+
+    if ($DirectoryObject -is [System.Collections.IDictionary]) {
+        foreach ($key in $DirectoryObject.Keys) {
+            if ([string]$key -ieq $Name) {
+                return $DirectoryObject[$key]
+            }
+        }
+    }
+
+    $additionalProperties = $DirectoryObject.PSObject.Properties |
+        Where-Object { $_.Name -eq 'AdditionalProperties' } |
+        Select-Object -First 1
+    if ($additionalProperties -and $additionalProperties.Value -is [System.Collections.IDictionary]) {
+        foreach ($key in $additionalProperties.Value.Keys) {
+            if ([string]$key -ieq $Name) {
+                return $additionalProperties.Value[$key]
+            }
+        }
+    }
+
+    return $null
+}
+
+function Get-DirectoryObjectLabel {
+    param($DirectoryObject)
+
+    if (-not $DirectoryObject) {
+        return ""
+    }
+
+    $displayName = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'displayName')
+    $userPrincipalName = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'userPrincipalName')
+
+    if ($userPrincipalName) {
+        return "{0} ({1})" -f $displayName, $userPrincipalName
+    }
+
+    $mail = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'mail')
+    if ($mail) {
+        return "{0} ({1})" -f $displayName, $mail
+    }
+
+    if ($displayName) {
+        return $displayName
+    }
+
+    $id = [string](Get-DirectoryObjectValue -DirectoryObject $DirectoryObject -Name 'id')
+    if ($id) {
+        return $id
+    }
+
+    return ""
+}
+
+function Get-GraphAuthMethodLabel {
+    param($Method)
+
+    if (-not $Method) {
+        return "Unknown"
+    }
+
+    $typeHints = [System.Collections.Generic.List[string]]::new()
+    foreach ($typeHint in @(
+        [string](Get-DirectoryObjectValue -DirectoryObject $Method -Name '@odata.type'),
+        [string](Get-DirectoryObjectValue -DirectoryObject $Method -Name 'OdataType')
+    )) {
+        if ($typeHint) {
+            [void]$typeHints.Add($typeHint)
+        }
+    }
+
+    foreach ($typeName in @($Method.PSObject.TypeNames)) {
+        if ($typeName) {
+            [void]$typeHints.Add([string]$typeName)
+        }
+    }
+
+    try {
+        $fullTypeName = [string]$Method.GetType().FullName
+        if ($fullTypeName) {
+            [void]$typeHints.Add($fullTypeName)
+        }
+    }
+    catch {}
+
+    $typeText = $typeHints -join ' '
+    switch -Regex ($typeText) {
+        'microsoftAuthenticatorAuthenticationMethod' { return 'Authenticator App' }
+        'phoneAuthenticationMethod' { return 'Phone' }
+        'fido2AuthenticationMethod' { return 'FIDO2 Key' }
+        'softwareOathAuthenticationMethod' { return 'Software OATH' }
+        'emailAuthenticationMethod' { return 'Email OTP' }
+        'windowsHelloForBusinessAuthenticationMethod' { return 'Windows Hello' }
+        'passwordAuthenticationMethod' { return 'Password' }
+    }
+
+    if ($typeHints.Count -gt 0) {
+        return (($typeHints[0] -replace '^#microsoft\.graph\.', '') -replace '^Microsoft\.Graph\.PowerShell\.Models\.', '')
+    }
+
+    return "Unknown"
+}
+
 function Get-GeoLocationString {
     param($Location)
 

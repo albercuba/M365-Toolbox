@@ -7,13 +7,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Policy.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING MFA EXCLUSION DATA"
 
-$policies = @(Invoke-GraphCollection -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies")
+$policies = @(Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop)
 $rows = foreach ($policy in $policies) {
     $grants = if ($policy.grantControls) { @($policy.grantControls.builtInControls) } else { @() }
     $usesMfa = $grants -contains "mfa" -or [string]$policy.grantControls.authenticationStrength?.id

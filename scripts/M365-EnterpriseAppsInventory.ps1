@@ -7,13 +7,13 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("Application.Read.All", "Directory.Read.All")
 Resolve-ToolboxTenantLabel
 
 Write-SectionHeader "COLLECTING ENTERPRISE APP INVENTORY"
 
-$servicePrincipals = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/servicePrincipals?$select=id,displayName,appId,servicePrincipalType,publisherName,signInAudience,appRoleAssignmentRequired,accountEnabled,passwordCredentials,keyCredentials,tags&$top=999')
+$servicePrincipals = @(Get-MgServicePrincipal -All -Property Id,DisplayName,AppId,ServicePrincipalType,PublisherName,SignInAudience,AppRoleAssignmentRequired,AccountEnabled,PasswordCredentials,KeyCredentials,Tags -ErrorAction Stop)
 $rows = foreach ($sp in $servicePrincipals) {
     [pscustomobject]@{
         DisplayName        = [string]$sp.displayName

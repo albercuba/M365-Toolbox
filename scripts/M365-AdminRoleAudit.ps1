@@ -7,7 +7,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.DirectoryManagement", "Microsoft.Graph.Identity.SignIns")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("RoleManagement.Read.Directory", "Directory.Read.All", "User.Read.All", "UserAuthenticationMethod.Read.All")
 Resolve-ToolboxTenantLabel
 
@@ -25,7 +25,7 @@ $privilegedRoleNames = @(
     "Conditional Access Administrator"
 )
 
-$directoryRoles = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/directoryRoles?$top=200')
+$directoryRoles = @(Get-MgDirectoryRole -All -ErrorAction Stop)
 $roleRows = [System.Collections.Generic.List[object]]::new()
 $adminMap = @{}
 
@@ -34,7 +34,7 @@ foreach ($role in $directoryRoles) {
         continue
     }
 
-    $members = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/directoryRoles/{0}/members?`$select=id,displayName,userPrincipalName" -f $role.id))
+    $members = @(Get-MgDirectoryRoleMemberAsUser -DirectoryRoleId $role.Id -All -ErrorAction Stop)
     [void]$roleRows.Add([pscustomobject]@{
         RoleName = [string]$role.displayName
         Members  = $members.Count
@@ -43,15 +43,15 @@ foreach ($role in $directoryRoles) {
     foreach ($member in $members) {
         if (-not $member.id) { continue }
         if (-not $adminMap.ContainsKey([string]$member.id)) {
-            $methods = @(Invoke-GraphCollection -Uri ("https://graph.microsoft.com/v1.0/users/{0}/authentication/methods" -f $member.id))
-            $methodNames = @($methods | ForEach-Object { [string]$_.'@odata.type' })
-            $hasMfa = @($methodNames | Where-Object { $_ -notmatch "passwordAuthenticationMethod$" }).Count -gt 0
+            $methods = @(Get-MgUserAuthenticationMethod -UserId $member.Id -ErrorAction Stop)
+            $methodNames = @($methods | ForEach-Object { Get-GraphAuthMethodLabel -Method $_ })
+            $hasMfa = @($methodNames | Where-Object { $_ -ne "Password" }).Count -gt 0
 
             $adminMap[[string]$member.id] = [pscustomobject]@{
                 DisplayName       = [string]$member.displayName
                 UserPrincipalName = [string]$member.userPrincipalName
                 MfaRegistered     = if ($hasMfa) { "Registered" } else { "Not Registered" }
-                Methods           = ($methodNames -replace "^#microsoft.graph\.", "" -join ", ")
+                Methods           = ($methodNames | Sort-Object -Unique) -join ", "
             }
         }
     }
