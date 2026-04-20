@@ -8,7 +8,7 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
-Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication", "Microsoft.Graph.Identity.SignIns")
+Assert-GraphModules -RequiredModules @("Microsoft.Graph.Authentication")
 Connect-ToolboxGraph -TenantId $TenantId -Scopes @("IdentityRiskyUser.Read.All", "IdentityRiskEvent.Read.All", "AuditLog.Read.All", "User.Read.All")
 Resolve-ToolboxTenantLabel
 
@@ -18,7 +18,7 @@ $riskFeatureUnavailable = $false
 $riskFeatureMessage = ""
 
 try {
-    $riskyUsers = @(Get-MgRiskyUser -All -ErrorAction Stop)
+    $riskyUsers = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/identityProtection/riskyUsers?$top=500')
 }
 catch {
     $message = $_.Exception.Message
@@ -34,7 +34,7 @@ catch {
 }
 
 try {
-    $riskDetections = if ($riskFeatureUnavailable) { @() } else { @(Get-MgRiskDetection -All -ErrorAction Stop) }
+    $riskDetections = if ($riskFeatureUnavailable) { @() } else { @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/identityProtection/riskDetections?$top=500') }
 }
 catch {
     $message = $_.Exception.Message
@@ -62,25 +62,27 @@ $filteredDetections = @(
 
 $userRows = @(
 foreach ($user in $riskyUsers) {
+    $riskLastUpdatedDateTime = Get-DirectoryObjectValue -DirectoryObject $user -Name 'riskLastUpdatedDateTime'
     [pscustomobject]@{
-        UserPrincipalName = [string]$user.userPrincipalName
-        RiskLevel         = [string]$user.riskLevel
-        RiskState         = [string]$user.riskState
-        Detail            = [string]$user.riskDetail
-        Updated           = if ($user.riskLastUpdatedDateTime) { (Get-Date $user.riskLastUpdatedDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
+        UserPrincipalName = [string](Get-DirectoryObjectValue -DirectoryObject $user -Name 'userPrincipalName')
+        RiskLevel         = [string](Get-DirectoryObjectValue -DirectoryObject $user -Name 'riskLevel')
+        RiskState         = [string](Get-DirectoryObjectValue -DirectoryObject $user -Name 'riskState')
+        Detail            = [string](Get-DirectoryObjectValue -DirectoryObject $user -Name 'riskDetail')
+        Updated           = if ($riskLastUpdatedDateTime) { (Get-Date $riskLastUpdatedDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
     }
 }
 )
 
 $detectionRows = @(
 foreach ($detection in $filteredDetections) {
+    $activityDateTime = Get-DirectoryObjectValue -DirectoryObject $detection -Name 'activityDateTime'
     [pscustomobject]@{
-        UserPrincipalName = [string]$detection.userPrincipalName
-        RiskType          = [string]$detection.riskType
-        RiskLevel         = [string]$detection.riskLevel
-        DetectionTiming   = [string]$detection.detectionTimingType
-        IPAddress         = [string]$detection.ipAddress
-        Activity          = if ($detection.activityDateTime) { (Get-Date $detection.activityDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
+        UserPrincipalName = [string](Get-DirectoryObjectValue -DirectoryObject $detection -Name 'userPrincipalName')
+        RiskType          = [string](Get-DirectoryObjectValue -DirectoryObject $detection -Name 'riskType')
+        RiskLevel         = [string](Get-DirectoryObjectValue -DirectoryObject $detection -Name 'riskLevel')
+        DetectionTiming   = [string](Get-DirectoryObjectValue -DirectoryObject $detection -Name 'detectionTimingType')
+        IPAddress         = [string](Get-DirectoryObjectValue -DirectoryObject $detection -Name 'ipAddress')
+        Activity          = if ($activityDateTime) { (Get-Date $activityDateTime).ToString("yyyy-MM-dd HH:mm") } else { "" }
     }
 }
 )
