@@ -1238,6 +1238,15 @@ export function App() {
     setDevicePromptDismissed(false);
   };
 
+  const handleGoHome = () => {
+    setSelectedScript(null);
+    setFormValues({});
+    setExpandedCategories({});
+    setRunDetailsOpen(true);
+    setRecentRunsOpen(true);
+    setDevicePromptDismissed(false);
+  };
+
   const handleOpenRun = (run) => {
     setArtifacts([]);
     setActiveRun(run ? { ...run } : null);
@@ -1654,7 +1663,9 @@ export function App() {
       ) : null}
 
       <header className="topbar">
-        <div className="topbar-logo">M365 Toolbox</div>
+        <button type="button" className="topbar-logo topbar-home-btn" onClick={handleGoHome}>
+          M365 Toolbox
+        </button>
         <div className="topbar-title">Web-based PowerShell operations for Microsoft 365</div>
         <div className="topbar-right">
           <button

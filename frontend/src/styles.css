@@ -114,6 +114,17 @@ textarea {
   color: var(--accent);
 }
 
+.topbar-home-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.topbar-home-btn:hover {
+  color: var(--accent2);
+}
+
 .topbar-title {
   font-family: var(--mono);
   font-size: 0.75rem;
