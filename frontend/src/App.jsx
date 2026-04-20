@@ -2151,9 +2151,6 @@ export function App() {
                           )}
                         </div>
                       </div>
-
-                      {renderRecentRunsCard()}
-
                       {activeRun?.id && hasHtmlArtifact ? (
                         <div className="card" ref={reportCardRef} tabIndex={-1}>
                           <div className="card-header">
