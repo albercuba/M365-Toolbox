@@ -19,6 +19,11 @@ $settings = $null
 try { $settings = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/admin/sharepoint/settings' -ErrorAction Stop } catch {}
 $siteUsage = @(Import-GraphCsvReport -RequestUri ("https://graph.microsoft.com/v1.0/reports/getSharePointSiteUsageDetail(period='{0}')" -f $ReportPeriod))
 
+$sharingCapability = [string](Get-DirectoryObjectValue -DirectoryObject $settings -Name 'sharingCapability')
+$defaultSharingLinkType = [string](Get-DirectoryObjectValue -DirectoryObject $settings -Name 'defaultSharingLinkType')
+$defaultLinkPermission = [string](Get-DirectoryObjectValue -DirectoryObject $settings -Name 'defaultLinkPermission')
+$isResharingByExternalUsersEnabled = Get-DirectoryObjectValue -DirectoryObject $settings -Name 'isResharingByExternalUsersEnabled'
+
 $rows = foreach ($site in $siteUsage) {
     $ownerValue = [string](Get-DirectoryObjectValue -DirectoryObject $site -Name 'OwnerDisplayName')
     if (-not $ownerValue) {
@@ -39,12 +44,12 @@ $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "ExternalSharingLink
 
 Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 External Sharing Links Report" -Tenant $tenantName -Subtitle "SharePoint external sharing posture and active sites" -Kpis @(
     @{ label = "Sites"; value = $rows.Count; sub = "Reported sites"; cls = "neutral" },
-    @{ label = "Sharing Mode"; value = if ($settings.sharingCapability) { [string]$settings.sharingCapability } else { "Unknown" }; sub = "Tenant capability"; cls = "warn" },
-    @{ label = "Default Link"; value = if ($settings.defaultSharingLinkType) { [string]$settings.defaultSharingLinkType } else { "Unknown" }; sub = "Link type"; cls = "neutral" },
+    @{ label = "Sharing Mode"; value = if ($sharingCapability) { $sharingCapability } else { "Unknown" }; sub = "Tenant capability"; cls = "warn" },
+    @{ label = "Default Link"; value = if ($defaultSharingLinkType) { $defaultSharingLinkType } else { "Unknown" }; sub = "Link type"; cls = "neutral" },
     @{ label = "Period"; value = $ReportPeriod; sub = "Usage lookback"; cls = "neutral" }
 ) -StripItems @(
     @{ label = "Tenant"; value = $tenantName },
-    @{ label = "Anonymous Access"; value = if ($settings.sharingCapability -match "externalUserAndGuestSharing|anyone") { "Potentially Allowed" } else { "Restricted" } },
+    @{ label = "Anonymous Access"; value = if ($sharingCapability -match "externalUserAndGuestSharing|anyone") { "Potentially Allowed" } else { "Restricted" } },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
 ) -Sections @(
     @{
@@ -55,10 +60,10 @@ Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 External Sharing Links Rep
             @{ key = "Value"; header = "Value"; type = "pill" }
         )
         rows = @(
-            [pscustomobject]@{ Setting = "Sharing Capability"; Value = [string]$settings.sharingCapability },
-            [pscustomobject]@{ Setting = "Default Sharing Link Type"; Value = [string]$settings.defaultSharingLinkType },
-            [pscustomobject]@{ Setting = "Default Link Permission"; Value = [string]$settings.defaultLinkPermission },
-            [pscustomobject]@{ Setting = "External Resharing"; Value = if ($settings.isResharingByExternalUsersEnabled) { "Enabled" } else { "Disabled" } }
+            [pscustomobject]@{ Setting = "Sharing Capability"; Value = if ($sharingCapability) { $sharingCapability } else { "Unknown" } },
+            [pscustomobject]@{ Setting = "Default Sharing Link Type"; Value = if ($defaultSharingLinkType) { $defaultSharingLinkType } else { "Unknown" } },
+            [pscustomobject]@{ Setting = "Default Link Permission"; Value = if ($defaultLinkPermission) { $defaultLinkPermission } else { "Unknown" } },
+            [pscustomobject]@{ Setting = "External Resharing"; Value = if ($isResharingByExternalUsersEnabled) { "Enabled" } else { "Disabled" } }
         )
     },
     @{
