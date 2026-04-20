@@ -21,8 +21,8 @@ try {
     $riskyUsers = @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/identityProtection/riskyUsers?$top=500')
 }
 catch {
-    $message = $_.Exception.Message
-    if ($message -match "not licensed for this feature" -or $message -match "403 \(Forbidden\)") {
+    $message = Get-ToolboxExceptionMessage -Exception $_.Exception
+    if ($message -match "not licensed for this feature" -or $message -match "403" -or $message -match "forbidden" -or $message -match "license") {
         $riskFeatureUnavailable = $true
         $riskFeatureMessage = "Microsoft Entra ID Identity Protection data is not available for this tenant or license level."
         Write-Warning "  [!] $riskFeatureMessage"
@@ -37,8 +37,8 @@ try {
     $riskDetections = if ($riskFeatureUnavailable) { @() } else { @(Invoke-GraphCollection -Uri 'https://graph.microsoft.com/v1.0/identityProtection/riskDetections?$top=500') }
 }
 catch {
-    $message = $_.Exception.Message
-    if ($message -match "not licensed for this feature" -or $message -match "403 \(Forbidden\)") {
+    $message = Get-ToolboxExceptionMessage -Exception $_.Exception
+    if ($message -match "not licensed for this feature" -or $message -match "403" -or $message -match "forbidden" -or $message -match "license") {
         $riskFeatureUnavailable = $true
         if (-not $riskFeatureMessage) {
             $riskFeatureMessage = "Microsoft Entra ID Identity Protection data is not available for this tenant or license level."
