@@ -11,7 +11,7 @@ M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operat
 - Renders HTML reports inline in the UI and supports direct download
 - Stores favorites in the browser for faster access to common workflows
 
-The current catalog includes 57 toolbox-native scripts across categories such as Identity, Exchange, Security, SharePoint, Teams, Reporting, Licensing, Devices, Operations, Collaboration, and Incident Response.
+The current catalog includes 59 toolbox-native scripts across categories such as Identity, Exchange, Security, SharePoint, Teams, Reporting, Licensing, Devices, Operations, Collaboration, and Incident Response.
 
 ## Project layout
 
@@ -72,6 +72,12 @@ Core workflows and reporting:
   Finds mailbox forwarding and inbox rules that redirect mail.
 - `scripts/M365-SharedMailboxReport.ps1`
   Reviews shared mailboxes, forwarding, visibility, and delegate counts.
+- `scripts/M365-ImapMigrationPreflight.ps1`
+  Validates mounted IMAP migration CSV readiness, Exchange Online sign-in, and source IMAP endpoint availability.
+- `scripts/M365-ImapMigrationBatch.ps1`
+  Creates or reuses an Exchange Online IMAP migration endpoint, creates a migration batch from CSVData, and can optionally start it.
+- `scripts/M365-ImapMigrationStatus.ps1`
+  Exports current Exchange Online migration batch summary and per-user migration status.
 - `scripts/M365-SignInRiskReport.ps1`
   Shows risky users and detections when Identity Protection data is licensed and available.
 - `scripts/M365-TeamsExternalAccessReport.ps1`
@@ -211,6 +217,59 @@ By default, Docker mounts:
 
 - `./scripts` to `/toolbox-scripts`
 - `./output` to `/app/output`
+
+## IMAP migration workflows
+
+The IMAP migration workflows orchestrate Exchange Online migration cmdlets. They do not connect to source IMAP mailboxes from Node, React, or local script code, and they do not implement a custom mailbox copy engine. Microsoft 365 migration services perform the mailbox sync after Exchange Online PowerShell creates the endpoint and batch.
+
+Available workflows:
+
+- `M365 IMAP Migration Preflight`
+  Validates the CSV path and schema, connects to Exchange Online, tests IMAP endpoint availability, and writes a readiness report.
+- `M365 IMAP Migration Batch`
+  Creates or reuses the IMAP migration endpoint, creates the migration batch from CSVData, optionally starts it, and exports batch/per-user artifacts.
+- `M365 IMAP Migration Status`
+  Reads an existing migration batch and exports the current summary and per-user statistics.
+
+Prerequisites:
+
+- The signed-in admin needs sufficient Exchange Online permissions to manage migration endpoints and batches.
+- Target Microsoft 365 mailboxes must already exist and be licensed before migration.
+- The source IMAP server must be reachable by Microsoft 365 migration services on the selected host, port, and security mode.
+- IMAP migration moves mail only. It does not migrate contacts, calendars, tasks, mailbox rules, permissions, or client profiles.
+- Mailbox size, item, and message size behavior still follows Exchange Online migration service limits.
+
+CSV security and format:
+
+Mailbox passwords must not be entered into the browser. Store the migration CSV in a local folder that is mounted into the backend container, then provide the container path in the toolbox form or set `M365_TOOLBOX_IMAP_MIGRATION_CSV_PATH`. The scripts validate the CSV and redact sensitive values from logs, reports, diagnostics, and artifact names.
+
+Expected CSV headers:
+
+```csv
+EmailAddress,UserName,Password,UserRoot
+target.user@contoso.com,<source-user>,<source-password>,
+```
+
+Required headers are `EmailAddress`, `UserName`, and `Password`. `UserRoot` is optional for IMAP servers that require a virtual shared folder root.
+
+Example compose mount:
+
+```yaml
+services:
+  backend:
+    volumes:
+      - ./scripts:/toolbox-scripts:ro
+      - ./output:/app/output
+      - ./migration-input:/migration-input:ro
+    environment:
+      M365_TOOLBOX_IMAP_MIGRATION_CSV_PATH: /migration-input/imap-mailboxes.csv
+```
+
+Recommended operating sequence:
+
+1. Run `M365 IMAP Migration Preflight` with the endpoint name, IMAP server, port, security mode, and CSV path or environment-backed path.
+2. If preflight is ready, run `M365 IMAP Migration Batch` with the same endpoint settings and a unique batch name. Select auto-start only when you are ready for Microsoft 365 to begin syncing.
+3. Run `M365 IMAP Migration Status` with the batch name to review batch summary and per-user migration progress.
 
 ## UI flow
 

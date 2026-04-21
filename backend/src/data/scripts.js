@@ -8,7 +8,8 @@ const tenantField = {
 };
 
 const destructiveScriptIds = new Set([
-  "m365-compromised-account-remediation"
+  "m365-compromised-account-remediation",
+  "m365-imap-migration-batch"
 ]);
 
 function withCommonMetadata(script) {
@@ -353,6 +354,198 @@ const sharedMailboxReportScript = {
       defaultValue: true
     },
     tenantField
+  ]
+};
+
+const imapMigrationConnectionFields = [
+  {
+    id: "tenantAdminUpn",
+    label: "Tenant admin UPN",
+    type: "text",
+    required: false,
+    placeholder: "admin@contoso.com",
+    helpText: "Optional sign-in hint for Exchange Online device-code authentication."
+  },
+  {
+    id: "endpointName",
+    label: "Migration endpoint name",
+    type: "text",
+    required: true,
+    defaultValue: "imap-source",
+    helpText: "Existing endpoint to reuse or new endpoint to create for the source IMAP system."
+  },
+  {
+    id: "imapServer",
+    label: "IMAP server",
+    type: "text",
+    required: true,
+    placeholder: "imap.contoso.com",
+    helpText: "Source IMAP hostname reachable by Microsoft 365 migration services."
+  },
+  {
+    id: "port",
+    label: "IMAP port",
+    type: "number",
+    required: false,
+    defaultValue: 993,
+    min: 1,
+    max: 65535
+  },
+  {
+    id: "security",
+    label: "Security",
+    type: "text",
+    required: false,
+    defaultValue: "Ssl",
+    placeholder: "Ssl, Tls, or None",
+    helpText: "Use Ssl for SSL/TLS on 993, Tls for STARTTLS where supported, or None only for trusted lab scenarios."
+  },
+  {
+    id: "csvPath",
+    label: "CSV path inside backend container",
+    type: "text",
+    required: false,
+    placeholder: "/migration-input/imap-mailboxes.csv",
+    helpText:
+      "Mounted local path containing EmailAddress, UserName, Password, and optional UserRoot. Leave blank to use M365_TOOLBOX_IMAP_MIGRATION_CSV_PATH. Do not paste passwords into the browser."
+  },
+  {
+    id: "skipCertificateValidation",
+    label: "Skip IMAP certificate validation (high risk)",
+    type: "checkbox",
+    defaultValue: false,
+    helpText: "High risk. Use only for temporary testing against a known source host with a certificate issue."
+  }
+];
+
+const imapMigrationPreflightScript = {
+  id: "m365-imap-migration-preflight",
+  name: "M365 IMAP Migration Preflight",
+  category: "Exchange",
+  summary: "Validate readiness for an Exchange Online IMAP mailbox migration.",
+  description:
+    "Validates the mounted IMAP migration CSV, connects to Exchange Online by device code, and tests source IMAP endpoint availability using Exchange Online migration cmdlets. This does not copy mail locally and does not expose mailbox passwords in UI fields.",
+  scriptRelativePath: "M365-ImapMigrationPreflight.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-imap-migration-preflight",
+  outputs: "Writes an HTML readiness report plus CSV, JSON, and text diagnostics artifacts.",
+  fields: [
+    ...imapMigrationConnectionFields,
+    tenantField
+  ],
+  notes: [
+    "IMAP migration moves mail only, not contacts, calendars, tasks, mailbox rules, or permissions.",
+    "The Microsoft 365 target mailboxes must already exist and be licensed before migration.",
+    "Mailbox passwords must come from a mounted CSV file path or M365_TOOLBOX_IMAP_MIGRATION_CSV_PATH, not browser input.",
+    "Source IMAP connectivity from Microsoft 365 must work before a batch can be created."
+  ]
+};
+
+const imapMigrationBatchScript = {
+  id: "m365-imap-migration-batch",
+  name: "M365 IMAP Migration Batch",
+  category: "Exchange",
+  summary: "Create and optionally start an Exchange Online IMAP migration batch.",
+  description:
+    "Creates or reuses an Exchange Online IMAP migration endpoint, uploads CSVData to New-MigrationBatch, and optionally starts the batch. This workflow orchestrates Microsoft 365 migration services; it is not a local IMAP copy engine.",
+  scriptRelativePath: "M365-ImapMigrationBatch.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-imap-migration-batch",
+  outputs: "Writes an HTML batch report plus summary, per-user status, JSON diagnostics, and text notes artifacts.",
+  fields: [
+    ...imapMigrationConnectionFields,
+    {
+      id: "batchName",
+      label: "Migration batch name",
+      type: "text",
+      required: true,
+      placeholder: "imap-batch-001",
+      helpText: "Must be unique in Exchange Online. Existing batches are not overwritten."
+    },
+    {
+      id: "targetDeliveryDomain",
+      label: "Target delivery domain",
+      type: "text",
+      required: false,
+      placeholder: "contoso.onmicrosoft.com",
+      helpText: "Optional. Use only when your IMAP migration design requires a target delivery domain."
+    },
+    {
+      id: "notificationEmailAddresses",
+      label: "Notification email addresses",
+      type: "text",
+      required: false,
+      placeholder: "admin@contoso.com, migration-team@contoso.com",
+      helpText: "Optional comma-separated notification recipients for Exchange Online migration updates."
+    },
+    {
+      id: "maxConcurrentMigrations",
+      label: "Max concurrent migrations",
+      type: "number",
+      required: false,
+      defaultValue: 20,
+      min: 1,
+      max: 100
+    },
+    {
+      id: "autoStart",
+      label: "Start batch after creation",
+      type: "checkbox",
+      defaultValue: false,
+      helpText: "If disabled, the batch is created but must be started later."
+    },
+    {
+      id: "autoComplete",
+      label: "Auto-complete batch",
+      type: "checkbox",
+      defaultValue: false,
+      helpText: "Passes AutoComplete to New-MigrationBatch so Exchange Online completes the batch automatically when eligible."
+    },
+    tenantField
+  ],
+  notes: [
+    "Approval is required because this workflow creates Exchange Online migration objects and may start mailbox synchronization.",
+    "IMAP migration moves mail only, not contacts, calendars, tasks, mailbox rules, or permissions.",
+    "Mailbox passwords must come from a mounted CSV file path or M365_TOOLBOX_IMAP_MIGRATION_CSV_PATH, not browser input.",
+    "Large mailboxes and message size limits still follow Exchange Online migration service limits."
+  ]
+};
+
+const imapMigrationStatusScript = {
+  id: "m365-imap-migration-status",
+  name: "M365 IMAP Migration Status",
+  category: "Exchange",
+  summary: "Export current status for an existing Exchange Online IMAP migration batch.",
+  description:
+    "Reads an existing Exchange Online migration batch and exports summary plus per-user migration statistics. This is a read-only monitoring workflow.",
+  scriptRelativePath: "M365-ImapMigrationStatus.ps1",
+  scriptMountRootEnv: "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  runner: "generic-html",
+  outputBaseName: "m365-imap-migration-status",
+  outputs: "Writes an HTML status report plus summary, per-user status, JSON diagnostics, and text notes artifacts.",
+  fields: [
+    {
+      id: "tenantAdminUpn",
+      label: "Tenant admin UPN",
+      type: "text",
+      required: false,
+      placeholder: "admin@contoso.com",
+      helpText: "Optional sign-in hint for Exchange Online device-code authentication."
+    },
+    {
+      id: "batchName",
+      label: "Migration batch name",
+      type: "text",
+      required: true,
+      placeholder: "imap-batch-001"
+    },
+    tenantField
+  ],
+  notes: [
+    "This workflow only reads migration status and per-user statistics.",
+    "Per-user error summaries are redacted before export."
   ]
 };
 
@@ -1368,6 +1561,9 @@ export const scripts = [
   conditionalAccessReportScript,
   mailForwardingAuditScript,
   sharedMailboxReportScript,
+  imapMigrationPreflightScript,
+  imapMigrationBatchScript,
+  imapMigrationStatusScript,
   signInRiskReportScript,
   teamsExternalAccessReportScript,
   sharePointSharingReportScript,
