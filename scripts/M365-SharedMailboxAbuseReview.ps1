@@ -8,6 +8,22 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
+function Get-OptionalMailboxPropertyValue {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Mailbox,
+        [Parameter(Mandatory)]
+        [string]$PropertyName
+    )
+
+    $property = $Mailbox.PSObject.Properties[$PropertyName]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
 Write-Host ""
 Write-Host "[*] Checking required PowerShell modules..." -ForegroundColor Cyan
 Import-Module ExchangeOnlineManagement -Force -WarningAction SilentlyContinue
@@ -28,17 +44,25 @@ try {
     Write-Host "[+] Connected to Exchange Online" -ForegroundColor Green
     Write-SectionHeader "COLLECTING SHARED MAILBOX ABUSE SIGNALS"
 
-    $mailboxes = @(Get-ExoMailbox -RecipientTypeDetails SharedMailbox -ResultSize Unlimited | Select-Object -First $MaxMailboxesToInspect)
+    $mailboxes = @(
+        Get-ExoMailbox `
+            -RecipientTypeDetails SharedMailbox `
+            -ResultSize Unlimited `
+            -Properties ForwardingAddress,ForwardingSmtpAddress `
+            | Select-Object -First $MaxMailboxesToInspect
+    )
     $rows = [System.Collections.Generic.List[object]]::new()
 
     foreach ($mailbox in $mailboxes) {
+        $forwardingSmtpAddress = Get-OptionalMailboxPropertyValue -Mailbox $mailbox -PropertyName "ForwardingSmtpAddress"
+        $forwardingAddress = Get-OptionalMailboxPropertyValue -Mailbox $mailbox -PropertyName "ForwardingAddress"
         $delegateCount = @(
             Get-MailboxPermission -Identity $mailbox.UserPrincipalName -ErrorAction SilentlyContinue |
                 Where-Object { -not $_.IsInherited -and $_.User -notmatch 'NT AUTHORITY|S-1-5-|SELF' }
         ).Count
         $ruleCount = @(Get-InboxRule -Mailbox $mailbox.UserPrincipalName -ErrorAction SilentlyContinue).Count
         $signals = [System.Collections.Generic.List[string]]::new()
-        if ($mailbox.ForwardingSmtpAddress -or $mailbox.ForwardingAddress) { [void]$signals.Add("Forwarding configured") }
+        if ($forwardingSmtpAddress -or $forwardingAddress) { [void]$signals.Add("Forwarding configured") }
         if ($delegateCount -gt 5) { [void]$signals.Add("High delegate count") }
         if ($ruleCount -gt 0) { [void]$signals.Add("Inbox rules present") }
         if ($signals.Count -eq 0) { [void]$signals.Add("Review shared access posture") }
@@ -48,7 +72,7 @@ try {
             DisplayName   = [string]$mailbox.DisplayName
             Delegates     = $delegateCount
             InboxRules    = $ruleCount
-            Forwarding    = if ($mailbox.ForwardingSmtpAddress) { [string]$mailbox.ForwardingSmtpAddress } elseif ($mailbox.ForwardingAddress) { [string]$mailbox.ForwardingAddress } else { "None" }
+            Forwarding    = if ($forwardingSmtpAddress) { [string]$forwardingSmtpAddress } elseif ($forwardingAddress) { [string]$forwardingAddress } else { "None" }
             Signals       = ($signals -join "; ")
         })
     }
