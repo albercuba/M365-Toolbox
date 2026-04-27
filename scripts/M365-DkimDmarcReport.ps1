@@ -7,6 +7,26 @@ param(
 
 . (Join-Path $PSScriptRoot "Shared-ToolboxReport.ps1")
 
+function Get-OptionalPropertyValue {
+    param(
+        [Parameter(Mandatory)]
+        [object]$InputObject,
+        [Parameter(Mandatory)]
+        [string]$PropertyName
+    )
+
+    if ($null -eq $InputObject) {
+        return $null
+    }
+
+    $property = $InputObject.PSObject.Properties[$PropertyName]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
 Write-Host ""
 Write-Host "[*] Checking required PowerShell modules..." -ForegroundColor Cyan
 Import-Module ExchangeOnlineManagement -Force -WarningAction SilentlyContinue
@@ -31,6 +51,7 @@ try {
     $rows = foreach ($domain in $domains) {
         $dkim = $null
         try { $dkim = Get-DkimSigningConfig -Identity $domain.DomainName -ErrorAction Stop } catch {}
+        $dkimEnabled = Get-OptionalPropertyValue -InputObject $dkim -PropertyName "Enabled"
 
         $dmarcRecord = "Not queried"
         try {
@@ -44,7 +65,7 @@ try {
             Domain     = [string]$domain.DomainName
             DomainType = [string]$domain.DomainType
             Default    = if ($domain.Default) { "Yes" } else { "No" }
-            Dkim       = if ($dkim.Enabled) { "Enabled" } else { "Disabled" }
+            Dkim       = if ($null -eq $dkimEnabled) { "Unknown" } elseif ([bool]$dkimEnabled) { "Enabled" } else { "Disabled" }
             Dmarc      = if ($dmarcRecord -ne "Not queried" -and $dmarcRecord) { "Present" } else { "Missing" }
             DmarcValue = $dmarcRecord
         }
