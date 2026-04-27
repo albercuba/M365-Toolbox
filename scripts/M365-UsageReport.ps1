@@ -200,18 +200,10 @@ function Import-ReportCsv {
     $tempFile = [System.IO.Path]::GetTempFileName()
 
     try {
-        if ($RequestUri -match "/reports/getSharePointSiteUsageDetail\(period='([^']+)'\)") {
-            Get-MgReportSharePointSiteUsageDetail -Period $matches[1] -OutFile $tempFile -ErrorAction Stop | Out-Null
-        }
-        elseif ($RequestUri -match "/reports/getOneDriveUsageAccountDetail\(period='([^']+)'\)") {
-            Get-MgReportOneDriveUsageAccountDetail -Period $matches[1] -OutFile $tempFile -ErrorAction Stop | Out-Null
-        }
-        elseif ($RequestUri -match "/reports/getMailboxUsageDetail\(period='([^']+)'\)") {
-            Get-MgReportMailboxUsageDetail -Period $matches[1] -OutFile $tempFile -ErrorAction Stop | Out-Null
-        }
-        else {
-            Invoke-MgGraphRequest -Method GET -Uri $RequestUri -OutputFilePath $tempFile -ErrorAction Stop | Out-Null
-        }
+        # The generated Get-MgReport*Detail cmdlets can emit invalid progress values on some
+        # PowerShell / Graph module combinations. Using Invoke-MgGraphRequest avoids that bug
+        # while still downloading the same CSV report payload.
+        Invoke-MgGraphRequest -Method GET -Uri $RequestUri -OutputFilePath $tempFile -ErrorAction Stop | Out-Null
         $rawContent = [System.IO.File]::ReadAllText($tempFile, [System.Text.Encoding]::UTF8)
         $rawContent = $rawContent -replace "^[^R]*Report Refresh Date", "Report Refresh Date"
         return @($rawContent | ConvertFrom-Csv)
