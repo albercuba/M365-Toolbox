@@ -47,6 +47,7 @@ The current catalog includes 59 toolbox-native scripts across categories such as
 - Run cancellation from the UI
 - Structured run logs, timestamps, and clearer run-state feedback
 - Artifact browser for HTML, CSV, XLSX, text, and log downloads
+- ZIP bundle download for full run artifact packages
 - Inline HTML report preview after successful runs, with the report brought into focus automatically
 - Device-code modal that surfaces the sign-in code, copy action, and login URL
 - Approval confirmation prompt for remediation workflows
@@ -317,7 +318,9 @@ What Compose starts:
 What Compose mounts:
 
 - `./scripts` into the backend container at `/toolbox-scripts` as read-only
+- `./scripts` into the worker container at `/toolbox-scripts` as read-only
 - `./output` into the backend container at `/app/output` for generated artifacts
+- `./output` into the worker container at `/app/output` for generated artifacts
 
 What Compose exposes:
 
@@ -352,6 +355,8 @@ Useful Docker Compose commands:
 docker compose ps
 docker compose logs -f
 docker compose logs -f backend
+docker compose logs -f worker
+docker compose logs -f redis
 docker compose logs -f frontend
 docker compose down
 ```
@@ -405,18 +410,21 @@ Recommended variables for Coolify or Portainer:
   Set this to the public URL of the deployed frontend, for example `https://toolbox.example.com`. The backend normalizes the value to its origin, so an optional trailing slash or pasted path is tolerated.
 - `FRONTEND_PORT`
   Optional host port override if you are not using a platform-managed proxy
+- `ARTIFACT_TOKEN_SECRET`
+  Required HMAC secret used for signed artifact, HTML preview, and ZIP bundle links
 
 When to rebuild:
 
-- Rebuild `backend` if you change backend code, script metadata, PowerShell scripts, or PowerShell module installation
+- Rebuild `backend` and `worker` if you change backend code or PowerShell module installation
 - Rebuild `frontend` if you change the React UI and want the containerized build updated
 - Rebuild everything if you change shared package metadata or Dockerfiles
+- You do not need an image rebuild for normal edits inside `scripts/` or `scripts/catalog/` when those folders are mounted from the host
 
 Examples:
 
 ```powershell
 docker compose build backend
-docker compose up -d backend
+docker compose up -d backend worker redis
 ```
 
 ```powershell
@@ -439,6 +447,8 @@ Install workspace dependencies:
 cd C:\VSCode\M365-Toolbox
 npm install
 ```
+
+This repo currently does not require a committed `package-lock.json` for local development. The GitHub workflow therefore uses `npm install` instead of `npm ci`.
 
 Start both apps together:
 
