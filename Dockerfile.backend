@@ -16,11 +16,12 @@ WORKDIR /app
 COPY package.json ./
 COPY package-lock.json ./
 COPY backend/package.json ./backend/package.json
+COPY backend/scripts/prismaGenerate.js ./backend/scripts/prismaGenerate.js
 COPY frontend/package.json ./frontend/package.json
 RUN npm ci
 
 COPY backend ./backend
-RUN npx prisma generate --schema ./backend/prisma/schema.prisma
+RUN cd /app/backend && npx prisma generate --config ./prisma.config.ts --schema ./prisma/schema.prisma
 
 WORKDIR /app/backend
 EXPOSE 3001

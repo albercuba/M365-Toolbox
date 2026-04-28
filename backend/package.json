@@ -7,28 +7,31 @@
     "dev": "npm run dev:api",
     "dev:api": "node --watch src/server.js",
     "dev:worker": "node --watch src/worker.js",
-    "postinstall": "node -e \"const fs=require('fs'); const {spawnSync}=require('child_process'); if (process.env.SKIP_PRISMA_GENERATE==='1' || !fs.existsSync('./prisma/schema.prisma')) process.exit(0); const cmd=process.platform==='win32' ? 'npx.cmd' : 'npx'; const result=spawnSync(cmd,['prisma','generate','--schema','./prisma/schema.prisma'],{stdio:'inherit', env:process.env}); if (result.error) throw result.error; process.exit(result.status ?? 0);\"",
-    "prisma:generate": "prisma generate --schema ./prisma/schema.prisma",
+    "postinstall": "node ./scripts/prismaGenerate.js",
+    "prisma:generate": "prisma generate --config ./prisma.config.ts --schema ./prisma/schema.prisma",
     "start": "npm run db:migrate && node src/server.js",
     "start:api": "npm run db:migrate && node src/server.js",
     "start:worker": "npm run db:migrate && node src/worker.js",
     "test": "npm run prisma:generate && node --test",
-    "db:migrate": "prisma migrate deploy --schema ./prisma/schema.prisma",
+    "db:migrate": "node ./scripts/prismaMigrateDeploy.js",
     "db:seed": "node src/scripts/seed.js",
     "migrate:file-runs": "node src/scripts/migrateFileRuns.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.7.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "archiver": "^7.0.1",
     "bullmq": "^5.58.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "ioredis": "^5.7.0",
     "morgan": "^1.10.0",
+    "pg": "^8.16.3",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "prisma": "^6.7.0"
+    "dotenv": "^16.6.1",
+    "prisma": "^7.8.0"
   }
 }
 

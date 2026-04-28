@@ -1,10 +1,20 @@
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
 const globalScope = globalThis;
+const connectionString =
+  process.env.DATABASE_URL || "postgresql://m365:m365password@localhost:5432/m365_toolbox";
+
+const adapter = new PrismaPg({
+  connectionString,
+  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 300_000
+});
 
 export const prisma =
   globalScope.__m365ToolboxPrisma ||
   new PrismaClient({
+    adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"]
   });
 
