@@ -7,7 +7,7 @@
     "dev": "npm run dev:api",
     "dev:api": "node --watch src/server.js",
     "dev:worker": "node --watch src/worker.js",
-    "postinstall": "node ./scripts/prismaGenerate.js",
+    "postinstall": "node -e \"const fs=require('fs'); const {spawnSync}=require('child_process'); if (process.env.SKIP_PRISMA_GENERATE==='1' || !fs.existsSync('./prisma/schema.prisma')) process.exit(0); const cmd=process.platform==='win32' ? 'npx.cmd' : 'npx'; const result=spawnSync(cmd,['prisma','generate','--schema','./prisma/schema.prisma'],{stdio:'inherit', env:process.env}); if (result.error) throw result.error; process.exit(result.status ?? 0);\"",
     "prisma:generate": "prisma generate --schema ./prisma/schema.prisma",
     "start": "npm run db:migrate && node src/server.js",
     "start:api": "npm run db:migrate && node src/server.js",
