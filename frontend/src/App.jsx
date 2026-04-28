@@ -1013,6 +1013,73 @@ function Field({ field, value, onChange }) {
   );
 }
 
+function SelectField({ label, value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selectedOption = options.find((option) => option.value === value) || options[0] || null;
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className="form-field select-field" ref={rootRef}>
+      <span>{label}</span>
+      <button
+        type="button"
+        className={`select-trigger${open ? " open" : ""}`}
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="select-trigger-label">{selectedOption?.label || ""}</span>
+        <span className="select-trigger-chevron" aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div className="select-menu" role="listbox" aria-label={label}>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={`select-option${option.value === value ? " active" : ""}`}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function App() {
   const reportCardRef = useRef(null);
   const nextToastIdRef = useRef(0);
@@ -1555,6 +1622,19 @@ export function App() {
       : activeRunHeartbeatVisible
         ? "Still running. Some Microsoft 365, Graph, and Exchange queries can take a few minutes before the next output appears."
         : "";
+  const runStatusOptions = [
+    { value: "all", label: "All" },
+    { value: "queued", label: "Queued" },
+    { value: "running", label: "Running" },
+    { value: "canceling", label: "Canceling" },
+    { value: "completed", label: "Completed" },
+    { value: "failed", label: "Failed" },
+    { value: "canceled", label: "Canceled" }
+  ];
+  const runScriptOptions = [
+    { value: "all", label: "All scripts" },
+    ...scripts.map((script) => ({ value: script.id, label: script.name }))
+  ];
   const normalizedSearch = scriptSearch.trim().toLowerCase();
   const runCountsByScriptId = runs.reduce((acc, run) => {
     acc[run.scriptId] = (acc[run.scriptId] || 0) + 1;
@@ -1637,27 +1717,18 @@ export function App() {
   const renderRecentRunsContent = () => (
     <div className="card-body">
       <div className="recent-runs-filters">
-        <label className="form-field">
-          <span>Status</span>
-          <select value={runStatusFilter} onChange={(event) => setRunStatusFilter(event.target.value)}>
-            <option value="all">All</option>
-            <option value="queued">Queued</option>
-            <option value="running">Running</option>
-            <option value="canceling">Canceling</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="canceled">Canceled</option>
-          </select>
-        </label>
-        <label className="form-field">
-          <span>Script</span>
-          <select value={runScriptFilter} onChange={(event) => setRunScriptFilter(event.target.value)}>
-            <option value="all">All scripts</option>
-            {scripts.map((script) => (
-              <option key={script.id} value={script.id}>{script.name}</option>
-            ))}
-          </select>
-        </label>
+        <SelectField
+          label="Status"
+          value={runStatusFilter}
+          options={runStatusOptions}
+          onChange={setRunStatusFilter}
+        />
+        <SelectField
+          label="Script"
+          value={runScriptFilter}
+          options={runScriptOptions}
+          onChange={setRunScriptFilter}
+        />
         <label className="form-field">
           <span>Tenant</span>
           <input value={runTenantFilter} onChange={(event) => setRunTenantFilter(event.target.value)} placeholder="Tenant ID or domain" />
