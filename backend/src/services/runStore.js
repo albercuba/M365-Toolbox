@@ -383,6 +383,7 @@ export async function addArtifact(runId, artifact) {
     artifact.sizeBytes ??
     artifact.size ??
     (fs.existsSync(artifactPath) ? fs.statSync(artifactPath).size : null);
+  const artifactId = artifact.id && validateUuid(String(artifact.id)) ? String(artifact.id) : uuidv4();
 
   return prisma.runArtifact.upsert({
     where: {
@@ -397,7 +398,7 @@ export async function addArtifact(runId, artifact) {
       sizeBytes
     },
     create: {
-      id: artifact.id || uuidv4(),
+      id: artifactId,
       runId,
       type: artifact.type || "other",
       filename: artifact.filename || artifact.name || path.basename(artifactPath),

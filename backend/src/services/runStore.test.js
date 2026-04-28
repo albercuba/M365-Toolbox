@@ -289,6 +289,22 @@ test("addArtifact records artifact metadata and normalizes file names", withFake
   assert.equal(run.artifacts.files[0].name, "report.html");
 }));
 
+test("addArtifact replaces non-uuid artifact ids before persistence", withFakePrisma(async (state) => {
+  const id = "00000000-0000-0000-0000-000000000015";
+  await createRun({ id, scriptId: "m365-test", scriptName: "Test Script" });
+
+  await addArtifact(id, {
+    id: "Licensing_arnold-rv_28.04.26-20.11.50.html",
+    path: path.join(process.cwd(), "output", "Licensing_arnold-rv_28.04.26-20.11.50.html"),
+    type: "html",
+    size: 99
+  });
+
+  assert.equal(state.artifacts.length, 1);
+  assert.match(state.artifacts[0].id, /^[0-9a-f-]{36}$/i);
+  assert.equal(state.artifacts[0].filename, "Licensing_arnold-rv_28.04.26-20.11.50.html");
+}));
+
 test("listRuns supports filters and pagination", withFakePrisma(async () => {
   await createRun({
     id: "00000000-0000-0000-0000-000000000011",
