@@ -1084,6 +1084,8 @@ textarea {
   border: 1px solid var(--border2);
   border-radius: var(--r);
   box-shadow: var(--shadow);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .select-option {
@@ -1135,6 +1137,8 @@ textarea {
   box-shadow: var(--shadow);
   display: grid;
   gap: 0.75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .date-popover-header {
