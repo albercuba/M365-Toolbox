@@ -46,6 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build compose services
+        env:
+          ARTIFACT_TOKEN_SECRET: ci-artifact-token-secret
         run: docker compose -f docker-compose.prod.yml build backend worker frontend
 
   secret-scan:
