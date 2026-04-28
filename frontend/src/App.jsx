@@ -244,8 +244,8 @@ function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWi
         ? anchorRect.width
         : Math.max(minWidth, anchorRect.width, panelRect?.width || 0);
       const desiredHeight = panelRect?.height || 0;
-      const availableBelow = Math.max(140, Math.floor(window.innerHeight - anchorRect.bottom - viewportPadding - 6));
-      const availableAbove = Math.max(140, Math.floor(anchorRect.top - viewportPadding - 6));
+      const availableBelow = Math.max(0, Math.floor(window.innerHeight - anchorRect.bottom - viewportPadding));
+      const availableAbove = Math.max(0, Math.floor(anchorRect.top - viewportPadding));
       const preferredHeight = Math.max(desiredHeight, estimatedHeight);
       const placeBelow = availableBelow >= preferredHeight;
       const maxHeight = placeBelow ? availableBelow : availableAbove;
@@ -255,10 +255,10 @@ function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWi
         left = Math.max(viewportPadding, window.innerWidth - viewportPadding - desiredWidth);
       }
 
-      let top = anchorRect.bottom + 6;
+      let top = anchorRect.bottom;
       if (!placeBelow) {
-        const renderHeight = Math.min(preferredHeight, maxHeight);
-        top = Math.max(viewportPadding, anchorRect.top - renderHeight - 6);
+        const renderHeight = Math.min(preferredHeight, maxHeight || preferredHeight);
+        top = Math.max(viewportPadding, anchorRect.top - renderHeight);
       }
 
       setStyle({
