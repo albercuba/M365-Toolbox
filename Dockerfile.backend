@@ -6,7 +6,7 @@ RUN apt-get update \
     && dpkg -i packages-microsoft-prod.deb \
     && rm packages-microsoft-prod.deb \
     && apt-get update \
-    && apt-get install -y powershell libgdiplus libc6-dev \
+    && apt-get install -y powershell libgdiplus libc6-dev openssl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pwsh -NoLogo -NoProfile -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module Microsoft.Graph -RequiredVersion 2.36.1 -Scope AllUsers -Force -AllowClobber; Install-Module ExchangeOnlineManagement,ImportExcel -Scope AllUsers -Force -AllowClobber"
