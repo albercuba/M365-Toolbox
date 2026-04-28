@@ -539,7 +539,9 @@ function Export-ToolboxHtmlReport {
     .card-title{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);flex:1}
     .card-badge{font-size:.7rem;padding:.18rem .55rem;border-radius:4px;background:rgba(15,124,192,.1);color:var(--accent)}
     .card-body{padding:1.25rem}
+    .card-body.table-card-body{padding:0}
     .card-text{font-family:var(--mono);font-size:.78rem;color:var(--text2)}
+    .table-card-shell{padding:1.1rem 1.25rem 1.25rem}
     .table-filter{display:grid;gap:.35rem;margin-bottom:.8rem}
     .table-filter-label{font-size:.63rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
     .table-filter-input{width:100%;max-width:320px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg3);color:var(--text);font-family:var(--mono);font-size:.74rem;padding:.55rem .7rem;outline:none}
@@ -550,7 +552,7 @@ function Export-ToolboxHtmlReport {
     .warn{background:rgba(180,83,9,.1);color:var(--warn)}
     .crit{background:rgba(220,38,38,.1);color:var(--crit)}
     .neutral{background:rgba(15,124,192,.1);color:var(--accent)}
-    .table-scroll{max-height:620px;overflow:auto;border:1px solid var(--border);border-radius:var(--r)}
+    .table-scroll{max-height:620px;overflow:auto;border-top:1px solid var(--border);border-bottom-left-radius:var(--r2);border-bottom-right-radius:var(--r2)}
     table{width:100%;border-collapse:collapse;font-size:.77rem;table-layout:fixed}
     thead{background:var(--bg3);position:sticky;top:0;z-index:1}
     th{position:relative;padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
@@ -726,9 +728,10 @@ function Export-ToolboxHtmlReport {
   function renderSections(items){
     return (items||[]).map(function(section){
       let inner='';
+      let bodyClass='card-body';
       if(section.text){inner='<div class="card-text">'+esc(section.text)+'</div>';}
-      if(section.columns){inner=renderRows(section.columns,section.rows||[],section);}
-      return '<div class="card"'+(section.id?' id="'+attr(section.id)+'"':'')+'><div class="card-header"><span class="card-title">'+esc(section.title)+'</span>'+(section.badge?'<span class="card-badge">'+esc(section.badge)+'</span>':'')+'</div><div class="card-body">'+inner+'</div></div>';
+      if(section.columns){inner='<div class="table-card-shell">'+renderRows(section.columns,section.rows||[],section)+'</div>';bodyClass+=' table-card-body';}
+      return '<div class="card"'+(section.id?' id="'+attr(section.id)+'"':'')+'><div class="card-header"><span class="card-title">'+esc(section.title)+'</span>'+(section.badge?'<span class="card-badge">'+esc(section.badge)+'</span>':'')+'</div><div class="'+bodyClass+'">'+inner+'</div></div>';
     }).join('');
   }
   document.getElementById('server-strip').innerHTML=renderStrip(DATA.stripItems);
