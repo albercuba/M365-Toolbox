@@ -17,8 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
+      - run: npm install
       - run: npm run test -w backend
       - run: npm run build -w frontend
       - run: npm audit --omit=dev -w backend
