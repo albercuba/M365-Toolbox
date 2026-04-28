@@ -70,6 +70,11 @@ function formatDuration(value) {
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
+function formatRunTenant(run) {
+  const tenant = run?.payload?.tenantId;
+  return tenant ? String(tenant).trim() : "Auto-detect";
+}
+
 function formatRelativeTime(value, nowMs = Date.now()) {
   if (!value) return "Pending";
 
@@ -1568,6 +1573,7 @@ export function App() {
             <thead>
               <tr>
                 <th>Script</th>
+                <th>Tenant</th>
                 <th>Status</th>
                 <th>Requested</th>
                 <th>Action</th>
@@ -1577,6 +1583,7 @@ export function App() {
               {runs.map((run) => (
                 <tr key={run.id}>
                   <td>{run.scriptName}</td>
+                  <td>{formatRunTenant(run)}</td>
                   <td>
                     <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
                       {run.status}
