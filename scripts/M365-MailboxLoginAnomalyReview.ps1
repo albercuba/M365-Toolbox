@@ -15,7 +15,23 @@ Resolve-ToolboxTenantLabel
 Write-SectionHeader "COLLECTING MAILBOX SIGN-IN DATA"
 
 $startUtc = (Get-Date).AddDays(-1 * $LookbackDays).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$signIns = @(Get-MgAuditLogSignIn -Filter "createdDateTime ge $startUtc" -All -ErrorAction Stop)
+$signIns = @()
+$dataUnavailableReason = $null
+
+try {
+    $signIns = @(Get-MgAuditLogSignIn -Filter "createdDateTime ge $startUtc" -All -ErrorAction Stop)
+}
+catch {
+    $errorMessage = Get-ToolboxExceptionMessage -Exception $_.Exception
+    if ($errorMessage -match 'Authentication_RequestFromNonPremiumTenantOrB2CTenant|premium license|403 \(Forbidden\)') {
+        $dataUnavailableReason = "Microsoft Entra sign-in logs for this review require a supported Premium tenant license. This tenant does not currently expose the mailbox sign-in dataset through Microsoft Graph."
+        Write-Warning $dataUnavailableReason
+    }
+    else {
+        throw
+    }
+}
+
 $mailboxRows = [System.Collections.Generic.List[object]]::new()
 
 foreach ($signIn in $signIns) {
@@ -52,31 +68,46 @@ foreach ($signIn in $signIns) {
 
 $htmlPath = Add-TimestampToPath -Path $ExportHtml -BaseName "MailboxLoginAnomalyReview" -OutputPath $OutputPath
 $tenantName = if ($script:ToolboxTenantLabel) { $script:ToolboxTenantLabel } else { "Unknown tenant" }
+$reportSubtitle = if ($dataUnavailableReason) {
+    "Mailbox sign-in anomaly data is unavailable for this tenant"
+}
+else {
+    "Mailbox-related sign-ins with unusual client, failure, or access patterns"
+}
+$sections = @()
 
-Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Mailbox Login Anomaly Review" -Tenant $tenantName -Subtitle "Mailbox-related sign-ins with unusual client, failure, or access patterns" -Kpis @(
-    @{ label = "Mailbox Events"; value = $mailboxRows.Count; sub = "Mailbox sign-ins with anomaly signals"; cls = if ($mailboxRows.Count -gt 0) { "warn" } else { "ok" } },
+if ($dataUnavailableReason) {
+    $sections += @{
+        title = "Mailbox Sign-In Dataset Unavailable"
+        badge = "license required"
+        text = $dataUnavailableReason
+    }
+}
+
+$sections += @{
+    title = "Mailbox Sign-In Anomalies"
+    badge = "$($mailboxRows.Count) event(s)"
+    columns = @(
+        @{ key = "UserPrincipalName"; header = "User" },
+        @{ key = "CreatedDateTime"; header = "Time" },
+        @{ key = "AppDisplayName"; header = "Application" },
+        @{ key = "ClientAppUsed"; header = "Client" },
+        @{ key = "IPAddress"; header = "IP" },
+        @{ key = "Location"; header = "Location" },
+        @{ key = "ConditionalAccess"; header = "CA Status"; type = "pill" },
+        @{ key = "Signals"; header = "Signals" }
+    )
+    rows = @($mailboxRows | Sort-Object CreatedDateTime -Descending)
+}
+
+Export-ToolboxHtmlReport -Path $htmlPath -Title "M365 Mailbox Login Anomaly Review" -Tenant $tenantName -Subtitle $reportSubtitle -Kpis @(
+    @{ label = "Mailbox Events"; value = $(if ($dataUnavailableReason) { "Unavailable" } else { $mailboxRows.Count }); sub = $(if ($dataUnavailableReason) { "Premium sign-in dataset required" } else { "Mailbox sign-ins with anomaly signals" }); cls = if ($dataUnavailableReason) { "warn" } elseif ($mailboxRows.Count -gt 0) { "warn" } else { "ok" } },
     @{ label = "Users"; value = @($mailboxRows | Select-Object -ExpandProperty UserPrincipalName -Unique).Count; sub = "Affected mailbox identities"; cls = "neutral" },
     @{ label = "Legacy Client"; value = @($mailboxRows | Where-Object { $_.ClientAppUsed -match 'IMAP|POP|SMTP|Other clients' }).Count; sub = "Legacy protocol activity"; cls = "crit" },
     @{ label = "Lookback"; value = "$LookbackDays d"; sub = "Review window"; cls = "neutral" }
 ) -StripItems @(
     @{ label = "Tenant"; value = $tenantName },
     @{ label = "Generated"; value = (Get-Date).ToString("yyyy-MM-dd HH:mm") }
-) -Sections @(
-    @{
-        title = "Mailbox Sign-In Anomalies"
-        badge = "$($mailboxRows.Count) event(s)"
-        columns = @(
-            @{ key = "UserPrincipalName"; header = "User" },
-            @{ key = "CreatedDateTime"; header = "Time" },
-            @{ key = "AppDisplayName"; header = "Application" },
-            @{ key = "ClientAppUsed"; header = "Client" },
-            @{ key = "IPAddress"; header = "IP" },
-            @{ key = "Location"; header = "Location" },
-            @{ key = "ConditionalAccess"; header = "CA Status"; type = "pill" },
-            @{ key = "Signals"; header = "Signals" }
-        )
-        rows = @($mailboxRows | Sort-Object CreatedDateTime -Descending)
-    }
-)
+) -Sections $sections
 
 Write-Host "[+] HTML dashboard exported to: $htmlPath" -ForegroundColor Green
