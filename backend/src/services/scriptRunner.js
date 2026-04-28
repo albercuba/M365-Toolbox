@@ -31,34 +31,76 @@ function resolveScript(scriptId) {
   return script;
 }
 
+function inferArtifactsFromOutput(run) {
+  const discovered = [];
+  const seen = new Set();
+  const output = [run?.stdout, run?.stderr]
+    .filter(Boolean)
+    .join("\n");
+
+  for (const match of output.matchAll(/exported to:\s*([^\r\n]+)/gi)) {
+    const artifactPath = match[1]?.trim();
+    if (!artifactPath || seen.has(artifactPath) || !fs.existsSync(artifactPath)) {
+      continue;
+    }
+
+    seen.add(artifactPath);
+    const stat = fs.statSync(artifactPath);
+    discovered.push({
+      id: path.basename(artifactPath),
+      name: path.basename(artifactPath),
+      path: artifactPath,
+      type: path.extname(artifactPath).slice(1).toLowerCase() || "file",
+      size: stat.size,
+      createdAt: stat.mtime.toISOString()
+    });
+  }
+
+  return discovered;
+}
+
 function updateArtifactsFromFilesystem(run) {
-  if (!run?.artifacts?.basePath) {
-    return run?.artifacts?.files || [];
+  const knownFiles = Array.isArray(run?.artifacts?.files) ? run.artifacts.files : [];
+  const filesByPath = new Map();
+
+  for (const file of knownFiles) {
+    if (file?.path) {
+      filesByPath.set(path.resolve(file.path), file);
+    }
   }
 
-  const dir = path.dirname(run.artifacts.basePath);
-  const prefix = path.basename(run.artifacts.basePath);
-  if (!fs.existsSync(dir)) {
-    return run.artifacts.files || [];
+  if (run?.artifacts?.basePath) {
+    const dir = path.dirname(run.artifacts.basePath);
+    const prefix = path.basename(run.artifacts.basePath);
+
+    if (fs.existsSync(dir)) {
+      const discoveredByPrefix = fs
+        .readdirSync(dir)
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => {
+          const fullPath = path.join(dir, name);
+          const stat = fs.statSync(fullPath);
+          return {
+            id: name,
+            name,
+            path: fullPath,
+            type: path.extname(name).slice(1).toLowerCase() || "file",
+            size: stat.size,
+            createdAt: stat.mtime.toISOString()
+          };
+        });
+
+      for (const file of discoveredByPrefix) {
+        filesByPath.set(path.resolve(file.path), file);
+      }
+    }
   }
 
-  const files = fs
-    .readdirSync(dir)
-    .filter((name) => name.startsWith(prefix))
-    .map((name) => {
-      const fullPath = path.join(dir, name);
-      const stat = fs.statSync(fullPath);
-      return {
-        id: name,
-        name,
-        path: fullPath,
-        type: path.extname(name).slice(1).toLowerCase() || "file",
-        size: stat.size,
-        createdAt: stat.mtime.toISOString()
-      };
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
+  for (const file of inferArtifactsFromOutput(run)) {
+    filesByPath.set(path.resolve(file.path), file);
+  }
 
+  const files = [...filesByPath.values()].sort((left, right) => left.name.localeCompare(right.name));
   run.artifacts.files = files;
   const htmlFile = files.find((file) => file.type === "html");
   run.artifacts.htmlPath = htmlFile?.path || run.artifacts.htmlPath || null;
