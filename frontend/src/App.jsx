@@ -222,7 +222,7 @@ function formatCalendarHeading(date) {
   });
 }
 
-function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWidth = 0 } = {}) {
+function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWidth = 0, estimatedHeight = 320 } = {}) {
   const [style, setStyle] = useState(null);
 
   useEffect(() => {
@@ -246,7 +246,7 @@ function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWi
       const desiredHeight = panelRect?.height || 0;
       const availableBelow = Math.max(140, Math.floor(window.innerHeight - anchorRect.bottom - viewportPadding - 6));
       const availableAbove = Math.max(140, Math.floor(anchorRect.top - viewportPadding - 6));
-      const preferredHeight = desiredHeight || 320;
+      const preferredHeight = Math.max(desiredHeight, estimatedHeight);
       const placeBelow = availableBelow >= preferredHeight;
       const maxHeight = placeBelow ? availableBelow : availableAbove;
 
@@ -279,7 +279,7 @@ function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWi
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [anchorRef, matchWidth, minWidth, open, panelRef]);
+  }, [anchorRef, estimatedHeight, matchWidth, minWidth, open, panelRef]);
 
   return style;
 }
@@ -1149,7 +1149,11 @@ function SelectField({ label, value, options, onChange }) {
   const rootRef = useRef(null);
   const menuRef = useRef(null);
   const selectedOption = options.find((option) => option.value === value) || options[0] || null;
-  const menuStyle = useFloatingLayer(open, rootRef, menuRef, { matchWidth: true });
+  const estimatedMenuHeight = Math.min(520, Math.max(180, options.length * 38 + 20));
+  const menuStyle = useFloatingLayer(open, rootRef, menuRef, {
+    matchWidth: true,
+    estimatedHeight: estimatedMenuHeight
+  });
 
   useEffect(() => {
     if (!open) {
@@ -1222,7 +1226,7 @@ function DateField({ label, value, onChange }) {
   const panelRef = useRef(null);
   const selectedDate = parseInputDateValue(value);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selectedDate || new Date()));
-  const panelStyle = useFloatingLayer(open, rootRef, panelRef, { minWidth: 280 });
+  const panelStyle = useFloatingLayer(open, rootRef, panelRef, { minWidth: 280, estimatedHeight: 360 });
   const today = new Date();
   const days = buildCalendarDays(viewMonth);
 
