@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const apiBase = "/api";
 
@@ -151,6 +152,132 @@ function formatFileSize(value) {
   const formatted = size / 1024 ** exponent;
   const digits = formatted >= 10 || exponent === 0 ? 0 : 1;
   return `${formatted.toFixed(digits)} ${units[exponent]}`;
+}
+
+function formatDateInputDisplay(value) {
+  if (!value) {
+    return "mm/dd/yyyy";
+  }
+
+  const [year, month, day] = String(value).split("-");
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  return `${month}/${day}/${year}`;
+}
+
+function parseInputDateValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  const [year, month, day] = String(value).split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+function toInputDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date, delta) {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+function sameDay(left, right) {
+  return (
+    left?.getFullYear?.() === right?.getFullYear?.() &&
+    left?.getMonth?.() === right?.getMonth?.() &&
+    left?.getDate?.() === right?.getDate?.()
+  );
+}
+
+function buildCalendarDays(monthDate) {
+  const monthStart = startOfMonth(monthDate);
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+}
+
+function formatCalendarHeading(date) {
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWidth = 0 } = {}) {
+  const [style, setStyle] = useState(null);
+
+  useEffect(() => {
+    if (!open) {
+      setStyle(null);
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      const anchorRect = anchorRef.current?.getBoundingClientRect();
+      const panelRect = panelRef.current?.getBoundingClientRect();
+
+      if (!anchorRect) {
+        return;
+      }
+
+      const viewportPadding = 12;
+      const desiredWidth = matchWidth
+        ? anchorRect.width
+        : Math.max(minWidth, anchorRect.width, panelRect?.width || 0);
+      const desiredHeight = panelRect?.height || 0;
+
+      let left = anchorRect.left;
+      if (left + desiredWidth > window.innerWidth - viewportPadding) {
+        left = Math.max(viewportPadding, window.innerWidth - viewportPadding - desiredWidth);
+      }
+
+      let top = anchorRect.bottom + 6;
+      if (desiredHeight && top + desiredHeight > window.innerHeight - viewportPadding) {
+        const aboveTop = anchorRect.top - desiredHeight - 6;
+        if (aboveTop >= viewportPadding) {
+          top = aboveTop;
+        }
+      }
+
+      setStyle({
+        position: "fixed",
+        top: `${Math.round(top)}px`,
+        left: `${Math.round(left)}px`,
+        width: matchWidth ? `${Math.round(anchorRect.width)}px` : undefined,
+        minWidth: `${Math.round(Math.max(minWidth, anchorRect.width))}px`
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef, matchWidth, minWidth, open, panelRef]);
+
+  return style;
 }
 
 async function copyText(text) {
@@ -1016,7 +1143,9 @@ function Field({ field, value, onChange }) {
 function SelectField({ label, value, options, onChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
   const selectedOption = options.find((option) => option.value === value) || options[0] || null;
+  const menuStyle = useFloatingLayer(open, rootRef, menuRef, { matchWidth: true });
 
   useEffect(() => {
     if (!open) {
@@ -1024,7 +1153,7 @@ function SelectField({ label, value, options, onChange }) {
     }
 
     const handlePointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) {
+      if (!rootRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) {
         setOpen(false);
       }
     };
@@ -1057,25 +1186,163 @@ function SelectField({ label, value, options, onChange }) {
         <span className="select-trigger-label">{selectedOption?.label || ""}</span>
         <span className="select-trigger-chevron" aria-hidden="true">▾</span>
       </button>
-      {open ? (
-        <div className="select-menu" role="listbox" aria-label={label}>
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="option"
-              aria-selected={option.value === value}
-              className={`select-option${option.value === value ? " active" : ""}`}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {open && menuStyle
+        ? createPortal(
+            <div className="select-menu" role="listbox" aria-label={label} ref={menuRef} style={menuStyle}>
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={option.value === value}
+                  className={`select-option${option.value === value ? " active" : ""}`}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const panelRef = useRef(null);
+  const selectedDate = parseInputDateValue(value);
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(selectedDate || new Date()));
+  const panelStyle = useFloatingLayer(open, rootRef, panelRef, { minWidth: 280 });
+  const today = new Date();
+  const days = buildCalendarDays(viewMonth);
+
+  useEffect(() => {
+    if (selectedDate) {
+      setViewMonth(startOfMonth(selectedDate));
+    }
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target) && !panelRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className="form-field date-field" ref={rootRef}>
+      <span>{label}</span>
+      <button
+        type="button"
+        className={`select-trigger date-trigger${open ? " open" : ""}${value ? "" : " placeholder"}`}
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        <span className="select-trigger-label">{formatDateInputDisplay(value)}</span>
+        <span className="date-trigger-icon" aria-hidden="true">◷</span>
+      </button>
+      {open && panelStyle
+        ? createPortal(
+            <div className="date-popover" ref={panelRef} style={panelStyle} role="dialog" aria-label={`${label} date`}>
+              <div className="date-popover-header">
+                <button
+                  type="button"
+                  className="date-nav-btn"
+                  onClick={() => setViewMonth((current) => addMonths(current, -1))}
+                  aria-label="Previous month"
+                >
+                  ‹
+                </button>
+                <div className="date-popover-title">{formatCalendarHeading(viewMonth)}</div>
+                <button
+                  type="button"
+                  className="date-nav-btn"
+                  onClick={() => setViewMonth((current) => addMonths(current, 1))}
+                  aria-label="Next month"
+                >
+                  ›
+                </button>
+              </div>
+              <div className="date-weekdays">
+                {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+                  <span key={day}>{day}</span>
+                ))}
+              </div>
+              <div className="date-grid">
+                {days.map((date) => {
+                  const inCurrentMonth = date.getMonth() === viewMonth.getMonth();
+                  const isSelected = selectedDate ? sameDay(date, selectedDate) : false;
+                  const isToday = sameDay(date, today);
+
+                  return (
+                    <button
+                      key={date.toISOString()}
+                      type="button"
+                      className={`date-cell${inCurrentMonth ? "" : " muted"}${isSelected ? " active" : ""}${isToday ? " today" : ""}`}
+                      onClick={() => {
+                        onChange(toInputDateValue(date));
+                        setOpen(false);
+                      }}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="date-popover-actions">
+                <button
+                  type="button"
+                  className="date-action-btn"
+                  onClick={() => {
+                    onChange("");
+                    setOpen(false);
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="date-action-btn primary"
+                  onClick={() => {
+                    const nextValue = toInputDateValue(today);
+                    onChange(nextValue);
+                    setViewMonth(startOfMonth(today));
+                    setOpen(false);
+                  }}
+                >
+                  Today
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
@@ -1733,14 +2000,8 @@ export function App() {
           <span>Tenant</span>
           <input value={runTenantFilter} onChange={(event) => setRunTenantFilter(event.target.value)} placeholder="Tenant ID or domain" />
         </label>
-        <label className="form-field">
-          <span>From</span>
-          <input type="date" value={runDateFrom} onChange={(event) => setRunDateFrom(event.target.value)} />
-        </label>
-        <label className="form-field">
-          <span>To</span>
-          <input type="date" value={runDateTo} onChange={(event) => setRunDateTo(event.target.value)} />
-        </label>
+        <DateField label="From" value={runDateFrom} onChange={setRunDateFrom} />
+        <DateField label="To" value={runDateTo} onChange={setRunDateTo} />
       </div>
       {runsLoading ? (
         <div className="empty-row">Loading run history...</div>
@@ -1803,7 +2064,7 @@ export function App() {
 
   const renderRecentRunsCard = () => {
     return (
-      <div className={`card ${recentRunsOpen ? "" : "card-collapsed"}`}>
+      <div className={`card recent-runs-card ${recentRunsOpen ? "" : "card-collapsed"}`}>
         <button type="button" className="card-header card-header-button" onClick={() => setRecentRunsOpen((current) => !current)}>
           <span className="card-title">Recent Runs</span>
           <span className="card-badge badge-neutral">{runTotal}</span>
