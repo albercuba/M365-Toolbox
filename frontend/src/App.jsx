@@ -247,9 +247,7 @@ function useFloatingLayer(open, anchorRef, panelRef, { matchWidth = false, minWi
       const availableBelow = Math.max(140, Math.floor(window.innerHeight - anchorRect.bottom - viewportPadding - 6));
       const availableAbove = Math.max(140, Math.floor(anchorRect.top - viewportPadding - 6));
       const preferredHeight = desiredHeight || 320;
-      const placeBelow =
-        (availableBelow >= preferredHeight) ||
-        (availableBelow >= availableAbove);
+      const placeBelow = availableBelow >= preferredHeight;
       const maxHeight = placeBelow ? availableBelow : availableAbove;
 
       let left = anchorRect.left;
