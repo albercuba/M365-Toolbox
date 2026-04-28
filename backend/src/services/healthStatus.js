@@ -6,6 +6,7 @@ import {
   TOOLBOX_SCRIPT_MOUNT_ROOT,
   WORKER_HEARTBEAT_STALE_MS
 } from "../config/runtime.js";
+import { prisma } from "./db.js";
 import { getQueueMetrics, redisConnection } from "./queue.js";
 import { loadWorkerHeartbeat } from "./runRepository.js";
 
@@ -64,6 +65,10 @@ export async function getSystemStatus() {
     status: "missing",
     error: null
   };
+  let database = {
+    available: false,
+    error: null
+  };
   const heartbeat = loadWorkerHeartbeat();
 
   try {
@@ -71,6 +76,19 @@ export async function getSystemStatus() {
     redis = { available: pong === "PONG", url: maskRedisUrl(REDIS_URL), error: null };
   } catch (error) {
     redis = { available: false, url: maskRedisUrl(REDIS_URL), error: error.message };
+  }
+
+  try {
+    await prisma.$queryRawUnsafe("SELECT 1");
+    database = {
+      available: true,
+      error: null
+    };
+  } catch (error) {
+    database = {
+      available: false,
+      error: error.message
+    };
   }
 
   try {
@@ -103,7 +121,7 @@ export async function getSystemStatus() {
     };
   }
 
-  const executionAvailable = outputWritable && scriptsMounted && redis.available && worker.fresh;
+  const executionAvailable = outputWritable && scriptsMounted && redis.available && database.available && worker.fresh;
   const backendStatus = executionAvailable ? "ok" : "degraded";
 
   lastStatus = {
@@ -120,6 +138,7 @@ export async function getSystemStatus() {
       available: executionAvailable,
       queueName: JOB_QUEUE_NAME
     },
+    database,
     redis,
     queue,
     worker

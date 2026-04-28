@@ -5,15 +5,19 @@ import { v4 as uuidv4 } from "uuid";
 import { OUTPUT_DIR } from "../config/runtime.js";
 import { scripts } from "../data/scripts.js";
 import { issueArtifactToken } from "./artifactTokens.js";
-import { createError, validatePayload } from "./validation.js";
 import {
+  addArtifact,
+  appendLog,
+  createRun,
   deleteRun,
-  ensureRuntimePaths,
-  listRuns,
-  loadRun,
-  pruneExpiredRuns,
-  saveRun
-} from "./runRepository.js";
+  getRun as getStoredRun,
+  getRunArtifactRecord,
+  listRuns as listStoredRuns,
+  setApproval,
+  updateRun
+} from "./runStore.js";
+import { createError, validatePayload } from "./validation.js";
+import { ensureRuntimePaths } from "./runRepository.js";
 import { enqueueRun, getQueueMetrics, scriptRunQueue } from "./queue.js";
 
 const scriptsById = new Map(scripts.map((script) => [script.id, script]));
@@ -34,9 +38,7 @@ function resolveScript(scriptId) {
 function inferArtifactsFromOutput(run) {
   const discovered = [];
   const seen = new Set();
-  const output = [run?.stdout, run?.stderr]
-    .filter(Boolean)
-    .join("\n");
+  const output = [run?.stdout, run?.stderr].filter(Boolean).join("\n");
 
   for (const match of output.matchAll(/exported to:\s*([^\r\n]+)/gi)) {
     const artifactPath = match[1]?.trim();
@@ -59,9 +61,9 @@ function inferArtifactsFromOutput(run) {
   return discovered;
 }
 
-function updateArtifactsFromFilesystem(run) {
-  const knownFiles = Array.isArray(run?.artifacts?.files) ? run.artifacts.files : [];
+async function syncRunArtifacts(run) {
   const filesByPath = new Map();
+  const knownFiles = Array.isArray(run?.artifacts?.files) ? run.artifacts.files : [];
 
   for (const file of knownFiles) {
     if (file?.path) {
@@ -69,29 +71,22 @@ function updateArtifactsFromFilesystem(run) {
     }
   }
 
-  if (run?.artifacts?.basePath) {
-    const dir = path.dirname(run.artifacts.basePath);
-    const prefix = path.basename(run.artifacts.basePath);
-
+  const basePath = run?.artifacts?.basePath || run?.result?.artifactBasePath || null;
+  if (basePath) {
+    const dir = path.dirname(basePath);
+    const prefix = path.basename(basePath);
     if (fs.existsSync(dir)) {
-      const discoveredByPrefix = fs
-        .readdirSync(dir)
-        .filter((name) => name.startsWith(prefix))
-        .map((name) => {
-          const fullPath = path.join(dir, name);
-          const stat = fs.statSync(fullPath);
-          return {
-            id: name,
-            name,
-            path: fullPath,
-            type: path.extname(name).slice(1).toLowerCase() || "file",
-            size: stat.size,
-            createdAt: stat.mtime.toISOString()
-          };
+      for (const name of fs.readdirSync(dir).filter((entry) => entry.startsWith(prefix))) {
+        const fullPath = path.join(dir, name);
+        const stat = fs.statSync(fullPath);
+        filesByPath.set(path.resolve(fullPath), {
+          id: name,
+          name,
+          path: fullPath,
+          type: path.extname(name).slice(1).toLowerCase() || "file",
+          size: stat.size,
+          createdAt: stat.mtime.toISOString()
         });
-
-      for (const file of discoveredByPrefix) {
-        filesByPath.set(path.resolve(file.path), file);
       }
     }
   }
@@ -101,9 +96,17 @@ function updateArtifactsFromFilesystem(run) {
   }
 
   const files = [...filesByPath.values()].sort((left, right) => left.name.localeCompare(right.name));
-  run.artifacts.files = files;
+  for (const file of files) {
+    await addArtifact(run.id, file);
+  }
+
   const htmlFile = files.find((file) => file.type === "html");
-  run.artifacts.htmlPath = htmlFile?.path || run.artifacts.htmlPath || null;
+  run.artifacts = {
+    ...run.artifacts,
+    basePath,
+    htmlPath: htmlFile?.path || run.artifacts?.htmlPath || null,
+    files
+  };
   return files;
 }
 
@@ -118,15 +121,8 @@ async function getQueuePosition(runId) {
 }
 
 async function cloneForResponse(run) {
-  updateArtifactsFromFilesystem(run);
-  let queueMetrics = {
-    waiting: 0
-  };
-  try {
-    queueMetrics = await getQueueMetrics();
-  } catch {
-    queueMetrics = { waiting: 0 };
-  }
+  await syncRunArtifacts(run);
+  const queueMetrics = await getQueueMetrics().catch(() => ({ waiting: 0 }));
   const queuePosition = run.status === "queued" ? await getQueuePosition(run.id) : null;
   const currentStep =
     run.status === "queued" && queuePosition
@@ -139,7 +135,7 @@ async function cloneForResponse(run) {
     ...run,
     currentStep,
     queuePosition,
-    queueSize: queueMetrics.waiting,
+    queueSize: queueMetrics.waiting || 0,
     artifacts: {
       ...run.artifacts,
       files: (run.artifacts?.files || []).map((file) => ({
@@ -173,14 +169,16 @@ export function getScript(scriptId) {
   return resolveScript(scriptId);
 }
 
-export async function getRuns() {
-  pruneExpiredRuns(scriptsById);
-  const runs = listRuns();
-  return Promise.all(runs.map((run) => cloneForResponse(run)));
+export async function getRuns(filters = {}) {
+  const page = await listStoredRuns(filters);
+  return {
+    ...page,
+    items: await Promise.all(page.items.map((run) => cloneForResponse(run)))
+  };
 }
 
 export async function getRun(runId) {
-  const run = loadRun(runId);
+  const run = await getStoredRun(runId);
   if (!run) {
     return null;
   }
@@ -198,7 +196,7 @@ export async function startRun(scriptId, payload = {}, options = {}) {
   }
 
   const requestedAt = nowIso();
-  const run = {
+  const run = await createRun({
     id: uuidv4(),
     scriptId,
     scriptName: script.name,
@@ -206,51 +204,39 @@ export async function startRun(scriptId, payload = {}, options = {}) {
     status: "queued",
     requestedAt,
     queuedAt: requestedAt,
-    startedAt: null,
-    finishedAt: null,
-    updatedAt: requestedAt,
     lastActivityAt: requestedAt,
-    payload: validatedPayload,
-    command: null,
-    commandArgs: [],
-    scriptPath: null,
-    artifacts: {
-      basePath: null,
-      htmlPath: null,
-      files: []
-    },
-    stdout: "",
-    stderr: "",
-    logs: [
-      {
-        id: uuidv4(),
-        timestamp: requestedAt,
-        stream: "stdout",
-        level: "progress",
-        message: "Queued for worker execution."
-      }
-    ],
-    events: [
-      {
-        type: "progress",
-        timestamp: requestedAt,
-        message: "Queued for worker execution."
-      }
-    ],
+    parameters: validatedPayload,
     currentStep: "Queued for worker execution",
-    errorSummary: null,
-    exitCode: null,
-    durationMs: null,
-    cancelRequestedAt: null
-  };
+    result: {
+      events: [
+        {
+          type: "progress",
+          timestamp: requestedAt,
+          message: "Queued for worker execution."
+        }
+      ],
+      metrics: {}
+    },
+    approval: {
+      status: script.approvalRequired ? "approved" : "not_required",
+      requestedBy: options.requestedBy || null,
+      approvedBy: script.approvalRequired ? options.requestedBy || null : null,
+      reason: script.approvalRequired ? "Approved from toolbox UI before launch." : null,
+      createdAt: requestedAt
+    }
+  });
 
-  saveRun(run);
+  await appendLog(run.id, "stdout", "Queued for worker execution.", {
+    id: uuidv4(),
+    level: "progress",
+    createdAt: requestedAt
+  });
   await enqueueRun(run);
-  return cloneForResponse(run);
+  return getRun(run.id);
 }
 
 export async function cancelRun(runId) {
-  const run = loadRun(runId);
+  const run = await getStoredRun(runId);
   if (!run) {
     throw createError("Run not found.", 404);
   }
@@ -265,55 +251,59 @@ export async function cancelRun(runId) {
     if (job) {
       await job.remove();
     }
-    run.cancelRequestedAt = timestamp;
-    run.status = "canceled";
-    run.finishedAt = timestamp;
-    run.updatedAt = timestamp;
-    run.lastActivityAt = timestamp;
-    run.logs.push({
-      id: uuidv4(),
-      timestamp,
-      stream: "stderr",
-      level: "warn",
-      message: "Queued run canceled before worker launch."
+
+    await updateRun(run.id, {
+      status: "canceled",
+      finishedAt: timestamp,
+      cancelRequestedAt: timestamp,
+      lastActivityAt: timestamp,
+      currentStep: "Canceled before worker launch",
+      summary: "Queued run canceled before worker launch."
     });
-    saveRun(run);
-    return cloneForResponse(run);
+    await appendLog(run.id, "system", "Queued run canceled before worker launch.", {
+      id: uuidv4(),
+      level: "warn",
+      createdAt: timestamp
+    });
+    return getRun(run.id);
   }
 
-  run.cancelRequestedAt = timestamp;
-  run.status = "canceling";
-  run.updatedAt = timestamp;
-  run.lastActivityAt = timestamp;
-  run.logs.push({
-    id: uuidv4(),
-    timestamp,
-    stream: "stderr",
-    level: "warn",
-    message: "Cancellation requested from UI."
+  await updateRun(run.id, {
+    status: "canceling",
+    cancelRequestedAt: timestamp,
+    lastActivityAt: timestamp,
+    currentStep: "Stopping PowerShell script",
+    summary: "Cancellation requested from UI."
   });
-  saveRun(run);
-  return cloneForResponse(run);
+  await appendLog(run.id, "system", "Cancellation requested from UI.", {
+    id: uuidv4(),
+    level: "warn",
+    createdAt: timestamp
+  });
+  return getRun(run.id);
 }
 
 export async function getRunArtifacts(runId) {
-  const run = loadRun(runId);
+  const run = await getStoredRun(runId);
   if (!run) {
     throw createError("Run not found.", 404);
   }
 
-  updateArtifactsFromFilesystem(run);
-  saveRun(run);
-  return (await cloneForResponse(run)).artifacts.files;
+  const response = await cloneForResponse(run);
+  return response.artifacts.files;
 }
 
-export function getRunArtifact(runId, artifactId) {
-  const run = loadRun(runId);
+export async function getRunArtifact(runId, artifactId) {
+  const run = await getStoredRun(runId);
   if (!run) {
     throw createError("Run not found.", 404);
   }
 
-  const file = updateArtifactsFromFilesystem(run).find((entry) => entry.id === artifactId);
+  await syncRunArtifacts(run);
+  const file =
+    run.artifacts.files.find((entry) => entry.id === artifactId || entry.name === artifactId) ||
+    (await getRunArtifactRecord(runId, artifactId));
+
   if (!file || !fs.existsSync(file.path)) {
     throw createError("Artifact not found for this run.", 404);
   }
@@ -327,13 +317,14 @@ export function getRunArtifact(runId, artifactId) {
   return file;
 }
 
-export function getRunHtml(runId) {
-  const run = loadRun(runId);
+export async function getRunHtml(runId) {
+  const run = await getStoredRun(runId);
   if (!run) {
     return null;
   }
 
-  const htmlArtifact = updateArtifactsFromFilesystem(run).find((file) => file.type === "html");
+  await syncRunArtifacts(run);
+  const htmlArtifact = run.artifacts.files.find((file) => file.type === "html");
   if (!htmlArtifact || !fs.existsSync(htmlArtifact.path)) {
     return null;
   }
@@ -344,13 +335,13 @@ export function getRunHtml(runId) {
   };
 }
 
-export function buildArtifactArchive(runId, outputStream) {
-  const run = loadRun(runId);
+export async function buildArtifactArchive(runId, outputStream) {
+  const run = await getStoredRun(runId);
   if (!run) {
     throw createError("Run not found.", 404);
   }
 
-  const artifacts = updateArtifactsFromFilesystem(run);
+  const artifacts = await syncRunArtifacts(run);
   if (!artifacts.length) {
     throw createError("No artifacts are available for this run.", 404);
   }
@@ -371,4 +362,13 @@ export function buildArtifactArchive(runId, outputStream) {
 
 export async function getQueueStatus() {
   return getQueueMetrics();
+}
+
+export async function removeRun(runId) {
+  await deleteRun(runId);
+}
+
+export async function setRunApproval(runId, approvalData) {
+  await setApproval(runId, approvalData);
+  return getRun(runId);
 }

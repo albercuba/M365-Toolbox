@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const apiBase = "/api";
 
@@ -71,8 +71,20 @@ function formatDuration(value) {
 }
 
 function formatRunTenant(run) {
-  const tenant = run?.payload?.tenantId;
+  const tenant = run?.tenantHint || run?.payload?.tenantId;
   return tenant ? String(tenant).trim() : "Auto-detect";
+}
+
+function buildRunHistoryQuery({ limit, offset, status, scriptId, tenantId, dateFrom, dateTo }) {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  if (status && status !== "all") params.set("status", status);
+  if (scriptId && scriptId !== "all") params.set("scriptId", scriptId);
+  if (tenantId) params.set("tenantId", tenantId);
+  if (dateFrom) params.set("dateFrom", `${dateFrom}T00:00:00.000Z`);
+  if (dateTo) params.set("dateTo", `${dateTo}T23:59:59.999Z`);
+  return params.toString();
 }
 
 function formatRelativeTime(value, nowMs = Date.now()) {
@@ -1031,21 +1043,52 @@ export function App() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [modeFilter, setModeFilter] = useState("all");
   const [theme, setTheme] = useState(() => getThemePreference());
+  const [runStatusFilter, setRunStatusFilter] = useState("all");
+  const [runScriptFilter, setRunScriptFilter] = useState("all");
+  const [runTenantFilter, setRunTenantFilter] = useState("");
+  const [runDateFrom, setRunDateFrom] = useState("");
+  const [runDateTo, setRunDateTo] = useState("");
+  const [runOffset, setRunOffset] = useState(0);
+  const [runTotal, setRunTotal] = useState(0);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const runPageSize = 12;
   const activeRunIsBusy = Boolean(activeRun && ["running", "queued", "canceling"].includes(activeRun.status));
+
+  const loadRuns = useCallback(async (nextOffset = runOffset) => {
+    setRunsLoading(true);
+    try {
+      const query = buildRunHistoryQuery({
+        limit: runPageSize,
+        offset: nextOffset,
+        status: runStatusFilter,
+        scriptId: runScriptFilter,
+        tenantId: runTenantFilter.trim(),
+        dateFrom: runDateFrom,
+        dateTo: runDateTo
+      });
+      const runsResponse = await fetch(`${apiBase}/runs?${query}`);
+      const runsData = await parseApiResponse(runsResponse);
+      if (!runsResponse.ok) {
+        throw new Error(runsData.message || "Failed to load run history.");
+      }
+      setRuns(runsData.items || []);
+      setRunTotal(runsData.total ?? 0);
+      setRunOffset(runsData.offset ?? nextOffset);
+    } finally {
+      setRunsLoading(false);
+    }
+  }, [runDateFrom, runDateTo, runOffset, runScriptFilter, runStatusFilter, runTenantFilter]);
 
   useEffect(() => {
     const load = async () => {
-      const [scriptsResponse, runsResponse, statusResponse] = await Promise.all([
+      const [scriptsResponse, statusResponse] = await Promise.all([
         fetch(`${apiBase}/scripts`),
-        fetch(`${apiBase}/runs`),
         fetch(`${apiBase}/status`)
       ]);
 
       const scriptsData = await parseApiResponse(scriptsResponse);
-      const runsData = await parseApiResponse(runsResponse);
       const statusData = await parseApiResponse(statusResponse);
       setScripts(scriptsData);
-      setRuns(runsData);
       setStatus(statusData);
       setStatusUpdatedAt(new Date().toISOString());
       setSelectedScript(null);
@@ -1055,6 +1098,14 @@ export function App() {
 
     load().catch((loadError) => setError(loadError.message));
   }, []);
+
+  useEffect(() => {
+    loadRuns(runOffset).catch((loadError) => setError(loadError.message));
+  }, [loadRuns, runOffset]);
+
+  useEffect(() => {
+    setRunOffset(0);
+  }, [runStatusFilter, runScriptFilter, runTenantFilter, runDateFrom, runDateTo]);
 
   useEffect(() => {
     document.body.dataset.theme = theme;
@@ -1118,15 +1169,21 @@ export function App() {
     }
 
     const timer = window.setInterval(async () => {
-      const response = await fetch(`${apiBase}/runs/${activeRun.id}`);
-      const data = await parseApiResponse(response);
-      setActiveRun(data);
-      const runsResponse = await fetch(`${apiBase}/runs`);
-      setRuns(await parseApiResponse(runsResponse));
+      try {
+        const response = await fetch(`${apiBase}/runs/${activeRun.id}`);
+        const data = await parseApiResponse(response);
+        if (!response.ok) {
+          throw new Error(data.message || "Failed to refresh the active run.");
+        }
+        setActiveRun(data);
+        await loadRuns(runOffset);
+      } catch (pollError) {
+        setError(pollError.message);
+      }
     }, 2000);
 
     return () => window.clearInterval(timer);
-  }, [activeRun]);
+  }, [activeRun, loadRuns, runOffset]);
 
   useEffect(() => {
     if (!activeRunIsBusy) {
@@ -1256,15 +1313,28 @@ export function App() {
     setDevicePromptDismissed(false);
   };
 
-  const handleOpenRun = (run) => {
+  const handleOpenRun = async (run) => {
     setArtifacts([]);
-    setActiveRun(run ? { ...run } : null);
     setRunDetailsOpen(true);
     setRecentRunsOpen(true);
     setDevicePromptDismissed(false);
     const matchingScript = scripts.find((script) => script.id === run?.scriptId);
     if (matchingScript) {
       setSelectedScript(matchingScript);
+    }
+    if (!run?.id) {
+      setActiveRun(null);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiBase}/runs/${run.id}`);
+      const fullRun = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(fullRun.message || "Failed to load run details.");
+      }
+      setActiveRun(fullRun);
+    } catch (openError) {
+      setError(openError.message);
     }
   };
 
@@ -1369,8 +1439,7 @@ export function App() {
       setRunDetailsOpen(true);
       setRecentRunsOpen(true);
       setSuccess(data.status === "queued" ? "Run queued successfully." : "Run started successfully.");
-      const runsResponse = await fetch(`${apiBase}/runs`);
-      setRuns(await parseApiResponse(runsResponse));
+      await loadRuns(0);
     } catch (submitError) {
       setError(submitError.message);
     } finally {
@@ -1395,8 +1464,7 @@ export function App() {
       }
       setActiveRun(data);
       setSuccess("Run cancellation requested.");
-      const runsResponse = await fetch(`${apiBase}/runs`);
-      setRuns(await parseApiResponse(runsResponse));
+      await loadRuns(runOffset);
     } catch (cancelError) {
       setError(cancelError.message);
     } finally {
@@ -1406,6 +1474,10 @@ export function App() {
 
   const handleRerun = async (run) => {
     if (!run?.scriptId) return;
+    if (run?.canRerun === false) {
+      setError("This run used redacted parameters, so it cannot be re-launched directly from history.");
+      return;
+    }
 
     const matchingScript = scripts.find((script) => script.id === run.scriptId);
     if (!matchingScript) {
@@ -1445,8 +1517,7 @@ export function App() {
       setRunDetailsOpen(true);
       setRecentRunsOpen(true);
       setSuccess(data.status === "queued" ? "Run re-queued successfully." : "Run started again with the previous inputs.");
-      const runsResponse = await fetch(`${apiBase}/runs`);
-      setRuns(await parseApiResponse(runsResponse));
+      await loadRuns(0);
     } catch (rerunError) {
       setError(rerunError.message);
     } finally {
@@ -1565,44 +1636,96 @@ export function App() {
 
   const renderRecentRunsContent = () => (
     <div className="card-body">
-      {runs.length === 0 ? (
+      <div className="settings-row" style={{ marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
+        <label className="field">
+          <span>Status</span>
+          <select value={runStatusFilter} onChange={(event) => setRunStatusFilter(event.target.value)}>
+            <option value="all">All</option>
+            <option value="queued">Queued</option>
+            <option value="running">Running</option>
+            <option value="canceling">Canceling</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="canceled">Canceled</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Script</span>
+          <select value={runScriptFilter} onChange={(event) => setRunScriptFilter(event.target.value)}>
+            <option value="all">All scripts</option>
+            {scripts.map((script) => (
+              <option key={script.id} value={script.id}>{script.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Tenant</span>
+          <input value={runTenantFilter} onChange={(event) => setRunTenantFilter(event.target.value)} placeholder="Tenant ID or domain" />
+        </label>
+        <label className="field">
+          <span>From</span>
+          <input type="date" value={runDateFrom} onChange={(event) => setRunDateFrom(event.target.value)} />
+        </label>
+        <label className="field">
+          <span>To</span>
+          <input type="date" value={runDateTo} onChange={(event) => setRunDateTo(event.target.value)} />
+        </label>
+      </div>
+      {runsLoading ? (
+        <div className="empty-row">Loading run history...</div>
+      ) : runs.length === 0 ? (
         <div className="empty-row">No runs yet. Launch a report to start building persistent history.</div>
       ) : (
-        <div className="table-scroll recent-runs-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Script</th>
-                <th>Tenant</th>
-                <th>Status</th>
-                <th>Requested</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => (
-                <tr key={run.id}>
-                  <td>{run.scriptName}</td>
-                  <td>{formatRunTenant(run)}</td>
-                  <td>
-                    <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
-                      {run.status}
-                    </span>
-                    {run.status === "queued" && run.queuePosition ? (
-                      <div className="table-subtext">Queue {run.queuePosition} of {run.queueSize || run.queuePosition}</div>
-                    ) : null}
-                  </td>
-                  <td>{formatDate(run.requestedAt || run.startedAt)}</td>
-                  <td className="table-actions">
-                    <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
-                      Open
-                    </button>
-                  </td>
+        <>
+          <div className="table-scroll recent-runs-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Script</th>
+                  <th>Tenant</th>
+                  <th>Status</th>
+                  <th>Requested</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id}>
+                    <td>{run.scriptName}</td>
+                    <td>{formatRunTenant(run)}</td>
+                    <td>
+                      <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
+                        {run.status}
+                      </span>
+                      {run.status === "queued" && run.queuePosition ? (
+                        <div className="table-subtext">Queue {run.queuePosition} of {run.queueSize || run.queuePosition}</div>
+                      ) : null}
+                    </td>
+                    <td>{formatDate(run.requestedAt || run.startedAt)}</td>
+                    <td className="table-actions">
+                      <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="panel-toolbar" style={{ marginTop: "1rem" }}>
+            <div className="method-label">
+              Showing {Math.min(runOffset + 1, runTotal)}-{Math.min(runOffset + runs.length, runTotal)} of {runTotal}
+            </div>
+            <div className="run-actions">
+              <button type="button" className="filter-btn" disabled={runOffset === 0} onClick={() => setRunOffset(Math.max(0, runOffset - runPageSize))}>
+                Previous
+              </button>
+              <button type="button" className="filter-btn" disabled={runOffset + runPageSize >= runTotal} onClick={() => setRunOffset(runOffset + runPageSize)}>
+                Next
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -1612,7 +1735,7 @@ export function App() {
       <div className={`card ${recentRunsOpen ? "" : "card-collapsed"}`}>
         <button type="button" className="card-header card-header-button" onClick={() => setRecentRunsOpen((current) => !current)}>
           <span className="card-title">Recent Runs</span>
-          <span className="card-badge badge-neutral">{runs.length}</span>
+          <span className="card-badge badge-neutral">{runTotal}</span>
           <span className="card-chevron">{recentRunsOpen ? "▾" : "▸"}</span>
         </button>
         {recentRunsOpen ? renderRecentRunsContent() : null}
@@ -1696,7 +1819,7 @@ export function App() {
             </span>
           </button>
           <div className="topbar-count">{scripts.length} script{scripts.length === 1 ? "" : "s"}</div>
-          <div className="topbar-count">{runs.length} run{runs.length === 1 ? "" : "s"}</div>
+          <div className="topbar-count">{runTotal} run{runTotal === 1 ? "" : "s"}</div>
         </div>
       </header>
 
@@ -1801,7 +1924,7 @@ export function App() {
           </div>
 
           <div className="sidebar-footer">
-            <div>{runs.length === 0 ? "No runs yet." : `${runs.length} tracked run${runs.length === 1 ? "" : "s"}`}</div>
+            <div>{runTotal === 0 ? "No runs yet." : `${runTotal} tracked run${runTotal === 1 ? "" : "s"}`}</div>
             <div className="sidebar-footer-links">
               <a
                 className="sidebar-repo-link"
@@ -2041,6 +2164,10 @@ export function App() {
                                   <div className="method-label">Exit Code</div>
                                   <div className="method-count">{activeRun.exitCode ?? "Pending"}</div>
                                 </div>
+                                <div className="quick-summary-item">
+                                  <div className="method-label">Approval</div>
+                                  <div className="method-count">{activeRun.approval?.status || "not recorded"}</div>
+                                </div>
                               </div>
                               {activeRun.errorSummary ? (
                                 <div className="flash flash-error soft">{activeRun.errorSummary}</div>
@@ -2067,7 +2194,11 @@ export function App() {
                                       type="button"
                                       className="filter-btn"
                                       onClick={() => handleRerun(activeRun)}
-                                      disabled={submitting || ["running", "queued", "canceling"].includes(activeRun.status)}
+                                      disabled={
+                                        submitting ||
+                                        activeRun.canRerun === false ||
+                                        ["running", "queued", "canceling"].includes(activeRun.status)
+                                      }
                                     >
                                       Re-Run
                                     </button>
@@ -2079,6 +2210,11 @@ export function App() {
                                     ) : null}
                                   </div>
                                 </div>
+                                {activeRun.canRerun === false ? (
+                                  <div className="flash soft" style={{ marginBottom: "0.75rem" }}>
+                                    This run stored redacted parameters only. Enter fresh credentials in the form before running it again.
+                                  </div>
+                                ) : null}
                                 <pre className="manage-response">{activeRun.command}</pre>
                               </div>
                               <div className="manage-form-panel">
@@ -2220,7 +2356,7 @@ export function App() {
                       <div className="method-item">
                         <div className="method-info">
                           <div className="method-label">Persistent Runs</div>
-                          <div className="method-count">{runs.length} tracked runs survive backend restarts.</div>
+                          <div className="method-count">{runTotal} tracked runs survive backend restarts.</div>
                         </div>
                       </div>
                       <div className="method-item">

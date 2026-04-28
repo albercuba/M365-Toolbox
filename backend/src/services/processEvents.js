@@ -65,7 +65,14 @@ export function applyStructuredEvent(run, event) {
     return;
   }
 
+  run.result = run.result || { events: [], metrics: {} };
+  run.result.events = Array.isArray(run.result.events) ? run.result.events : [];
+  run.result.metrics = run.result.metrics && typeof run.result.metrics === "object" ? run.result.metrics : {};
   run.events.push({
+    ...event,
+    timestamp: event.timestamp || nowIso()
+  });
+  run.result.events.push({
     ...event,
     timestamp: event.timestamp || nowIso()
   });
@@ -73,6 +80,20 @@ export function applyStructuredEvent(run, event) {
 
   if (event.type === "progress" && event.message) {
     run.currentStep = event.message;
+  }
+
+  if (event.type === "metric" && event.name) {
+    run.result.metrics[event.name] = event.value;
+  }
+
+  if (event.type === "state") {
+    run.result.state = {
+      ...(run.result.state || {}),
+      ...event
+    };
+    if (event.message) {
+      run.summary = event.message;
+    }
   }
 
   if (event.type === "artifact" && event.path) {
@@ -91,6 +112,7 @@ export function applyStructuredEvent(run, event) {
     if ((event.kind || "").toLowerCase() === "html") {
       run.artifacts.htmlPath = event.path;
     }
+    run.result.artifactBasePath = run.artifacts.basePath || run.result.artifactBasePath || null;
   }
 }
 

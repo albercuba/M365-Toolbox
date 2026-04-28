@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Run {
+  id                 String        @id @db.Uuid
+  scriptId           String        @map("script_id")
+  scriptName         String?       @map("script_name")
+  mode               String?
+  status             String
+  tenantId           String?       @db.Uuid @map("tenant_id")
+  tenantHint         String?       @map("tenant_hint")
+  requestedBy        String?       @map("requested_by")
+  parameters         Json?
+  parametersRedacted Json?         @map("parameters_redacted")
+  result             Json?
+  summary            String?
+  exitCode           Int?          @map("exit_code")
+  startedAt          DateTime?     @map("started_at")
+  finishedAt         DateTime?     @map("finished_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  queuedAt           DateTime?     @map("queued_at")
+  lastActivityAt     DateTime?     @map("last_activity_at")
+  cancelRequestedAt  DateTime?     @map("cancel_requested_at")
+  currentStep        String?       @map("current_step")
+  errorSummary       String?       @map("error_summary")
+  durationMs         BigInt?       @map("duration_ms")
+  command            String?
+  commandArgs        Json?         @map("command_args")
+  scriptPath         String?       @map("script_path")
+  logs               RunLog[]
+  artifacts          RunArtifact[]
+  approval           Approval?
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([scriptId, createdAt(sort: Desc)])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantHint, createdAt(sort: Desc)])
+  @@index([requestedBy, createdAt(sort: Desc)])
+  @@map("runs")
+}
+
+model RunLog {
+  id        String   @id @db.Uuid
+  runId     String   @db.Uuid @map("run_id")
+  stream    String
+  level     String?
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@map("run_logs")
+}
+
+model RunArtifact {
+  id        String   @id @db.Uuid
+  runId     String   @db.Uuid @map("run_id")
+  type      String
+  filename  String
+  path      String
+  sizeBytes Int?     @map("size_bytes")
+  createdAt DateTime @default(now()) @map("created_at")
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, path])
+  @@index([runId, createdAt])
+  @@map("run_artifacts")
+}
+
+model Approval {
+  id         String   @id @db.Uuid
+  runId      String   @unique @db.Uuid @map("run_id")
+  status     String
+  requestedBy String? @map("requested_by")
+  approvedBy String?  @map("approved_by")
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  run        Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("approvals")
+}

@@ -33,7 +33,8 @@ scriptsRouter.post("/scripts/:id/run", async (req, res) => {
   try {
     const { approvalConfirmed, ...payload } = req.body || {};
     const run = await startRun(req.params.id, payload, {
-      approvalConfirmed: Boolean(approvalConfirmed)
+      approvalConfirmed: Boolean(approvalConfirmed),
+      requestedBy: req.get("x-requested-by") || null
     });
     res.status(202).json(run);
   } catch (error) {
@@ -41,8 +42,19 @@ scriptsRouter.post("/scripts/:id/run", async (req, res) => {
   }
 });
 
-scriptsRouter.get("/runs", async (_req, res) => {
-  res.json(await getRuns());
+scriptsRouter.get("/runs", async (req, res) => {
+  res.json(
+    await getRuns({
+      status: req.query.status,
+      scriptId: req.query.scriptId,
+      tenantId: req.query.tenantId,
+      requestedBy: req.query.requestedBy,
+      dateFrom: req.query.dateFrom,
+      dateTo: req.query.dateTo,
+      limit: req.query.limit,
+      offset: req.query.offset
+    })
+  );
 });
 
 scriptsRouter.get("/runs/:id", async (req, res) => {
@@ -71,7 +83,7 @@ scriptsRouter.get("/runs/:id/artifacts", async (req, res) => {
   }
 });
 
-scriptsRouter.get("/runs/:id/artifacts/:artifactId", (req, res) => {
+scriptsRouter.get("/runs/:id/artifacts/:artifactId", async (req, res) => {
   try {
     if (
       !verifyArtifactToken(req.query.token, {
@@ -83,14 +95,14 @@ scriptsRouter.get("/runs/:id/artifacts/:artifactId", (req, res) => {
       res.status(403).json({ message: "Artifact token is invalid or expired." });
       return;
     }
-    const artifact = getRunArtifact(req.params.id, req.params.artifactId);
+    const artifact = await getRunArtifact(req.params.id, req.params.artifactId);
     res.download(artifact.path, artifact.name);
   } catch (error) {
     res.status(error.statusCode || 400).json({ message: error.message });
   }
 });
 
-scriptsRouter.get("/runs/:id/package.zip", (req, res) => {
+scriptsRouter.get("/runs/:id/package.zip", async (req, res) => {
   try {
     if (
       !verifyArtifactToken(req.query.token, {
@@ -104,13 +116,13 @@ scriptsRouter.get("/runs/:id/package.zip", (req, res) => {
 
     res.type("application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}-artifacts.zip"`);
-    buildArtifactArchive(req.params.id, res);
+    await buildArtifactArchive(req.params.id, res);
   } catch (error) {
     res.status(error.statusCode || 400).json({ message: error.message });
   }
 });
 
-scriptsRouter.get("/runs/:id/html", (req, res) => {
+scriptsRouter.get("/runs/:id/html", async (req, res) => {
   if (
     !verifyArtifactToken(req.query.token, {
       runId: req.params.id,
@@ -121,7 +133,7 @@ scriptsRouter.get("/runs/:id/html", (req, res) => {
     return;
   }
 
-  const htmlReport = getRunHtml(req.params.id);
+  const htmlReport = await getRunHtml(req.params.id);
   if (!htmlReport) {
     res.status(404).json({ message: "HTML report not found for this run." });
     return;

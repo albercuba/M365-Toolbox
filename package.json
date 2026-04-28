@@ -11,6 +11,9 @@
     "dev": "concurrently \"npm run dev:api -w backend\" \"npm run dev:worker -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run build -w frontend",
     "test": "npm run test -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:seed": "npm run db:seed -w backend",
+    "migrate:file-runs": "npm run migrate:file-runs -w backend",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up",
     "docker:down": "docker compose down"

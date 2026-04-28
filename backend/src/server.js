@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { scriptsRouter } from "./routes/scripts.js";
+import { ensureDatabaseReady } from "./services/db.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -99,6 +100,8 @@ app.use((error, _req, res, _next) => {
   console.error(error);
   res.status(500).json({ message: error.message || "Unexpected server error." });
 });
+
+await ensureDatabaseReady();
 
 app.listen(port, () => {
   console.log(`M365 Toolbox API listening on port ${port}`);

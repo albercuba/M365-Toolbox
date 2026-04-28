@@ -1,4 +1,19 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: m365-toolbox-postgres
+    environment:
+      POSTGRES_DB: m365_toolbox
+      POSTGRES_USER: m365
+      POSTGRES_PASSWORD: m365password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U m365 -d m365_toolbox"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: m365-toolbox-redis
@@ -9,12 +24,16 @@ services:
       dockerfile: Dockerfile.backend
     container_name: m365-toolbox-backend
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       PORT: 3001
       OUTPUT_DIR: /app/output
       TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://m365:m365password@postgres:5432/m365_toolbox
       ARTIFACT_TOKEN_SECRET: dev-artifact-token-secret
       FRONTEND_ORIGIN: http://localhost:5173
     volumes:
@@ -30,11 +49,15 @@ services:
     container_name: m365-toolbox-worker
     command: ["npm", "run", "start:worker"]
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       OUTPUT_DIR: /app/output
       TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://m365:m365password@postgres:5432/m365_toolbox
       ARTIFACT_TOKEN_SECRET: dev-artifact-token-secret
     volumes:
       - ./output:/app/output
@@ -49,3 +72,6 @@ services:
       - backend
     ports:
       - "5173:80"
+
+volumes:
+  postgres_data:

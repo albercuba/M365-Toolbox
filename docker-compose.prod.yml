@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: m365-toolbox-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: m365_toolbox
+      POSTGRES_USER: m365
+      POSTGRES_PASSWORD: m365password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U m365 -d m365_toolbox"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: m365-toolbox-redis
@@ -11,12 +27,16 @@ services:
     container_name: m365-toolbox-backend
     restart: unless-stopped
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       PORT: 3001
       OUTPUT_DIR: /app/output
       TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-postgresql://m365:m365password@postgres:5432/m365_toolbox}
       ARTIFACT_TOKEN_SECRET: ${ARTIFACT_TOKEN_SECRET:?Set ARTIFACT_TOKEN_SECRET}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
     volumes:
@@ -33,11 +53,15 @@ services:
     command: ["npm", "run", "start:worker"]
     restart: unless-stopped
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       OUTPUT_DIR: /app/output
       TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-postgresql://m365:m365password@postgres:5432/m365_toolbox}
       ARTIFACT_TOKEN_SECRET: ${ARTIFACT_TOKEN_SECRET:?Set ARTIFACT_TOKEN_SECRET}
     volumes:
       - ./output:/app/output
@@ -53,3 +77,6 @@ services:
       - backend
     ports:
       - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  postgres_data:

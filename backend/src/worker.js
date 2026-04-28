@@ -9,6 +9,7 @@ import {
   RUN_ATTEMPTS,
   RUN_TIMEOUT_MS
 } from "./config/runtime.js";
+import { ensureDatabaseReady } from "./services/db.js";
 import { scripts } from "./data/scripts.js";
 import {
   addLogEntry,
@@ -18,10 +19,12 @@ import {
   parseOutputChunk
 } from "./services/processEvents.js";
 import {
-  loadRun,
-  saveRun,
-  saveWorkerHeartbeat
-} from "./services/runRepository.js";
+  addArtifact,
+  appendLog,
+  getRun as getStoredRun,
+  updateRun
+} from "./services/runStore.js";
+import { saveWorkerHeartbeat } from "./services/runRepository.js";
 import { deadLetterQueue } from "./services/queue.js";
 import { buildExecutionPlan } from "./services/scriptExecution.js";
 
@@ -31,7 +34,46 @@ const workerRedisConnection = new IORedis(REDIS_URL, {
   enableReadyCheck: true
 });
 
-function finalizeRun(run, status, exitCode = null) {
+async function syncRunAggregate(run, state) {
+  for (let index = state.persistedLogCount; index < run.logs.length; index += 1) {
+    const entry = run.logs[index];
+    await appendLog(run.id, entry.stream, entry.message, {
+      id: entry.id || uuidv4(),
+      level: entry.level,
+      createdAt: entry.timestamp
+    });
+  }
+  state.persistedLogCount = run.logs.length;
+
+  const files = run.artifacts?.files || [];
+  for (let index = state.persistedArtifactCount; index < files.length; index += 1) {
+    const artifact = files[index];
+    await addArtifact(run.id, artifact);
+  }
+  state.persistedArtifactCount = files.length;
+
+  await updateRun(run.id, {
+    status: run.status,
+    startedAt: run.startedAt,
+    finishedAt: run.finishedAt,
+    lastActivityAt: run.lastActivityAt,
+    currentStep: run.currentStep,
+    errorSummary: run.errorSummary,
+    exitCode: run.exitCode,
+    durationMs: run.durationMs,
+    command: run.command,
+    commandArgs: run.commandArgs,
+    scriptPath: run.scriptPath,
+    cancelRequestedAt: run.cancelRequestedAt,
+    result: {
+      ...(run.result || {}),
+      artifactBasePath: run.artifacts?.basePath || run.result?.artifactBasePath || null
+    },
+    summary: run.summary
+  });
+}
+
+async function finalizeRun(run, state, status, exitCode = null) {
   run.status = status;
   run.exitCode = exitCode;
   run.finishedAt = nowIso();
@@ -41,13 +83,13 @@ function finalizeRun(run, status, exitCode = null) {
     : null;
   delete run._stdoutBuffer;
   delete run._stderrBuffer;
-  saveRun(run);
+  await syncRunAggregate(run, state);
 }
 
 async function executeRun(job) {
-  const run = loadRun(job.data.runId);
+  const run = await getStoredRun(job.data.runId);
   if (!run) {
-    throw new Error(`Run '${job.data.runId}' was not found on disk.`);
+    throw new Error(`Run '${job.data.runId}' was not found in PostgreSQL.`);
   }
 
   const script = scriptsById.get(run.scriptId);
@@ -55,7 +97,12 @@ async function executeRun(job) {
     throw new Error(`Script '${run.scriptId}' is not defined in the catalog.`);
   }
 
-  const plan = buildExecutionPlan(script, run.payload);
+  const state = {
+    persistedLogCount: Array.isArray(run.logs) ? run.logs.length : 0,
+    persistedArtifactCount: Array.isArray(run.artifacts?.files) ? run.artifacts.files.length : 0
+  };
+
+  const plan = buildExecutionPlan(script, run.payload || {});
   run.status = "running";
   run.startedAt = nowIso();
   run.updatedAt = run.startedAt;
@@ -70,7 +117,7 @@ async function executeRun(job) {
     files: Array.isArray(run.artifacts?.files) ? run.artifacts.files : []
   };
   addLogEntry(run, "stdout", "[+] Launching PowerShell script");
-  saveRun(run);
+  await syncRunAggregate(run, state);
 
   await job.updateProgress({
     phase: "running",
@@ -79,10 +126,36 @@ async function executeRun(job) {
   });
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let syncChain = Promise.resolve();
+
+    const queueSync = () => {
+      syncChain = syncChain
+        .then(() => syncRunAggregate(run, state))
+        .catch((error) => {
+          console.error(`Failed to persist incremental run state for ${run.id}:`, error);
+        });
+      return syncChain;
+    };
+
+    const settle = async (handler) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutTimer);
+      clearInterval(cancelWatcher);
+      clearInterval(persistHeartbeat);
+
+      await syncChain;
+      await handler();
+    };
+
     const child = spawn("pwsh", plan.commandArgs, {
       cwd: OUTPUT_DIR,
       env: process.env
     });
+
     const timeoutTimer = setTimeout(() => {
       if (child.killed) {
         return;
@@ -91,17 +164,17 @@ async function executeRun(job) {
       run.status = "canceling";
       run.errorSummary = `The script exceeded the ${Math.round(RUN_TIMEOUT_MS / 60_000)} minute timeout.`;
       run.currentStep = "Stopping PowerShell script after timeout";
-      saveRun(run);
+      queueSync();
       child.kill();
     }, RUN_TIMEOUT_MS);
 
-    const cancelWatcher = setInterval(() => {
-      const latest = loadRun(run.id);
+    const cancelWatcher = setInterval(async () => {
+      const latest = await getStoredRun(run.id);
       if (latest?.cancelRequestedAt && !child.killed) {
         run.status = "canceling";
         run.cancelRequestedAt = latest.cancelRequestedAt;
         run.currentStep = "Stopping PowerShell script";
-        saveRun(run);
+        queueSync();
         child.kill();
       }
     }, 1000);
@@ -117,56 +190,56 @@ async function executeRun(job) {
 
     child.stdout.on("data", (chunk) => {
       parseOutputChunk(run, "stdout", chunk);
-      saveRun(run);
+      queueSync();
     });
 
     child.stderr.on("data", (chunk) => {
       parseOutputChunk(run, "stderr", chunk);
-      saveRun(run);
+      queueSync();
     });
 
     child.on("error", (error) => {
-      clearTimeout(timeoutTimer);
-      clearInterval(cancelWatcher);
-      clearInterval(persistHeartbeat);
-      addLogEntry(run, "stderr", error.message);
-      finalizeRun(run, "failed", 1);
-      reject(error);
+      settle(async () => {
+        addLogEntry(run, "stderr", error.message);
+        await finalizeRun(run, state, "failed", 1);
+        reject(error);
+      }).catch(reject);
     });
 
-    child.on("close", async (code) => {
-      clearTimeout(timeoutTimer);
-      clearInterval(cancelWatcher);
-      clearInterval(persistHeartbeat);
-      flushOutputBuffers(run);
+    child.on("close", (code) => {
+      settle(async () => {
+        flushOutputBuffers(run);
 
-      if (run.cancelRequestedAt) {
-        addLogEntry(run, "stderr", "[!] Run canceled while worker was executing.");
-        finalizeRun(run, "canceled", code);
-        resolve({ canceled: true });
-        return;
-      }
+        if (run.cancelRequestedAt) {
+          addLogEntry(run, "stderr", "[!] Run canceled while worker was executing.");
+          await finalizeRun(run, state, "canceled", code);
+          resolve({ canceled: true });
+          return;
+        }
 
-      if (code === 0) {
-        addLogEntry(run, "stdout", "[+] Script completed successfully");
-        finalizeRun(run, "completed", code);
-        await job.updateProgress({
-          phase: "completed",
-          step: "Completed",
-          runId: run.id
-        });
-        resolve({ completed: true });
-        return;
-      }
+        if (code === 0) {
+          addLogEntry(run, "stdout", "[+] Script completed successfully");
+          await finalizeRun(run, state, "completed", code);
+          await job.updateProgress({
+            phase: "completed",
+            step: "Completed",
+            runId: run.id
+          });
+          resolve({ completed: true });
+          return;
+        }
 
-      if (!run.errorSummary) {
-        run.errorSummary = "The script exited with an error.";
-      }
-      finalizeRun(run, "failed", code);
-      reject(new Error(run.errorSummary));
+        if (!run.errorSummary) {
+          run.errorSummary = "The script exited with an error.";
+        }
+        await finalizeRun(run, state, "failed", code);
+        reject(new Error(run.errorSummary));
+      }).catch(reject);
     });
   });
 }
+
+await ensureDatabaseReady();
 
 const worker = new Worker(
   JOB_QUEUE_NAME,
@@ -201,7 +274,7 @@ worker.on("failed", async (job, error) => {
     return;
   }
 
-  const run = loadRun(job.data.runId);
+  const run = await getStoredRun(job.data.runId);
   if (!run) {
     return;
   }
@@ -210,35 +283,33 @@ worker.on("failed", async (job, error) => {
   const timestamp = nowIso();
 
   if (hasRetriesLeft) {
-    run.status = "queued";
-    run.queuedAt = timestamp;
-    run.updatedAt = timestamp;
-    run.lastActivityAt = timestamp;
-    run.currentStep = `Retry scheduled (${job.attemptsMade} of ${job.opts.attempts || RUN_ATTEMPTS})`;
-    run.logs.push({
-      id: uuidv4(),
-      timestamp,
-      stream: "stderr",
-      level: "warn",
-      message: `Worker attempt ${job.attemptsMade} failed. BullMQ will retry this run.`
+    await updateRun(run.id, {
+      status: "queued",
+      queuedAt: timestamp,
+      lastActivityAt: timestamp,
+      currentStep: `Retry scheduled (${job.attemptsMade} of ${job.opts.attempts || RUN_ATTEMPTS})`,
+      summary: `Worker attempt ${job.attemptsMade} failed. BullMQ will retry this run.`
     });
-    saveRun(run);
+    await appendLog(run.id, "system", `Worker attempt ${job.attemptsMade} failed. BullMQ will retry this run.`, {
+      id: uuidv4(),
+      level: "warn",
+      createdAt: timestamp
+    });
     return;
   }
 
-  run.status = run.cancelRequestedAt ? "canceled" : "failed";
-  run.finishedAt = timestamp;
-  run.updatedAt = timestamp;
-  run.lastActivityAt = timestamp;
-  run.errorSummary = run.errorSummary || error.message;
-  run.logs.push({
-    id: uuidv4(),
-    timestamp,
-    stream: "stderr",
-    level: "error",
-    message: error.message
+  await updateRun(run.id, {
+    status: run.cancelRequestedAt ? "canceled" : "failed",
+    finishedAt: timestamp,
+    lastActivityAt: timestamp,
+    errorSummary: run.errorSummary || error.message,
+    summary: run.errorSummary || error.message
   });
-  saveRun(run);
+  await appendLog(run.id, "stderr", error.message, {
+    id: uuidv4(),
+    level: "error",
+    createdAt: timestamp
+  });
   await deadLetterQueue.add(
     "failed-run",
     {

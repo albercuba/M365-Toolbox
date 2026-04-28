@@ -14,11 +14,13 @@ RUN pwsh -NoLogo -NoProfile -Command "Set-PSRepository -Name PSGallery -Installa
 WORKDIR /app
 
 COPY package.json ./
+COPY package-lock.json ./
 COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json
-RUN npm install
+RUN npm ci
 
 COPY backend ./backend
+RUN npx prisma generate --schema ./backend/prisma/schema.prisma
 
 WORKDIR /app/backend
 EXPOSE 3001

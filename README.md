@@ -1,6 +1,6 @@
 # M365 Toolbox
 
-M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operations. It combines a React frontend, an Express API, a Redis-backed BullMQ queue, a dedicated PowerShell worker, and a toolbox-native script catalog so admins can launch reports and response workflows from the browser, authenticate with Microsoft device code, and review results without leaving the app.
+M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operations. It combines a React frontend, an Express API, a Redis-backed BullMQ queue, a PostgreSQL-backed run store, a dedicated PowerShell worker, and a toolbox-native script catalog so admins can launch reports and response workflows from the browser, authenticate with Microsoft device code, and review results without leaving the app.
 
 ## What the project does
 
@@ -26,7 +26,7 @@ The current catalog includes 59 toolbox-native scripts across categories such as
 - `output/`
   Generated report artifacts written by backend runs
 - `docker-compose.yml`
-  Starts the backend and frontend containers together
+  Starts PostgreSQL, Redis, the backend, the PowerShell worker, and the frontend together
 - `docker-compose.prod.yml`
   Production-oriented Docker Compose deployment for self-hosting
 - `docker-compose.coolify.yml`
@@ -188,7 +188,7 @@ The catalog loader lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbo
 
 ## Runtime model
 
-The backend loads script metadata from the JSON catalog, accepts validated run requests, persists a queued run record, and hands execution to BullMQ. A separate PowerShell worker container reads queued jobs, launches `scripts/Invoke-ToolboxScript.ps1`, captures structured events and artifacts, and writes run state back to disk.
+The backend loads script metadata from the JSON catalog, accepts validated run requests, persists queued run records in PostgreSQL, and hands execution to BullMQ. A separate PowerShell worker container reads queued jobs, launches `scripts/Invoke-ToolboxScript.ps1`, captures structured events and artifacts, and writes incremental logs, artifacts, approvals, and result metadata back to PostgreSQL while keeping report files in `output/`.
 
 The backend tracks:
 
@@ -210,19 +210,19 @@ Frontend
   -> API backend
   -> BullMQ / Redis
   -> PowerShell worker
-  -> Artifacts + persisted run state
+  -> Artifacts + PostgreSQL run store
 ```
 
 Runtime controls available through environment variables:
 
 - `MAX_CONCURRENT_RUNS`
   Limits how many worker jobs can execute at the same time. Extra runs stay queued until a slot opens.
-- `RUN_RETENTION_HOURS`
-  Controls how long persisted run records are kept before cleanup removes them.
+- `DATABASE_URL`
+  Controls how the API and worker connect to PostgreSQL for run history, logs, artifacts, approvals, and result metadata.
 - `RUN_STATE_DIR`
-  Overrides the directory used for persisted run state files.
+  Controls the directory used for worker heartbeat files and optional legacy file-run imports.
 - `OUTPUT_DIR`
-  Controls where generated artifacts and worker state are written.
+  Controls where generated artifacts and worker heartbeat files are written.
 - `TOOLBOX_SCRIPT_MOUNT_ROOT`
   Controls where the worker resolves toolbox PowerShell scripts.
 - `REDIS_URL`
@@ -234,6 +234,20 @@ By default, Docker mounts:
 
 - `./scripts` to `/toolbox-scripts`
 - `./output` to `/app/output`
+
+Local and container startup both run Prisma migrations before the API or worker starts. You can also run them manually:
+
+```bash
+npm run db:migrate
+```
+
+To import legacy JSON run files from older builds into PostgreSQL:
+
+```bash
+npm run migrate:file-runs
+```
+
+The importer skips duplicate run ids, preserves artifacts on disk, and does not delete the old JSON files automatically.
 
 ## IMAP migration workflows
 
@@ -434,7 +448,7 @@ docker compose up -d frontend
 
 Notes for deployment:
 
-- The backend persists run history to a state file, so completed runs remain visible after backend restarts.
+- The backend persists run history in PostgreSQL, so completed runs remain visible after backend and worker restarts.
 - Generated artifacts remain in the host `output/` folder because it is mounted into the container.
 - Scripts are loaded from the host `scripts/` folder, so keep that directory in place on the machine running Docker Compose.
 - The Coolify or Portainer-friendly compose file stores artifacts in a Docker-managed volume instead of the host `output/` folder.
@@ -448,7 +462,7 @@ cd C:\VSCode\M365-Toolbox
 npm install
 ```
 
-This repo currently does not require a committed `package-lock.json` for local development. The GitHub workflow therefore uses `npm install` instead of `npm ci`.
+The repo includes a committed `package-lock.json`, so CI uses `npm ci` for repeatable installs.
 
 Start both apps together:
 
