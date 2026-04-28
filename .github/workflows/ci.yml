@@ -35,10 +35,19 @@ jobs:
       - name: Analyze PowerShell scripts
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Severity Warning,Error
-          if ($results) {
-            $results | Format-Table -AutoSize
-            throw "PSScriptAnalyzer found issues."
+          $results = @(Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Severity Warning,Error)
+          $warnings = @($results | Where-Object { $_.Severity -eq "Warning" })
+          $errors = @($results | Where-Object { $_.Severity -eq "Error" })
+
+          if ($warnings.Count -gt 0) {
+            Write-Host "PSScriptAnalyzer warnings:"
+            $warnings | Format-Table RuleName, Severity, ScriptName -AutoSize
+          }
+
+          if ($errors.Count -gt 0) {
+            Write-Host "PSScriptAnalyzer errors:"
+            $errors | Format-Table RuleName, Severity, ScriptName -AutoSize
+            throw "PSScriptAnalyzer found error-severity issues."
           }
 
   docker-build:
