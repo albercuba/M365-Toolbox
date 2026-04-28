@@ -1636,8 +1636,8 @@ export function App() {
 
   const renderRecentRunsContent = () => (
     <div className="card-body">
-      <div className="settings-row" style={{ marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
-        <label className="field">
+      <div className="recent-runs-filters">
+        <label className="form-field">
           <span>Status</span>
           <select value={runStatusFilter} onChange={(event) => setRunStatusFilter(event.target.value)}>
             <option value="all">All</option>
@@ -1649,7 +1649,7 @@ export function App() {
             <option value="canceled">Canceled</option>
           </select>
         </label>
-        <label className="field">
+        <label className="form-field">
           <span>Script</span>
           <select value={runScriptFilter} onChange={(event) => setRunScriptFilter(event.target.value)}>
             <option value="all">All scripts</option>
@@ -1658,15 +1658,15 @@ export function App() {
             ))}
           </select>
         </label>
-        <label className="field">
+        <label className="form-field">
           <span>Tenant</span>
           <input value={runTenantFilter} onChange={(event) => setRunTenantFilter(event.target.value)} placeholder="Tenant ID or domain" />
         </label>
-        <label className="field">
+        <label className="form-field">
           <span>From</span>
           <input type="date" value={runDateFrom} onChange={(event) => setRunDateFrom(event.target.value)} />
         </label>
-        <label className="field">
+        <label className="form-field">
           <span>To</span>
           <input type="date" value={runDateTo} onChange={(event) => setRunDateTo(event.target.value)} />
         </label>

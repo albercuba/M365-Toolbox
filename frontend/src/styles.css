@@ -1001,6 +1001,7 @@ textarea {
 }
 
 .form-field input,
+.form-field select,
 .form-field textarea {
   width: 100%;
   background: var(--bg3);
@@ -1011,6 +1012,21 @@ textarea {
   font-size: 0.72rem;
   padding: 0.6rem 0.75rem;
   outline: none;
+}
+
+.form-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text3) 50%),
+    linear-gradient(135deg, var(--text3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
 }
 
 .checkbox-field input[type="checkbox"] {
@@ -1051,8 +1067,21 @@ textarea {
 }
 
 .form-field input:focus,
+.form-field select:focus,
 .form-field textarea:focus {
   border-color: var(--accent2);
+}
+
+.recent-runs-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: end;
+}
+
+.recent-runs-filters .form-field {
+  min-width: 0;
 }
 
 .checkbox-field {
