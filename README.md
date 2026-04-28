@@ -320,6 +320,8 @@ Docker Compose is the easiest way to deploy the project because it builds both s
 
 What Compose starts:
 
+- `postgres`
+  Internal PostgreSQL service for persistent run history, logs, artifacts, approvals, and result metadata
 - `backend`
   Node/Express API, run persistence, queue endpoints, and artifact serving
 - `worker`
@@ -328,6 +330,14 @@ What Compose starts:
   Internal Redis service for BullMQ queues, retries, and dead-letter handling
 - `frontend`
   Nginx container serving the built React app
+
+Named containers in the default and production compose files:
+
+- `m365-toolbox-postgres`
+- `m365-toolbox-redis`
+- `m365-toolbox-backend`
+- `m365-toolbox-worker`
+- `m365-toolbox-frontend`
 
 What Compose mounts:
 
@@ -393,6 +403,8 @@ The production compose file supports these environment overrides:
   Public frontend URL used by backend CORS validation, for example `https://m365toolbox.domain.com`
 - `FRONTEND_PORT`
   Host port mapped to the frontend container, default `8080`
+- `DATABASE_URL`
+  Optional PostgreSQL connection string override if you are not using the bundled `postgres` service defaults
 - `ARTIFACT_TOKEN_SECRET`
   Required HMAC secret used for signed artifact and report preview links
 
@@ -424,6 +436,8 @@ Recommended variables for Coolify or Portainer:
   Set this to the public URL of the deployed frontend, for example `https://toolbox.example.com`. The backend normalizes the value to its origin, so an optional trailing slash or pasted path is tolerated.
 - `FRONTEND_PORT`
   Optional host port override if you are not using a platform-managed proxy
+- `DATABASE_URL`
+  Optional PostgreSQL connection string override if your platform manages the database separately
 - `ARTIFACT_TOKEN_SECRET`
   Required HMAC secret used for signed artifact, HTML preview, and ZIP bundle links
 
@@ -480,7 +494,7 @@ Before local development, make sure Redis is available on `redis://127.0.0.1:637
 
 ## Implementation notes
 
-- Run history is persisted to a backend state file so completed runs survive backend restarts.
+- Run history is persisted in PostgreSQL so completed runs survive backend and worker restarts.
 - Running or queued jobs are marked as interrupted if the backend restarts before they finish.
 - Toolbox-native scripts are served only from `scripts/`; there is no external PowerShell repository mount.
 - Shared helpers such as `Shared-ToolboxReport.ps1` support common HTML dashboard rendering and output handling.
@@ -494,7 +508,6 @@ Before local development, make sure Redis is available on `redis://127.0.0.1:637
 The current implementation focuses on safe execution, persistent run visibility, and better operator feedback. The next natural product steps are:
 
 - authentication and RBAC for multi-user environments
-- a real database-backed run store instead of file-based persistence
 - richer approval workflows with requester and approver identities
 - stronger artifact management and retention controls
 - localization when multilingual support becomes a priority
