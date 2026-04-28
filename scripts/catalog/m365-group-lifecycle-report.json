@@ -1,0 +1,53 @@
+{
+  "id": "m365-group-lifecycle-report",
+  "name": "M365 Group Lifecycle Report",
+  "category": "Collaboration",
+  "summary": "Review Microsoft 365 group ownership, renewal activity, and lifecycle hygiene.",
+  "description": "Exports an HTML dashboard for Unified group ownership gaps, membership size, and renewal status across the selected group sample.",
+  "scriptRelativePath": "M365-GroupLifecycleReport.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-group-lifecycle-report",
+  "outputs": "Writes an HTML group-lifecycle dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "maxGroupsToInspect",
+      "label": "Maximum groups to inspect",
+      "type": "number",
+      "required": false,
+      "defaultValue": 200,
+      "min": 50,
+      "max": 500
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Microsoft Graph permissions required by the selected workflow"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 3,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

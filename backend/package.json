@@ -4,12 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "dev": "npm run dev:api",
+    "dev:api": "node --watch src/server.js",
+    "dev:worker": "node --watch src/worker.js",
+    "start": "node src/server.js",
+    "start:api": "node src/server.js",
+    "start:worker": "node src/worker.js",
+    "test": "node --test"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
+    "bullmq": "^5.58.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "ioredis": "^5.7.0",
     "morgan": "^1.10.0",
     "uuid": "^11.0.3"
   }

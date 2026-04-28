@@ -1,37 +1,31 @@
 import fs from "node:fs";
-import path from "node:path";
-import { execFile } from "node:child_process";
-
-const OUTPUT_DIR = process.env.OUTPUT_DIR || path.resolve(process.cwd(), "../output");
-const TOOLBOX_SCRIPT_MOUNT_ROOT = process.env.TOOLBOX_SCRIPT_MOUNT_ROOT || path.resolve(process.cwd(), "../scripts");
+import {
+  JOB_QUEUE_NAME,
+  OUTPUT_DIR,
+  REDIS_URL,
+  TOOLBOX_SCRIPT_MOUNT_ROOT,
+  WORKER_HEARTBEAT_STALE_MS
+} from "../config/runtime.js";
+import { getQueueMetrics, redisConnection } from "./queue.js";
+import { loadWorkerHeartbeat } from "./runRepository.js";
 
 let lastStatus = null;
 let lastStatusAt = 0;
 
-function execPwsh(args) {
-  return new Promise((resolve, reject) => {
-    execFile("pwsh", args, { timeout: 10000 }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(stderr?.trim() || error.message));
-        return;
-      }
-
-      resolve((stdout || "").trim());
-    });
-  });
-}
-
-function getModuleNames() {
-  return execPwsh([
-    "-NoLogo",
-    "-NoProfile",
-    "-Command",
-    "(Get-Module -ListAvailable Microsoft.Graph.Authentication,ExchangeOnlineManagement,ImportExcel | Select-Object -ExpandProperty Name) -join ','"
-  ]);
+function maskRedisUrl(connectionString) {
+  try {
+    const parsed = new URL(connectionString);
+    if (parsed.password) {
+      parsed.password = "***";
+    }
+    return parsed.toString();
+  } catch {
+    return connectionString;
+  }
 }
 
 export async function getSystemStatus() {
-  if (lastStatus && Date.now() - lastStatusAt < 15000) {
+  if (lastStatus && Date.now() - lastStatusAt < 5000) {
     return lastStatus;
   }
 
@@ -46,41 +40,89 @@ export async function getSystemStatus() {
   })();
 
   const scriptsMounted = fs.existsSync(TOOLBOX_SCRIPT_MOUNT_ROOT);
-
-  let powerShell = { available: false, version: null, error: null };
-  let modules = { ready: false, installed: [], error: null };
+  let redis = {
+    available: false,
+    url: maskRedisUrl(REDIS_URL),
+    error: null
+  };
+  let queue = {
+    ready: false,
+    queueName: JOB_QUEUE_NAME,
+    active: 0,
+    waiting: 0,
+    delayed: 0,
+    failed: 0,
+    deadLetter: 0,
+    error: null
+  };
+  let worker = {
+    available: false,
+    fresh: false,
+    lastHeartbeatAt: null,
+    activeRunId: null,
+    pid: null,
+    status: "missing",
+    error: null
+  };
+  const heartbeat = loadWorkerHeartbeat();
 
   try {
-    const version = await execPwsh(["-NoLogo", "-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"]);
-    powerShell = { available: true, version, error: null };
+    const pong = await redisConnection.ping();
+    redis = { available: pong === "PONG", url: maskRedisUrl(REDIS_URL), error: null };
   } catch (error) {
-    powerShell = { available: false, version: null, error: error.message };
+    redis = { available: false, url: maskRedisUrl(REDIS_URL), error: error.message };
   }
 
-  if (powerShell.available) {
-    try {
-      const installed = (await getModuleNames()).split(",").filter(Boolean);
-      modules = {
-        ready: installed.includes("Microsoft.Graph.Authentication") && installed.includes("ExchangeOnlineManagement"),
-        installed,
-        error: null
-      };
-    } catch (error) {
-      modules = { ready: false, installed: [], error: error.message };
-    }
+  try {
+    const metrics = await getQueueMetrics();
+    queue = {
+      ready: true,
+      queueName: JOB_QUEUE_NAME,
+      active: metrics.active || 0,
+      waiting: (metrics.waiting || 0) + (metrics.prioritized || 0) + (metrics.delayed || 0),
+      delayed: metrics.delayed || 0,
+      failed: metrics.failed || 0,
+      deadLetter: metrics.deadLetter || 0,
+      error: null
+    };
+  } catch (error) {
+    queue.error = error.message;
   }
+
+  if (heartbeat?.updatedAt) {
+    const lastHeartbeat = new Date(heartbeat.updatedAt).getTime();
+    const fresh = Number.isFinite(lastHeartbeat) && Date.now() - lastHeartbeat <= WORKER_HEARTBEAT_STALE_MS;
+    worker = {
+      available: true,
+      fresh,
+      lastHeartbeatAt: heartbeat.updatedAt,
+      activeRunId: heartbeat.activeRunId || null,
+      pid: heartbeat.pid || null,
+      status: heartbeat.status || (fresh ? "ready" : "stale"),
+      error: heartbeat.error || null
+    };
+  }
+
+  const executionAvailable = outputWritable && scriptsMounted && redis.available && worker.fresh;
+  const backendStatus = executionAvailable ? "ok" : "degraded";
 
   lastStatus = {
     checkedAt: new Date().toISOString(),
-    backend: { status: "ok" },
+    backend: { status: backendStatus },
     paths: {
       outputDir: OUTPUT_DIR,
       outputWritable,
       scriptMountRoot: TOOLBOX_SCRIPT_MOUNT_ROOT,
       scriptsMounted
     },
-    powerShell,
-    modules
+    execution: {
+      mode: "queued-worker",
+      available: executionAvailable,
+      queueName: JOB_QUEUE_NAME
+    },
+    redis,
+    queue,
+    worker
   };
   lastStatusAt = Date.now();
   return lastStatus;

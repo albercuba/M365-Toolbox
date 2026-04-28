@@ -8,8 +8,9 @@
     "frontend"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev": "concurrently \"npm run dev:api -w backend\" \"npm run dev:worker -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run build -w frontend",
+    "test": "npm run test -w backend",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up",
     "docker:down": "docker compose down"

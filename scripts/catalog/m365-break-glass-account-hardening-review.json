@@ -1,0 +1,52 @@
+{
+  "id": "m365-break-glass-account-hardening-review",
+  "name": "M365 Break-Glass Account Hardening Review",
+  "category": "Identity",
+  "summary": "Review likely emergency access accounts for MFA, state, and recent sign-in posture.",
+  "description": "Exports an HTML dashboard that searches for likely break-glass accounts and summarizes their hardening state.",
+  "scriptRelativePath": "M365-BreakGlassAccountHardeningReview.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-break-glass-account-hardening-review",
+  "outputs": "Writes an HTML break-glass hardening dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "accountNameHints",
+      "label": "Account name hints",
+      "type": "text",
+      "required": false,
+      "defaultValue": "breakglass,emergency",
+      "placeholder": "breakglass, emergency, backupadmin"
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Microsoft Graph permissions required by the selected workflow"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 3,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

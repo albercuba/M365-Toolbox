@@ -1,15 +1,18 @@
 import { Router } from "express";
 import {
+  buildArtifactArchive,
   cancelRun,
   getRun,
   getRunArtifact,
   getRunArtifacts,
   getRunHtml,
+  getQueueStatus,
   getRuns,
   getScript,
   listScripts,
   startRun
 } from "../services/scriptRunner.js";
+import { verifyArtifactToken } from "../services/artifactTokens.js";
 import { getSystemStatus } from "../services/healthStatus.js";
 
 export const scriptsRouter = Router();
@@ -26,10 +29,10 @@ scriptsRouter.get("/scripts/:id", (req, res) => {
   }
 });
 
-scriptsRouter.post("/scripts/:id/run", (req, res) => {
+scriptsRouter.post("/scripts/:id/run", async (req, res) => {
   try {
     const { approvalConfirmed, ...payload } = req.body || {};
-    const run = startRun(req.params.id, payload, {
+    const run = await startRun(req.params.id, payload, {
       approvalConfirmed: Boolean(approvalConfirmed)
     });
     res.status(202).json(run);
@@ -38,12 +41,12 @@ scriptsRouter.post("/scripts/:id/run", (req, res) => {
   }
 });
 
-scriptsRouter.get("/runs", (_req, res) => {
-  res.json(getRuns());
+scriptsRouter.get("/runs", async (_req, res) => {
+  res.json(await getRuns());
 });
 
-scriptsRouter.get("/runs/:id", (req, res) => {
-  const run = getRun(req.params.id);
+scriptsRouter.get("/runs/:id", async (req, res) => {
+  const run = await getRun(req.params.id);
   if (!run) {
     res.status(404).json({ message: "Run not found." });
     return;
@@ -52,17 +55,17 @@ scriptsRouter.get("/runs/:id", (req, res) => {
   res.json(run);
 });
 
-scriptsRouter.post("/runs/:id/cancel", (req, res) => {
+scriptsRouter.post("/runs/:id/cancel", async (req, res) => {
   try {
-    res.json(cancelRun(req.params.id));
+    res.json(await cancelRun(req.params.id));
   } catch (error) {
     res.status(error.statusCode || 400).json({ message: error.message });
   }
 });
 
-scriptsRouter.get("/runs/:id/artifacts", (req, res) => {
+scriptsRouter.get("/runs/:id/artifacts", async (req, res) => {
   try {
-    res.json(getRunArtifacts(req.params.id));
+    res.json(await getRunArtifacts(req.params.id));
   } catch (error) {
     res.status(error.statusCode || 400).json({ message: error.message });
   }
@@ -70,6 +73,16 @@ scriptsRouter.get("/runs/:id/artifacts", (req, res) => {
 
 scriptsRouter.get("/runs/:id/artifacts/:artifactId", (req, res) => {
   try {
+    if (
+      !verifyArtifactToken(req.query.token, {
+        runId: req.params.id,
+        artifactId: req.params.artifactId,
+        kind: "download"
+      })
+    ) {
+      res.status(403).json({ message: "Artifact token is invalid or expired." });
+      return;
+    }
     const artifact = getRunArtifact(req.params.id, req.params.artifactId);
     res.download(artifact.path, artifact.name);
   } catch (error) {
@@ -77,14 +90,57 @@ scriptsRouter.get("/runs/:id/artifacts/:artifactId", (req, res) => {
   }
 });
 
+scriptsRouter.get("/runs/:id/package.zip", (req, res) => {
+  try {
+    if (
+      !verifyArtifactToken(req.query.token, {
+        runId: req.params.id,
+        kind: "bundle"
+      })
+    ) {
+      res.status(403).json({ message: "Bundle token is invalid or expired." });
+      return;
+    }
+
+    res.type("application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${req.params.id}-artifacts.zip"`);
+    buildArtifactArchive(req.params.id, res);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
 scriptsRouter.get("/runs/:id/html", (req, res) => {
+  if (
+    !verifyArtifactToken(req.query.token, {
+      runId: req.params.id,
+      kind: "html"
+    })
+  ) {
+    res.status(403).json({ message: "HTML preview token is invalid or expired." });
+    return;
+  }
+
   const htmlReport = getRunHtml(req.params.id);
   if (!htmlReport) {
     res.status(404).json({ message: "HTML report not found for this run." });
     return;
   }
 
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https: http:; sandbox allow-same-origin allow-scripts;"
+  );
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.type("html").send(htmlReport.content);
+});
+
+scriptsRouter.get("/queue", async (_req, res) => {
+  try {
+    res.json(await getQueueStatus());
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
 scriptsRouter.get("/status", async (_req, res, next) => {

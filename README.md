@@ -1,6 +1,6 @@
 # M365 Toolbox
 
-M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operations. It combines a React frontend, an Express API, and a toolbox-native PowerShell script catalog so admins can launch reports and response workflows from the browser, authenticate with Microsoft device code, and review results without leaving the app.
+M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operations. It combines a React frontend, an Express API, a Redis-backed BullMQ queue, a dedicated PowerShell worker, and a toolbox-native script catalog so admins can launch reports and response workflows from the browser, authenticate with Microsoft device code, and review results without leaving the app.
 
 ## What the project does
 
@@ -16,11 +16,13 @@ The current catalog includes 59 toolbox-native scripts across categories such as
 ## Project layout
 
 - `backend/`
-  Express API, script registry, PowerShell runner, run tracking, and HTML artifact endpoints
+  Express API, queue integration, run tracking, artifact endpoints, and worker health reporting
 - `frontend/`
   React/Vite UI with the resizable sidebar, category icons, dark mode, favorites, dashboard shortcuts, run details, and inline report preview
 - `scripts/`
   Toolbox-native PowerShell scripts, the script wrapper, and shared report helpers
+- `scripts/catalog/`
+  JSON catalog files that define script metadata, fields, risk, and runner behavior
 - `output/`
   Generated report artifacts written by backend runs
 - `docker-compose.yml`
@@ -49,7 +51,7 @@ The current catalog includes 59 toolbox-native scripts across categories such as
 - Device-code modal that surfaces the sign-in code, copy action, and login URL
 - Approval confirmation prompt for remediation workflows
 - Action profiles and high-impact action guidance for the compromised-account workflow
-- Backend status view for PowerShell, modules, script mount, and output path readiness
+- Backend status view for Redis, queue, worker heartbeat, script mount, and output path readiness
 - GitHub repository link in the sidebar footer
 
 ## Current script catalog
@@ -181,11 +183,11 @@ Latest additions:
 - `scripts/M365-OAuthAppRiskReview.ps1`
   Highlights OAuth-enabled apps with delegated grants, risky scopes, and credential risk.
 
-The registry for the full catalog lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbox/backend/src/data/scripts.js), and the PowerShell entry scripts live in [scripts](/c:/VSCode/M365-Toolbox/scripts).
+The catalog loader lives in [backend/src/data/scripts.js](/c:/VSCode/M365-Toolbox/backend/src/data/scripts.js), the catalog source files live in [scripts/catalog](/c:/VSCode/M365-Toolbox/scripts/catalog), and the PowerShell entry scripts live in [scripts](/c:/VSCode/M365-Toolbox/scripts).
 
 ## Runtime model
 
-The backend loads script metadata from the catalog registry and launches scripts through `scripts/Invoke-ToolboxScript.ps1`. Each run is executed with controlled arguments based on allowlisted form fields.
+The backend loads script metadata from the JSON catalog, accepts validated run requests, persists a queued run record, and hands execution to BullMQ. A separate PowerShell worker container reads queued jobs, launches `scripts/Invoke-ToolboxScript.ps1`, captures structured events and artifacts, and writes run state back to disk.
 
 The backend tracks:
 
@@ -200,18 +202,32 @@ The backend tracks:
 - timestamps
 - artifact inventory for exported files
 
+High-level flow:
+
+```text
+Frontend
+  -> API backend
+  -> BullMQ / Redis
+  -> PowerShell worker
+  -> Artifacts + persisted run state
+```
+
 Runtime controls available through environment variables:
 
 - `MAX_CONCURRENT_RUNS`
-  Limits how many PowerShell runs can execute at the same time. Extra runs stay queued until a slot opens.
+  Limits how many worker jobs can execute at the same time. Extra runs stay queued until a slot opens.
 - `RUN_RETENTION_HOURS`
   Controls how long persisted run records are kept before cleanup removes them.
 - `RUN_STATE_DIR`
   Overrides the directory used for persisted run state files.
 - `OUTPUT_DIR`
-  Controls where generated artifacts and backend run state are written.
+  Controls where generated artifacts and worker state are written.
 - `TOOLBOX_SCRIPT_MOUNT_ROOT`
-  Controls where the backend resolves toolbox PowerShell scripts.
+  Controls where the worker resolves toolbox PowerShell scripts.
+- `REDIS_URL`
+  Controls how the API and worker connect to Redis for BullMQ.
+- `ARTIFACT_TOKEN_SECRET`
+  Signs short-lived artifact, HTML preview, and ZIP bundle URLs.
 
 By default, Docker mounts:
 
@@ -290,7 +306,11 @@ Docker Compose is the easiest way to deploy the project because it builds both s
 What Compose starts:
 
 - `backend`
-  Node/Express API with `pwsh`, Microsoft Graph modules, Exchange Online Management, and the script runner
+  Node/Express API, run persistence, queue endpoints, and artifact serving
+- `worker`
+  Dedicated PowerShell execution container that consumes BullMQ jobs
+- `redis`
+  Internal Redis service for BullMQ queues, retries, and dead-letter handling
 - `frontend`
   Nginx container serving the built React app
 
@@ -346,7 +366,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 Default production ports:
 
 - Frontend: `http://localhost:8080`
-- Backend health: `http://localhost:3001/api/health`
+- Backend health: internal only at `http://backend:3001/api/health` from the Docker network
 
 The production compose file supports these environment overrides:
 
@@ -354,15 +374,15 @@ The production compose file supports these environment overrides:
   Public frontend URL used by backend CORS validation, for example `https://m365toolbox.domain.com`
 - `FRONTEND_PORT`
   Host port mapped to the frontend container, default `8080`
-- `BACKEND_PORT`
-  Host port mapped to the backend container, default `3001`
+- `ARTIFACT_TOKEN_SECRET`
+  Required HMAC secret used for signed artifact and report preview links
 
 Example:
 
 ```powershell
 $env:FRONTEND_ORIGIN="https://toolbox.example.com"
 $env:FRONTEND_PORT="80"
-$env:BACKEND_PORT="3001"
+$env:ARTIFACT_TOKEN_SECRET="replace-with-a-long-random-secret"
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -375,6 +395,7 @@ docker compose -f docker-compose.coolify.yml up -d --build
 Why this variant is different:
 
 - the backend uses `expose` instead of a public host port
+- the worker and Redis stay internal to the Compose network
 - report output is stored in a named Docker volume called `toolbox_output`
 - runtime values are expected to be supplied by the platform UI
 
@@ -427,10 +448,11 @@ npm run dev
 
 That starts:
 
-- backend on `http://localhost:3001`
+- API backend on `http://localhost:3001`
+- PowerShell worker in watch mode
 - frontend dev server on `http://localhost:5173`
 
-The frontend Vite config proxies `/api` requests to the backend during local development.
+Before local development, make sure Redis is available on `redis://127.0.0.1:6379` or set `REDIS_URL` to your local Redis endpoint. The frontend Vite config proxies `/api` requests to the backend during local development.
 
 ## Implementation notes
 
@@ -438,7 +460,7 @@ The frontend Vite config proxies `/api` requests to the backend during local dev
 - Running or queued jobs are marked as interrupted if the backend restarts before they finish.
 - Toolbox-native scripts are served only from `scripts/`; there is no external PowerShell repository mount.
 - Shared helpers such as `Shared-ToolboxReport.ps1` support common HTML dashboard rendering and output handling.
-- The backend API exposes script listing, run creation, run status, cancellation, artifact listing, artifact download, HTML preview, and backend status endpoints.
+- The backend API exposes script listing, run creation, run status, cancellation, artifact listing, artifact download, HTML preview, queue status, and backend status endpoints.
 - Input values are validated on the backend before PowerShell execution starts.
 - Run retention is controlled by backend retention settings so old run records do not accumulate forever.
 - CORS is restricted to configured origins, localhost, and private IPv4 ranges.

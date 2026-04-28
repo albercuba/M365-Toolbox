@@ -1,0 +1,53 @@
+{
+  "id": "m365-inbox-rule-threat-hunt",
+  "name": "M365 Inbox Rule Threat Hunt",
+  "category": "Exchange",
+  "summary": "Hunt for suspicious inbox rules that forward, redirect, hide, or delete messages.",
+  "description": "Connects to Exchange Online by device code and exports an HTML dashboard for inbox rules with threat-hunting signals.",
+  "scriptRelativePath": "M365-InboxRuleThreatHunt.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-inbox-rule-threat-hunt",
+  "outputs": "Writes an HTML inbox rule threat-hunt dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "maxMailboxesToInspect",
+      "label": "Maximum mailboxes to inspect",
+      "type": "number",
+      "required": false,
+      "defaultValue": 150,
+      "min": 25,
+      "max": 500
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Exchange Online permissions for the chosen account"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 4,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

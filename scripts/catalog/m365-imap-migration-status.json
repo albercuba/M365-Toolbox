@@ -1,0 +1,63 @@
+{
+  "id": "m365-imap-migration-status",
+  "name": "M365 IMAP Migration Status",
+  "category": "Exchange",
+  "summary": "Export current status for an existing Exchange Online IMAP migration batch.",
+  "description": "Reads an existing Exchange Online migration batch and exports summary plus per-user migration statistics. This is a read-only monitoring workflow.",
+  "scriptRelativePath": "M365-ImapMigrationStatus.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-imap-migration-status",
+  "outputs": "Writes an HTML status report plus summary, per-user status, JSON diagnostics, and text notes artifacts.",
+  "fields": [
+    {
+      "id": "tenantAdminUpn",
+      "label": "Tenant admin UPN",
+      "type": "text",
+      "required": false,
+      "placeholder": "admin@contoso.com",
+      "helpText": "Optional sign-in hint for Exchange Online device-code authentication."
+    },
+    {
+      "id": "batchName",
+      "label": "Migration batch name",
+      "type": "text",
+      "required": true,
+      "placeholder": "imap-batch-001"
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "notes": [
+    "This workflow only reads migration status and per-user statistics.",
+    "Per-user error summaries are redacted before export."
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Exchange Online permissions for the chosen account"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 4,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

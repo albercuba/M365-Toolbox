@@ -7,6 +7,49 @@ $ProgressPreference = "SilentlyContinue"
 
 $script:ToolboxTenantLabel = ""
 
+function Write-ToolboxStructuredEvent {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('progress', 'artifact', 'metric', 'state')]
+        [string]$Type,
+
+        [hashtable]$Body = @{}
+    )
+
+    $payload = [ordered]@{
+        type      = $Type
+        timestamp = (Get-Date).ToString('o')
+    }
+
+    foreach ($key in $Body.Keys) {
+        $payload[$key] = $Body[$key]
+    }
+
+    $json = $payload | ConvertTo-Json -Depth 6 -Compress
+    Write-Output ("::toolbox::{0}" -f $json)
+}
+
+function Write-ToolboxArtifactEvent {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [string]$Kind = 'file'
+    )
+
+    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
+    if (-not $item) {
+        return
+    }
+
+    Write-ToolboxStructuredEvent -Type 'artifact' -Body @{
+        path = $item.FullName
+        kind = $Kind
+        size = $item.Length
+        name = $item.Name
+    }
+}
+
 function Get-ToolboxExceptionMessage {
     param(
         [Parameter(Mandatory)]
@@ -43,6 +86,7 @@ function Write-ProgressStep {
         [string]$Message
     )
 
+    Write-ToolboxStructuredEvent -Type 'progress' -Body @{ message = $Message }
     Write-Host "[+] $Message" -ForegroundColor Cyan
 }
 
@@ -699,4 +743,5 @@ function Export-ToolboxHtmlReport {
 "@
 
     [System.IO.File]::WriteAllText($Path, $html, [System.Text.Encoding]::UTF8)
+    Write-ToolboxArtifactEvent -Path $Path -Kind 'html'
 }

@@ -1,0 +1,44 @@
+{
+  "id": "m365-distribution-group-audit",
+  "name": "M365 Distribution Group Audit",
+  "category": "Exchange",
+  "summary": "Review distribution group ownership, member counts, and exposure to external senders.",
+  "description": "Connects to Exchange Online by device code and exports an HTML dashboard for distribution group hygiene and sender scope.",
+  "scriptRelativePath": "M365-DistributionGroupAudit.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-distribution-group-audit",
+  "outputs": "Writes an HTML distribution-group dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Exchange Online permissions for the chosen account"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 4,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

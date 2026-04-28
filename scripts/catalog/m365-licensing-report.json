@@ -1,0 +1,64 @@
+{
+  "id": "m365-licensing-report",
+  "name": "M365 Licensing Report",
+  "category": "Licensing",
+  "summary": "Review assigned licenses, unlicensed users, and SKU consumption across the tenant.",
+  "description": "Collects tenant SKU inventory and user license assignments, then exports a light HTML dashboard with SKU consumption, unlicensed users, and multi-license visibility.",
+  "scriptRelativePath": "M365-LicensingReport.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-licensing-report",
+  "outputs": "Writes an HTML licensing dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "includeDisabledUsers",
+      "label": "Include disabled users",
+      "type": "checkbox",
+      "defaultValue": false
+    },
+    {
+      "id": "paidLicensesOnly",
+      "label": "Only paid licenses",
+      "type": "checkbox",
+      "defaultValue": false,
+      "helpText": "Best-effort filter that excludes common free and trial SKUs from the report."
+    },
+    {
+      "id": "includePaidAddOns",
+      "label": "Include paid add-ons",
+      "type": "checkbox",
+      "defaultValue": false,
+      "helpText": "When paid licenses only is enabled, include paid add-ons and storage SKUs in addition to user licenses."
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Microsoft Graph permissions required by the selected workflow"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 3,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

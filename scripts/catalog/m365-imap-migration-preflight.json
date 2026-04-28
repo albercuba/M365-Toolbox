@@ -1,0 +1,107 @@
+{
+  "id": "m365-imap-migration-preflight",
+  "name": "M365 IMAP Migration Preflight",
+  "category": "Exchange",
+  "summary": "Validate readiness for an Exchange Online IMAP mailbox migration.",
+  "description": "Validates the mounted IMAP migration CSV, connects to Exchange Online by device code, and tests source IMAP endpoint availability using Exchange Online migration cmdlets. This does not copy mail locally and does not expose mailbox passwords in UI fields.",
+  "scriptRelativePath": "M365-ImapMigrationPreflight.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-imap-migration-preflight",
+  "outputs": "Writes an HTML readiness report plus CSV, JSON, and text diagnostics artifacts.",
+  "fields": [
+    {
+      "id": "tenantAdminUpn",
+      "label": "Tenant admin UPN",
+      "type": "text",
+      "required": false,
+      "placeholder": "admin@contoso.com",
+      "helpText": "Optional sign-in hint for Exchange Online device-code authentication."
+    },
+    {
+      "id": "endpointName",
+      "label": "Migration endpoint name",
+      "type": "text",
+      "required": true,
+      "defaultValue": "imap-source",
+      "helpText": "Existing endpoint to reuse or new endpoint to create for the source IMAP system."
+    },
+    {
+      "id": "imapServer",
+      "label": "IMAP server",
+      "type": "text",
+      "required": true,
+      "placeholder": "imap.contoso.com",
+      "helpText": "Source IMAP hostname reachable by Microsoft 365 migration services."
+    },
+    {
+      "id": "port",
+      "label": "IMAP port",
+      "type": "number",
+      "required": false,
+      "defaultValue": 993,
+      "min": 1,
+      "max": 65535
+    },
+    {
+      "id": "security",
+      "label": "Security",
+      "type": "text",
+      "required": false,
+      "defaultValue": "Ssl",
+      "placeholder": "Ssl, Tls, or None",
+      "helpText": "Use Ssl for SSL/TLS on 993, Tls for STARTTLS where supported, or None only for trusted lab scenarios."
+    },
+    {
+      "id": "csvPath",
+      "label": "CSV path inside backend container",
+      "type": "text",
+      "required": false,
+      "placeholder": "/migration-input/imap-mailboxes.csv",
+      "helpText": "Mounted local path containing EmailAddress, UserName, Password, and optional UserRoot. Leave blank to use M365_TOOLBOX_IMAP_MIGRATION_CSV_PATH. Do not paste passwords into the browser."
+    },
+    {
+      "id": "skipCertificateValidation",
+      "label": "Skip IMAP certificate validation (high risk)",
+      "type": "checkbox",
+      "defaultValue": false,
+      "helpText": "High risk. Use only for temporary testing against a known source host with a certificate issue."
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "notes": [
+    "IMAP migration moves mail only, not contacts, calendars, tasks, mailbox rules, or permissions.",
+    "The Microsoft 365 target mailboxes must already exist and be licensed before migration.",
+    "Mailbox passwords must come from a mounted CSV file path or M365_TOOLBOX_IMAP_MIGRATION_CSV_PATH, not browser input.",
+    "Source IMAP connectivity from Microsoft 365 must work before a batch can be created."
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Exchange Online permissions for the chosen account"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 4,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

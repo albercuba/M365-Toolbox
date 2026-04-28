@@ -1,0 +1,50 @@
+{
+  "id": "m365-conditional-access-report",
+  "name": "M365 Conditional Access Report",
+  "category": "Identity",
+  "summary": "Inventory Conditional Access policies with state, scope, and grant controls.",
+  "description": "Exports a Conditional Access dashboard that highlights enabled, report-only, and disabled policies along with their included scope and grant configuration.",
+  "scriptRelativePath": "M365-ConditionalAccessReport.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-conditional-access-report",
+  "outputs": "Writes an HTML Conditional Access dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "includeDisabledPolicies",
+      "label": "Include disabled policies",
+      "type": "checkbox",
+      "defaultValue": true
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Microsoft Graph permissions required by the selected workflow"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 3,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

@@ -844,8 +844,12 @@ function openPdfPrintDialog(html, fileName) {
   });
 }
 
-async function fetchHtmlReport(runId) {
-  const response = await fetch(`${apiBase}/runs/${runId}/html`);
+async function fetchHtmlReport(url) {
+  if (!url) {
+    throw new Error("No HTML preview is available for this run yet.");
+  }
+
+  const response = await fetch(url);
   const contentType = response.headers.get("content-type") || "";
   const text = await response.text();
 
@@ -1293,7 +1297,7 @@ export function App() {
     setSuccess("");
 
     try {
-      const html = await fetchHtmlReport(activeRun.id);
+      const html = await fetchHtmlReport(activeRun.artifacts?.htmlPreviewUrl);
       const reportData = extractReportDataFromHtml(html);
       const fileName = buildReportExportFileName({
         tenantName: reportData.tenant || activeRun.payload?.tenantId || "Tenant",
@@ -1487,6 +1491,8 @@ export function App() {
     .sort((a, b) => (runCountsByScriptId[b.id] || 0) - (runCountsByScriptId[a.id] || 0))
     .slice(0, 3);
   const hasHtmlArtifact = artifacts.some((artifact) => artifact.type === "html");
+  const htmlPreviewUrl = activeRun?.artifacts?.htmlPreviewUrl || null;
+  const bundleUrl = activeRun?.artifacts?.bundleUrl || null;
   const compromisedTargetPreview = selectedScript?.id === "m365-compromised-account-remediation"
     ? parseUserList(formValues.userPrincipalName)
     : null;
@@ -1508,7 +1514,7 @@ export function App() {
   const sortedCategories = Object.keys(scriptGroups).sort((a, b) => a.localeCompare(b));
 
   const renderReportExportActions = ({ includePreview = false } = {}) => {
-    if (!activeRun?.id) {
+    if (!activeRun?.id || !htmlPreviewUrl) {
       return null;
     }
 
@@ -1539,8 +1545,13 @@ export function App() {
           {exportingFormat === "pdf" ? "Preparing..." : "PDF"}
         </button>
         {includePreview ? (
-          <a className="filter-btn" href={`${apiBase}/runs/${activeRun.id}/html`} target="_blank" rel="noreferrer">
+          <a className="filter-btn" href={htmlPreviewUrl} target="_blank" rel="noreferrer">
             Preview
+          </a>
+        ) : null}
+        {bundleUrl ? (
+          <a className="filter-btn" href={bundleUrl}>
+            ZIP
           </a>
         ) : null}
       </>
@@ -2140,7 +2151,7 @@ export function App() {
                                     {artifact.type === "html" ? (
                                       renderReportExportActions({ includePreview: true })
                                     ) : (
-                                      <a className="filter-btn active-all" href={`${apiBase}/runs/${activeRun?.id}/artifacts/${encodeURIComponent(artifact.id)}`}>
+                                      <a className="filter-btn active-all" href={artifact.downloadUrl}>
                                         Download
                                       </a>
                                     )}
@@ -2159,7 +2170,12 @@ export function App() {
                             {renderReportExportActions()}
                           </div>
                           <div className="card-body report-card-body">
-                            <iframe title="HTML report preview" className="report-frame" src={`${apiBase}/runs/${activeRun.id}/html`} />
+                            <iframe
+                              title="HTML report preview"
+                              className="report-frame"
+                              src={htmlPreviewUrl}
+                              sandbox="allow-same-origin allow-scripts"
+                            />
                           </div>
                         </div>
                       ) : null}
@@ -2210,7 +2226,7 @@ export function App() {
                         <div className="method-info">
                           <div className="method-label">Backend Status</div>
                           <div className="method-count">
-                            {status?.powerShell?.available ? "PowerShell ready" : "Status unavailable"} | {status?.modules?.ready ? "Modules ready" : "Module check pending"}
+                            {status?.execution?.available ? "Worker path ready" : "Execution degraded"} | {status?.redis?.available ? "Redis connected" : "Redis unavailable"}
                           </div>
                         </div>
                       </div>
@@ -2260,8 +2276,9 @@ export function App() {
                         <div className="status-list">
                           <div>Output path: {status?.paths?.outputWritable ? "writable" : "unavailable"}</div>
                           <div>Scripts mount: {status?.paths?.scriptsMounted ? "mounted" : "missing"}</div>
-                          <div>PowerShell: {status?.powerShell?.available ? `v${status.powerShell.version}` : "not ready"}</div>
-                          <div>Modules: {status?.modules?.ready ? "ready" : "check failed or pending"}</div>
+                          <div>Worker: {status?.worker?.fresh ? `${status.worker.status || "ready"}` : "missing or stale"}</div>
+                          <div>Queue: {status?.queue ? `${status.queue.active || 0} active / ${status.queue.waiting || 0} waiting / ${status.queue.deadLetter || 0} dead-letter` : "pending"}</div>
+                          <div>Redis: {status?.redis?.available ? "connected" : "unavailable"}</div>
                           <div>Last updated: {statusUpdatedAt ? formatDate(statusUpdatedAt) : "Pending"}</div>
                         </div>
                       </div>

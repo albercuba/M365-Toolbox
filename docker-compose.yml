@@ -1,19 +1,44 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: m365-toolbox-redis
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     container_name: m365-toolbox-backend
+    depends_on:
+      - redis
     environment:
       PORT: 3001
       OUTPUT_DIR: /app/output
       TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
+      REDIS_URL: redis://redis:6379
+      ARTIFACT_TOKEN_SECRET: dev-artifact-token-secret
       FRONTEND_ORIGIN: http://localhost:5173
     volumes:
       - ./output:/app/output
       - ./scripts:/toolbox-scripts:ro
     ports:
       - "3001:3001"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: m365-toolbox-worker
+    command: ["npm", "run", "start:worker"]
+    depends_on:
+      - redis
+    environment:
+      OUTPUT_DIR: /app/output
+      TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
+      REDIS_URL: redis://redis:6379
+      ARTIFACT_TOKEN_SECRET: dev-artifact-token-secret
+    volumes:
+      - ./output:/app/output
+      - ./scripts:/toolbox-scripts:ro
 
   frontend:
     build:

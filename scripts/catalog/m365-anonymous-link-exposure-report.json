@@ -1,0 +1,53 @@
+{
+  "id": "m365-anonymous-link-exposure-report",
+  "name": "M365 Anonymous Link Exposure Report",
+  "category": "SharePoint",
+  "summary": "Review SharePoint sharing defaults and site footprint that can amplify anyone-link exposure.",
+  "description": "Exports an HTML dashboard that combines tenant sharing settings with SharePoint site usage inventory.",
+  "scriptRelativePath": "M365-AnonymousLinkExposureReport.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-anonymous-link-exposure-report",
+  "outputs": "Writes an HTML anonymous-link exposure dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "reportPeriod",
+      "label": "Usage period",
+      "type": "text",
+      "required": false,
+      "defaultValue": "D30",
+      "placeholder": "D7, D30, D90, D180",
+      "helpText": "Accepted values: D7, D30, D90, D180."
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Microsoft Graph permissions required by the selected workflow"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 4,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

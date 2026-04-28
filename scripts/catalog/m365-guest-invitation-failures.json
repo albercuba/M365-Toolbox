@@ -1,0 +1,53 @@
+{
+  "id": "m365-guest-invitation-failures",
+  "name": "M365 Guest Invitation Failures",
+  "category": "Identity",
+  "summary": "Find guest invitations that were never accepted or never resulted in sign-in activity.",
+  "description": "Exports an HTML dashboard of guest accounts with pending invitation state, stale acceptance, or no successful sign-in history.",
+  "scriptRelativePath": "M365-GuestInvitationFailures.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "runner": "generic-html",
+  "outputBaseName": "m365-guest-invitation-failures",
+  "outputs": "Writes an HTML guest invitation dashboard to the configured output directory.",
+  "fields": [
+    {
+      "id": "staleDays",
+      "label": "Stale threshold (days)",
+      "type": "number",
+      "required": false,
+      "defaultValue": 30,
+      "min": 7,
+      "max": 365
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    }
+  ],
+  "mode": "read-only",
+  "approvalRequired": false,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Microsoft Graph permissions required by the selected workflow"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 3,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

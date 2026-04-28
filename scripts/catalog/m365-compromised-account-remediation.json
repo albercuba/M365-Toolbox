@@ -1,0 +1,159 @@
+{
+  "id": "m365-compromised-account-remediation",
+  "name": "M365 Compromised Account Remediation",
+  "category": "Incident Response",
+  "summary": "Contain a compromised Microsoft 365 account and generate an incident dashboard.",
+  "description": "Runs the approved compromised-account workflow against one or more target users, authenticates by device code, performs the selected review or remediation actions, and exports an HTML dashboard into the toolbox output folder.",
+  "scriptRelativePath": "M365-CompromisedAccountRemediation.ps1",
+  "scriptMountRootEnv": "TOOLBOX_SCRIPT_MOUNT_ROOT",
+  "outputs": "Writes an HTML incident dashboard plus supporting CSV and log artifacts to the configured output directory.",
+  "reviewActions": [
+    "ReviewMfaMethods",
+    "ReviewInboxRules",
+    "ReviewMailboxForwarding",
+    "ReviewMailboxDelegates",
+    "ReviewRecentSignIns",
+    "ExportAuditLog"
+  ],
+  "highImpactActions": [
+    "DisableUser",
+    "ResetPassword",
+    "RemoveMfaMethods",
+    "RemoveMailboxForwarding",
+    "RemoveMailboxDelegates",
+    "DisableMailboxProtocols"
+  ],
+  "actionProfiles": [
+    {
+      "id": "review-only",
+      "label": "Review Only",
+      "description": "Collect recent sign-ins, MFA, inbox rule, forwarding, delegate, and audit evidence without changing tenant state.",
+      "actions": [
+        "ReviewMfaMethods",
+        "ReviewInboxRules",
+        "ReviewMailboxForwarding",
+        "ReviewMailboxDelegates",
+        "ReviewRecentSignIns",
+        "ExportAuditLog"
+      ]
+    },
+    {
+      "id": "containment",
+      "label": "Containment",
+      "description": "Apply a fast containment bundle for active account compromise, including sign-out, password reset, mailbox cleanup, and protocol lock-down.",
+      "actions": [
+        "DisableUser",
+        "RevokeSessions",
+        "ResetPassword",
+        "RemoveMfaMethods",
+        "DisableInboxRules",
+        "RemoveMailboxForwarding",
+        "DisableSignature",
+        "DisableMailboxProtocols",
+        "ExportAuditLog"
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "id": "userPrincipalName",
+      "label": "User Principal Names",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "user1@domain.com, user2@domain.com",
+      "helpText": "Comma or newline separated UPNs."
+    },
+    {
+      "id": "actions",
+      "label": "Actions",
+      "type": "multiselect",
+      "required": true,
+      "defaultValue": [
+        "DisableUser",
+        "RevokeSessions",
+        "ResetPassword",
+        "RemoveMfaMethods",
+        "DisableInboxRules",
+        "RemoveMailboxForwarding",
+        "DisableSignature",
+        "ExportAuditLog"
+      ],
+      "options": [
+        "DisableUser",
+        "RevokeSessions",
+        "ResetPassword",
+        "ReviewMfaMethods",
+        "RemoveMfaMethods",
+        "ReviewInboxRules",
+        "DisableInboxRules",
+        "ReviewMailboxForwarding",
+        "RemoveMailboxForwarding",
+        "DisableSignature",
+        "ReviewMailboxDelegates",
+        "RemoveMailboxDelegates",
+        "ReviewRecentSignIns",
+        "DisableMailboxProtocols",
+        "ExportAuditLog"
+      ]
+    },
+    {
+      "id": "auditLogDays",
+      "label": "Audit Window (days)",
+      "type": "number",
+      "required": false,
+      "defaultValue": 10,
+      "min": 1,
+      "max": 30
+    },
+    {
+      "id": "tenantId",
+      "label": "Tenant ID or Domain",
+      "type": "text",
+      "required": false,
+      "placeholder": "contoso.onmicrosoft.com",
+      "helpText": "Optional. If provided, device-code sign-in is scoped to this tenant."
+    },
+    {
+      "id": "includeGeneratedPasswordsInResults",
+      "label": "Include generated passwords in results",
+      "type": "checkbox",
+      "defaultValue": false
+    },
+    {
+      "id": "exportIncidentPackage",
+      "label": "Export per-user incident package",
+      "type": "checkbox",
+      "defaultValue": true,
+      "helpText": "Creates a predictable folder per target with supporting CSV, log, and summary files."
+    },
+    {
+      "id": "whatIf",
+      "label": "Preview only (WhatIf)",
+      "type": "checkbox",
+      "defaultValue": true
+    }
+  ],
+  "mode": "remediation",
+  "approvalRequired": true,
+  "prerequisites": [
+    "PowerShell 7 and backend Microsoft Graph modules available in the execution container",
+    "Microsoft 365 admin sign-in by device code when prompted",
+    "Microsoft Graph permissions required by the selected workflow"
+  ],
+  "permissions": [
+    "Read tenant data",
+    "Modify tenant state",
+    "Generate report artifacts"
+  ],
+  "estimatedRuntimeMinutes": 8,
+  "examples": [
+    {
+      "title": "Default tenant-wide run",
+      "description": "Use the default field values and authenticate when the device-code prompt appears."
+    },
+    {
+      "title": "Scoped admin review",
+      "description": "Provide a tenant id or domain to scope authentication to the expected Microsoft 365 tenant."
+    }
+  ]
+}

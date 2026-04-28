@@ -1,19 +1,44 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     restart: unless-stopped
+    depends_on:
+      - redis
     environment:
       PORT: 3001
       OUTPUT_DIR: /app/output
       TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
+      REDIS_URL: redis://redis:6379
+      ARTIFACT_TOKEN_SECRET: ${ARTIFACT_TOKEN_SECRET:?Set ARTIFACT_TOKEN_SECRET}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
     volumes:
       - toolbox_output:/app/output
       - ./scripts:/toolbox-scripts:ro
     expose:
       - "3001"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    command: ["npm", "run", "start:worker"]
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      OUTPUT_DIR: /app/output
+      TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
+      REDIS_URL: redis://redis:6379
+      ARTIFACT_TOKEN_SECRET: ${ARTIFACT_TOKEN_SECRET:?Set ARTIFACT_TOKEN_SECRET}
+    volumes:
+      - toolbox_output:/app/output
+      - ./scripts:/toolbox-scripts:ro
 
   frontend:
     build:
