@@ -123,28 +123,32 @@ scriptsRouter.get("/runs/:id/package.zip", async (req, res) => {
 });
 
 scriptsRouter.get("/runs/:id/html", async (req, res) => {
-  if (
-    !verifyArtifactToken(req.query.token, {
-      runId: req.params.id,
-      kind: "html"
-    })
-  ) {
-    res.status(403).json({ message: "HTML preview token is invalid or expired." });
-    return;
-  }
+  try {
+    if (
+      !verifyArtifactToken(req.query.token, {
+        runId: req.params.id,
+        kind: "html"
+      })
+    ) {
+      res.status(403).json({ message: "HTML preview token is invalid or expired." });
+      return;
+    }
 
-  const htmlReport = await getRunHtml(req.params.id);
-  if (!htmlReport) {
-    res.status(404).json({ message: "HTML report not found for this run." });
-    return;
-  }
+    const htmlReport = await getRunHtml(req.params.id);
+    if (!htmlReport) {
+      res.status(404).json({ message: "HTML report not found for this run." });
+      return;
+    }
 
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https: http:; sandbox allow-same-origin allow-scripts;"
-  );
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.type("html").send(htmlReport.content);
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https: http:; sandbox allow-same-origin allow-scripts;"
+    );
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.type("html").send(htmlReport.content);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
 });
 
 scriptsRouter.get("/queue", async (_req, res) => {

@@ -33,4 +33,7 @@ export const ARTIFACT_TOKEN_TTL_SECONDS = Math.max(
   60,
   Number(process.env.ARTIFACT_TOKEN_TTL_SECONDS || 15 * 60)
 );
+if (process.env.NODE_ENV === "production" && !process.env.ARTIFACT_TOKEN_SECRET) {
+  throw new Error("ARTIFACT_TOKEN_SECRET must be set in production.");
+}
 export const ARTIFACT_TOKEN_SECRET = process.env.ARTIFACT_TOKEN_SECRET || "change-me";

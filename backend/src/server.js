@@ -40,7 +40,7 @@ function isAllowedToolboxOrigin(origin) {
 
   const normalizedOrigin = normalizeConfiguredOrigin(origin);
 
-  if (allowedOrigins.length === 0 || allowedOrigins.includes(normalizedOrigin)) {
+  if (allowedOrigins.includes(normalizedOrigin)) {
     return true;
   }
 

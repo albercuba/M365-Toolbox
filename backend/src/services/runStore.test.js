@@ -8,6 +8,7 @@ import {
   createRun,
   deleteRun,
   getRun,
+  getRunForExecution,
   listRuns,
   redactSensitiveParameters,
   updateRun
@@ -239,6 +240,27 @@ test("createRun redacts sensitive parameters and preserves tenant hint", withFak
   assert.equal(run.tenantHint, "contoso.onmicrosoft.com");
   assert.equal(run.tenantId, null);
   assert.equal(run.canRerun, false);
+}));
+
+test("getRunForExecution returns full parameters without exposing them from getRun", withFakePrisma(async (state) => {
+  const id = "00000000-0000-0000-0000-000000000016";
+  await createRun({
+    id,
+    scriptId: "m365-test",
+    scriptName: "Test Script",
+    parameters: {
+      tenantId: "contoso.onmicrosoft.com",
+      clientSecret: "super-secret"
+    }
+  });
+
+  const publicRun = await getRun(id);
+  const executionRun = await getRunForExecution(id);
+
+  assert.equal(publicRun.payload.clientSecret, "[REDACTED]");
+  assert.equal(executionRun.payload.clientSecret, "super-secret");
+  assert.equal(state.runs.get(id).parameters.clientSecret, "super-secret");
+  assert.equal(state.runs.get(id).parametersRedacted.clientSecret, "[REDACTED]");
 }));
 
 test("updateRun persists status changes and timing metadata", withFakePrisma(async () => {

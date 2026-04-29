@@ -65,7 +65,7 @@ function containsRedactedValue(value) {
   return value === REDACTED;
 }
 
-function normalizeRunRecord(run, { includeLogs = true } = {}) {
+function normalizeRunRecord(run, { exposeSensitiveParameters = false, includeLogs = true } = {}) {
   const orderedLogs = [...(run.logs || [])].sort(
     (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
   );
@@ -91,7 +91,10 @@ function normalizeRunRecord(run, { includeLogs = true } = {}) {
     }));
 
   const htmlArtifact = artifacts.find((artifact) => artifact.type === "html");
-  const payload = run.parametersRedacted ?? run.parameters ?? {};
+  const payload = exposeSensitiveParameters
+    ? run.parameters ?? run.parametersRedacted ?? {}
+    : run.parametersRedacted ?? run.parameters ?? {};
+  const parametersRedacted = run.parametersRedacted ?? redactSensitiveParameters(run.parameters ?? {});
 
   return {
     id: run.id,
@@ -104,8 +107,8 @@ function normalizeRunRecord(run, { includeLogs = true } = {}) {
     requestedBy: run.requestedBy || null,
     payload,
     parameters: payload,
-    parametersRedacted: run.parametersRedacted ?? null,
-    canRerun: !containsRedactedValue(payload),
+    parametersRedacted,
+    canRerun: !containsRedactedValue(parametersRedacted),
     result: run.result ?? null,
     summary: run.summary ?? null,
     requestedAt: asIso(run.createdAt),
@@ -238,7 +241,8 @@ function toDbPatch(patch = {}) {
 }
 
 export async function createRun(data) {
-  const parametersRedacted = redactSensitiveParameters(data.parameters ?? data.payload ?? {});
+  const parameters = data.parameters ?? data.payload ?? {};
+  const parametersRedacted = redactSensitiveParameters(parameters);
   const tenantInfo = extractTenantInfo(parametersRedacted);
   const created = await prisma.run.create({
     data: {
@@ -250,7 +254,7 @@ export async function createRun(data) {
       tenantId: tenantInfo.tenantId,
       tenantHint: tenantInfo.tenantHint,
       requestedBy: data.requestedBy || null,
-      parameters: null,
+      parameters,
       parametersRedacted,
       result: data.result || {},
       summary: data.summary || null,
@@ -302,6 +306,19 @@ export async function getRun(id) {
   return run ? normalizeRunRecord(run) : null;
 }
 
+export async function getRunForExecution(id) {
+  const run = await prisma.run.findUnique({
+    where: { id },
+    include: {
+      logs: true,
+      artifacts: true,
+      approval: true
+    }
+  });
+
+  return run ? normalizeRunRecord(run, { exposeSensitiveParameters: true }) : null;
+}
+
 export async function listRuns(filters = {}) {
   const limit = Math.max(1, Math.min(Number(filters.limit || 25), 100));
   const offset = Math.max(0, Number(filters.offset || 0));
@@ -336,7 +353,7 @@ export async function updateRun(id, patch) {
     return null;
   }
 
-  const mergedParameters = patch.parametersRedacted ?? current.parametersRedacted ?? {};
+  const mergedParameters = patch.parametersRedacted ?? current.parametersRedacted ?? redactSensitiveParameters(current.parameters ?? {});
   const tenantInfo = extractTenantInfo(mergedParameters);
 
   const updated = await prisma.run.update({

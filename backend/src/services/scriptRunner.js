@@ -26,6 +26,17 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function isPathInsideDirectory(candidatePath, directoryPath) {
+  const relativePath = path.relative(path.resolve(directoryPath), path.resolve(candidatePath));
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
+function assertArtifactPathAllowed(artifactPath) {
+  if (!isPathInsideDirectory(artifactPath, OUTPUT_DIR)) {
+    throw createError("Artifact path is outside the allowed output directory.", 403);
+  }
+}
+
 function resolveScript(scriptId) {
   const script = scriptsById.get(scriptId);
   if (!script) {
@@ -308,11 +319,7 @@ export async function getRunArtifact(runId, artifactId) {
     throw createError("Artifact not found for this run.", 404);
   }
 
-  const normalizedOutputDir = path.resolve(OUTPUT_DIR);
-  const resolvedArtifactPath = path.resolve(file.path);
-  if (!resolvedArtifactPath.startsWith(normalizedOutputDir)) {
-    throw createError("Artifact path is outside the allowed output directory.", 403);
-  }
+  assertArtifactPathAllowed(file.path);
 
   return file;
 }
@@ -329,6 +336,8 @@ export async function getRunHtml(runId) {
     return null;
   }
 
+  assertArtifactPathAllowed(htmlArtifact.path);
+
   return {
     path: htmlArtifact.path,
     content: fs.readFileSync(htmlArtifact.path, "utf8")
@@ -344,6 +353,12 @@ export async function buildArtifactArchive(runId, outputStream) {
   const artifacts = await syncRunArtifacts(run);
   if (!artifacts.length) {
     throw createError("No artifacts are available for this run.", 404);
+  }
+
+  for (const artifact of artifacts) {
+    if (artifact.path && fs.existsSync(artifact.path)) {
+      assertArtifactPathAllowed(artifact.path);
+    }
   }
 
   const archive = archiver("zip", { zlib: { level: 9 } });

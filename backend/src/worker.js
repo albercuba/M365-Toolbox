@@ -21,7 +21,8 @@ import {
 import {
   addArtifact,
   appendLog,
-  getRun as getStoredRun,
+  getRun,
+  getRunForExecution,
   updateRun
 } from "./services/runStore.js";
 import { saveWorkerHeartbeat } from "./services/runRepository.js";
@@ -87,7 +88,7 @@ async function finalizeRun(run, state, status, exitCode = null) {
 }
 
 async function executeRun(job) {
-  const run = await getStoredRun(job.data.runId);
+  const run = await getRunForExecution(job.data.runId);
   if (!run) {
     throw new Error(`Run '${job.data.runId}' was not found in PostgreSQL.`);
   }
@@ -169,7 +170,7 @@ async function executeRun(job) {
     }, RUN_TIMEOUT_MS);
 
     const cancelWatcher = setInterval(async () => {
-      const latest = await getStoredRun(run.id);
+      const latest = await getRun(run.id);
       if (latest?.cancelRequestedAt && !child.killed) {
         run.status = "canceling";
         run.cancelRequestedAt = latest.cancelRequestedAt;
@@ -274,7 +275,7 @@ worker.on("failed", async (job, error) => {
     return;
   }
 
-  const run = await getStoredRun(job.data.runId);
+  const run = await getRun(job.data.runId);
   if (!run) {
     return;
   }
