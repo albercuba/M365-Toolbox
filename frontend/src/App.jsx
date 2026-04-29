@@ -1591,6 +1591,8 @@ export function App() {
   const [companies, setCompanies] = useState(() => getCompanySettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [companyDraft, setCompanyDraft] = useState({ name: "", tenant: "" });
+  const [editingCompanyId, setEditingCompanyId] = useState("");
+  const [editingCompanyDraft, setEditingCompanyDraft] = useState({ name: "", tenant: "" });
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [modeFilter, setModeFilter] = useState("all");
   const [theme, setTheme] = useState(() => getThemePreference());
@@ -1913,6 +1915,49 @@ export function App() {
 
   const handleRemoveCompany = (companyId) => {
     setCompanies((current) => current.filter((company) => company.id !== companyId));
+    if (editingCompanyId === companyId) {
+      setEditingCompanyId("");
+      setEditingCompanyDraft({ name: "", tenant: "" });
+    }
+  };
+
+  const handleStartEditCompany = (company) => {
+    setEditingCompanyId(company.id);
+    setEditingCompanyDraft({ name: company.name, tenant: company.tenant });
+  };
+
+  const handleCancelEditCompany = () => {
+    setEditingCompanyId("");
+    setEditingCompanyDraft({ name: "", tenant: "" });
+  };
+
+  const handleSaveCompany = (companyId) => {
+    const name = editingCompanyDraft.name.trim();
+    const tenant = editingCompanyDraft.tenant.trim();
+
+    if (!name || !tenant) {
+      setError("Company name and tenant ID or domain are required.");
+      return;
+    }
+
+    const duplicate = companies.some(
+      (company) =>
+        company.id !== companyId &&
+        (company.name.toLowerCase() === name.toLowerCase() ||
+          company.tenant.toLowerCase() === tenant.toLowerCase())
+    );
+
+    if (duplicate) {
+      setError("That company name or tenant value already exists.");
+      return;
+    }
+
+    setCompanies((current) =>
+      current.map((company) => company.id === companyId ? { ...company, name, tenant } : company)
+    );
+    setEditingCompanyId("");
+    setEditingCompanyDraft({ name: "", tenant: "" });
+    setSuccess(`Updated ${name}.`);
   };
 
   const handleExportCompanies = () => {
@@ -2406,8 +2451,26 @@ export function App() {
       <div className="sections">
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Settings</span>
+            <span className="card-title">Companies</span>
             <span className="card-badge badge-neutral">{companies.length} companies</span>
+            <div className="run-actions">
+              <InfoTooltip label="Company CSV format">
+                CSV format: Company Name,Tenant ID or Domain. Example: Contoso,contoso.onmicrosoft.com. Wrap company names with commas in quotes.
+              </InfoTooltip>
+              <input
+                ref={companyImportInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="visually-hidden"
+                onChange={handleImportCompanies}
+              />
+              <button type="button" className="filter-btn" onClick={() => companyImportInputRef.current?.click()}>
+                Import CSV
+              </button>
+              <button type="button" className="filter-btn" onClick={handleExportCompanies} disabled={!companies.length}>
+                Export CSV
+              </button>
+            </div>
           </div>
           <div className="card-body">
             <form className="company-form" onSubmit={handleAddCompany}>
@@ -2429,46 +2492,59 @@ export function App() {
               </label>
               <button type="submit" className="add-btn">Add Company</button>
             </form>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Companies</span>
-            <div className="run-actions">
-              <InfoTooltip label="Company CSV format">
-                CSV format: Company Name,Tenant ID or Domain. Example: Contoso,contoso.onmicrosoft.com. Wrap company names with commas in quotes.
-              </InfoTooltip>
-              <input
-                ref={companyImportInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="visually-hidden"
-                onChange={handleImportCompanies}
-              />
-              <button type="button" className="filter-btn" onClick={() => companyImportInputRef.current?.click()}>
-                Import CSV
-              </button>
-              <button type="button" className="filter-btn" onClick={handleExportCompanies} disabled={!companies.length}>
-                Export CSV
-              </button>
-            </div>
-          </div>
-          <div className="card-body">
             {companies.length ? (
               <div className="company-list">
-                {companies.map((company) => (
-                  <div key={company.id} className="company-item">
-                    <div className="tenant-avatar">{company.name.slice(0, 2).toUpperCase()}</div>
-                    <div className="tenant-info">
-                      <div className="tenant-name">{company.name}</div>
-                      <div className="tenant-meta">{company.tenant}</div>
+                {companies.map((company) => {
+                  const isEditing = editingCompanyId === company.id;
+
+                  return (
+                    <div key={company.id} className={`company-item${isEditing ? " editing" : ""}`}>
+                      <div className="tenant-avatar">{company.name.slice(0, 2).toUpperCase()}</div>
+                      {isEditing ? (
+                        <div className="company-edit-grid">
+                          <label className="form-field">
+                            <span>Company Name</span>
+                            <input
+                              value={editingCompanyDraft.name}
+                              onChange={(event) => setEditingCompanyDraft((current) => ({ ...current, name: event.target.value }))}
+                            />
+                          </label>
+                          <label className="form-field">
+                            <span>Tenant ID or Domain</span>
+                            <input
+                              value={editingCompanyDraft.tenant}
+                              onChange={(event) => setEditingCompanyDraft((current) => ({ ...current, tenant: event.target.value }))}
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="tenant-info">
+                          <div className="tenant-name">{company.name}</div>
+                          <div className="tenant-meta">{company.tenant}</div>
+                        </div>
+                      )}
+                      <div className="company-actions">
+                        {isEditing ? (
+                          <>
+                            <button type="button" className="filter-btn active-all" onClick={() => handleSaveCompany(company.id)}>
+                              Save
+                            </button>
+                            <button type="button" className="filter-btn" onClick={handleCancelEditCompany}>
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" className="filter-btn" onClick={() => handleStartEditCompany(company)}>
+                            Edit
+                          </button>
+                        )}
+                        <button type="button" className="filter-btn destructive" onClick={() => handleRemoveCompany(company.id)}>
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                    <button type="button" className="filter-btn destructive" onClick={() => handleRemoveCompany(company.id)}>
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="empty-row">Add companies here, then type a company name, tenant ID, or domain in any script tenant field.</div>

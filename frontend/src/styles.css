@@ -1364,6 +1364,7 @@ textarea {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: end;
+  margin-bottom: 1rem;
 }
 
 .company-list {
@@ -1379,6 +1380,26 @@ textarea {
   border-radius: var(--r);
   background: var(--bg3);
   padding: 0.75rem;
+}
+
+.company-item.editing {
+  align-items: flex-end;
+}
+
+.company-edit-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.company-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .info-tooltip {
@@ -1894,6 +1915,20 @@ tr:last-child td {
 
   .company-form {
     grid-template-columns: 1fr;
+  }
+
+  .company-item,
+  .company-item.editing {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .company-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-actions {
+    justify-content: flex-start;
   }
 
   .report-frame {
