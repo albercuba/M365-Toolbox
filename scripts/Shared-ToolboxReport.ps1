@@ -517,9 +517,9 @@ function Export-ToolboxHtmlReport {
     .topbar-server{color:var(--text2);font-size:.78rem}
     .topbar-time{margin-left:auto;color:var(--text3);font-size:.7rem}
     .page{max-width:1440px;margin:0 auto;padding:1.75rem 2rem 2rem;position:relative;z-index:1}
-    .server-strip,.card,.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2)}
-    .server-strip{padding:1rem 1.5rem;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.25rem;margin-bottom:1.25rem}
-    .strip-item{display:flex;flex-direction:column;gap:.2rem}
+    .card,.kpi,.strip-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2)}
+    .server-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem;margin-bottom:1.25rem}
+    .strip-item{min-width:0;min-height:74px;padding:1rem 1.1rem;display:flex;flex-direction:column;gap:.2rem}
     .strip-label,.kpi-label{font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
     .strip-value{font-size:.82rem;color:var(--accent)}
     .hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem;margin-bottom:1.25rem}
