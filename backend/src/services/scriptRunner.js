@@ -10,6 +10,7 @@ import {
   appendLog,
   createRun,
   deleteRun,
+  deleteRunArtifactRecords,
   getRun as getStoredRun,
   getRunArtifactRecord,
   listRuns as listStoredRuns,
@@ -373,6 +374,47 @@ export async function buildArtifactArchive(runId, outputStream) {
   }
 
   archive.finalize();
+}
+
+export async function clearRunArtifacts(runId) {
+  const run = await getStoredRun(runId);
+  if (!run) {
+    throw createError("Run not found.", 404);
+  }
+
+  const artifacts = await syncRunArtifacts(run);
+  let deletedFiles = 0;
+  let missingFiles = 0;
+
+  for (const artifact of artifacts) {
+    if (!artifact.path) {
+      continue;
+    }
+
+    assertArtifactPathAllowed(artifact.path);
+
+    if (!fs.existsSync(artifact.path)) {
+      missingFiles += 1;
+      continue;
+    }
+
+    fs.unlinkSync(artifact.path);
+    deletedFiles += 1;
+  }
+
+  await deleteRunArtifactRecords(runId);
+  await updateRun(runId, {
+    result: {
+      ...(run.result || {}),
+      artifactBasePath: null
+    },
+    summary: run.summary || "Artifacts cleared."
+  });
+
+  return {
+    deletedFiles,
+    missingFiles
+  };
 }
 
 export async function getQueueStatus() {

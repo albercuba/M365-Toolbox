@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { SettingsPage } from "./components/SettingsPage.jsx";
 
 const apiBase = "/api";
+const ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001b\[[0-9;]*m`, "g");
+const WORKSHEET_NAME_UNSAFE_PATTERN = new RegExp("[\\[\\]\\\\/*?:]", "g");
 
 function stripAnsi(value) {
   if (!value) return "";
-  return value.replace(/\u001b\[[0-9;]*m/g, "");
+  return value.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 function extractDeviceCodePrompt(output) {
@@ -356,7 +359,7 @@ function sanitizeFileName(value) {
 
 function sanitizeWorksheetName(value, usedNames) {
   const normalized = String(value || "Sheet")
-    .replace(/[\[\]\\/*?:]/g, " ")
+    .replace(WORKSHEET_NAME_UNSAFE_PATTERN, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 31) || "Sheet";
@@ -1080,24 +1083,6 @@ function createLocalId() {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function getCompanySettings() {
-  try {
-    const raw = window.localStorage.getItem("m365-toolbox-companies");
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed)
-      ? parsed
-          .map((company) => ({
-            id: company.id || createLocalId(),
-            name: String(company.name || "").trim(),
-            tenant: String(company.tenant || "").trim()
-          }))
-          .filter((company) => company.name && company.tenant)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
 function findCompanyTenant(value, companies) {
   const query = String(value || "").trim().toLowerCase();
   if (!query) {
@@ -1581,6 +1566,7 @@ export function App() {
   const [exportingFormat, setExportingFormat] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [clearingArtifacts, setClearingArtifacts] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [runDetailsOpen, setRunDetailsOpen] = useState(true);
   const [recentRunsOpen, setRecentRunsOpen] = useState(true);
@@ -1588,7 +1574,7 @@ export function App() {
   const [expandedCategories, setExpandedCategories] = useState({});
   const [scriptSearch, setScriptSearch] = useState("");
   const [favoriteScriptIds, setFavoriteScriptIds] = useState(() => getFavoriteScriptIds());
-  const [companies, setCompanies] = useState(() => getCompanySettings());
+  const [companies, setCompanies] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [companyDraft, setCompanyDraft] = useState({ name: "", tenant: "" });
   const [editingCompanyId, setEditingCompanyId] = useState("");
@@ -1634,15 +1620,18 @@ export function App() {
 
   useEffect(() => {
     const load = async () => {
-      const [scriptsResponse, statusResponse] = await Promise.all([
+      const [scriptsResponse, statusResponse, companiesResponse] = await Promise.all([
         fetch(`${apiBase}/scripts`),
-        fetch(`${apiBase}/status`)
+        fetch(`${apiBase}/status`),
+        fetch(`${apiBase}/companies`)
       ]);
 
       const scriptsData = await parseApiResponse(scriptsResponse);
       const statusData = await parseApiResponse(statusResponse);
+      const companiesData = await parseApiResponse(companiesResponse);
       setScripts(scriptsData);
       setStatus(statusData);
+      setCompanies(companiesData);
       setStatusUpdatedAt(new Date().toISOString());
       setSelectedScript(null);
       setFormValues({});
@@ -1844,14 +1833,6 @@ export function App() {
     }
   }, [favoriteScriptIds]);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("m365-toolbox-companies", JSON.stringify(companies));
-    } catch {
-      // Ignore storage errors.
-    }
-  }, [companies]);
-
   const handleScriptSelect = (script) => {
     setSettingsOpen(false);
     setSelectedScript(script);
@@ -1887,7 +1868,7 @@ export function App() {
     setDevicePromptDismissed(false);
   };
 
-  const handleAddCompany = (event) => {
+  const handleAddCompany = async (event) => {
     event.preventDefault();
     const name = companyDraft.name.trim();
     const tenant = companyDraft.tenant.trim();
@@ -1908,16 +1889,41 @@ export function App() {
       return;
     }
 
-    setCompanies((current) => [...current, { id: createLocalId(), name, tenant }]);
-    setCompanyDraft({ name: "", tenant: "" });
-    setSuccess(`Added ${name}.`);
+    try {
+      const response = await fetch(`${apiBase}/companies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, tenant })
+      });
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to add company.");
+      }
+      setCompanies((current) => [...current, data].sort((left, right) => left.name.localeCompare(right.name)));
+      setCompanyDraft({ name: "", tenant: "" });
+      setSuccess(`Added ${name}.`);
+    } catch (addError) {
+      setError(addError.message);
+    }
   };
 
-  const handleRemoveCompany = (companyId) => {
-    setCompanies((current) => current.filter((company) => company.id !== companyId));
-    if (editingCompanyId === companyId) {
-      setEditingCompanyId("");
-      setEditingCompanyDraft({ name: "", tenant: "" });
+  const handleRemoveCompany = async (companyId) => {
+    try {
+      const response = await fetch(`${apiBase}/companies/${encodeURIComponent(companyId)}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) {
+        const data = await parseApiResponse(response);
+        throw new Error(data.message || "Failed to remove company.");
+      }
+      setCompanies((current) => current.filter((company) => company.id !== companyId));
+      if (editingCompanyId === companyId) {
+        setEditingCompanyId("");
+        setEditingCompanyDraft({ name: "", tenant: "" });
+      }
+      setSuccess("Company removed.");
+    } catch (removeError) {
+      setError(removeError.message);
     }
   };
 
@@ -1931,7 +1937,7 @@ export function App() {
     setEditingCompanyDraft({ name: "", tenant: "" });
   };
 
-  const handleSaveCompany = (companyId) => {
+  const handleSaveCompany = async (companyId) => {
     const name = editingCompanyDraft.name.trim();
     const tenant = editingCompanyDraft.tenant.trim();
 
@@ -1952,12 +1958,25 @@ export function App() {
       return;
     }
 
-    setCompanies((current) =>
-      current.map((company) => company.id === companyId ? { ...company, name, tenant } : company)
-    );
-    setEditingCompanyId("");
-    setEditingCompanyDraft({ name: "", tenant: "" });
-    setSuccess(`Updated ${name}.`);
+    try {
+      const response = await fetch(`${apiBase}/companies/${encodeURIComponent(companyId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, tenant })
+      });
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update company.");
+      }
+      setCompanies((current) =>
+        current.map((company) => company.id === companyId ? data : company).sort((left, right) => left.name.localeCompare(right.name))
+      );
+      setEditingCompanyId("");
+      setEditingCompanyDraft({ name: "", tenant: "" });
+      setSuccess(`Updated ${name}.`);
+    } catch (saveError) {
+      setError(saveError.message);
+    }
   };
 
   const handleExportCompanies = () => {
@@ -1985,12 +2004,12 @@ export function App() {
       }
 
       let added = 0;
-      setCompanies((current) => {
-        const seen = new Set(current.flatMap((company) => [
+      const nextCompanies = (() => {
+        const seen = new Set(companies.flatMap((company) => [
           company.name.toLowerCase(),
           company.tenant.toLowerCase()
         ]));
-        const next = [...current];
+        const next = [...companies];
 
         for (const company of imported) {
           const nameKey = company.name.toLowerCase();
@@ -2005,7 +2024,17 @@ export function App() {
         }
 
         return next;
+      })();
+      const response = await fetch(`${apiBase}/companies`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companies: nextCompanies })
       });
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to import companies.");
+      }
+      setCompanies(data);
       setSuccess(`Imported ${added} compan${added === 1 ? "y" : "ies"}.`);
     } catch (importError) {
       setError(importError.message);
@@ -2104,6 +2133,45 @@ export function App() {
       setError(exportError.message);
     } finally {
       setExportingFormat("");
+    }
+  };
+
+  const handleClearArtifacts = async () => {
+    if (!activeRun?.id || artifacts.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${artifacts.length} artifact${artifacts.length === 1 ? "" : "s"} for this run from the server output folder? Run history and logs will remain.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingArtifacts(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(`${apiBase}/runs/${activeRun.id}/artifacts`, {
+        method: "DELETE"
+      });
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to clear artifacts.");
+      }
+
+      setArtifacts([]);
+      const runResponse = await fetch(`${apiBase}/runs/${activeRun.id}`);
+      const runData = await parseApiResponse(runResponse);
+      if (runResponse.ok) {
+        setActiveRun(runData);
+      }
+      setSuccess(`Deleted ${data.deletedFiles} artifact file${data.deletedFiles === 1 ? "" : "s"}.`);
+    } catch (clearError) {
+      setError(clearError.message);
+    } finally {
+      setClearingArtifacts(false);
     }
   };
 
@@ -2446,115 +2514,6 @@ export function App() {
     );
   };
 
-  const renderSettingsPage = () => (
-    <div className="dash-page settings-page">
-      <div className="sections">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">Companies</span>
-            <span className="card-badge badge-neutral">{companies.length} companies</span>
-            <div className="run-actions">
-              <InfoTooltip label="Company CSV format">
-                CSV format: Company Name,Tenant ID or Domain. Example: Contoso,contoso.onmicrosoft.com. Wrap company names with commas in quotes.
-              </InfoTooltip>
-              <input
-                ref={companyImportInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="visually-hidden"
-                onChange={handleImportCompanies}
-              />
-              <button type="button" className="filter-btn" onClick={() => companyImportInputRef.current?.click()}>
-                Import CSV
-              </button>
-              <button type="button" className="filter-btn" onClick={handleExportCompanies} disabled={!companies.length}>
-                Export CSV
-              </button>
-            </div>
-          </div>
-          <div className="card-body">
-            <form className="company-form" onSubmit={handleAddCompany}>
-              <label className="form-field">
-                <span>Company Name</span>
-                <input
-                  value={companyDraft.name}
-                  onChange={(event) => setCompanyDraft((current) => ({ ...current, name: event.target.value }))}
-                  placeholder="Contoso"
-                />
-              </label>
-              <label className="form-field">
-                <span>Tenant ID or Domain</span>
-                <input
-                  value={companyDraft.tenant}
-                  onChange={(event) => setCompanyDraft((current) => ({ ...current, tenant: event.target.value }))}
-                  placeholder="contoso.onmicrosoft.com"
-                />
-              </label>
-              <button type="submit" className="add-btn">Add Company</button>
-            </form>
-            {companies.length ? (
-              <div className="company-list">
-                {companies.map((company) => {
-                  const isEditing = editingCompanyId === company.id;
-
-                  return (
-                    <div key={company.id} className={`company-item${isEditing ? " editing" : ""}`}>
-                      <div className="tenant-avatar">{company.name.slice(0, 2).toUpperCase()}</div>
-                      {isEditing ? (
-                        <div className="company-edit-grid">
-                          <label className="form-field">
-                            <span>Company Name</span>
-                            <input
-                              value={editingCompanyDraft.name}
-                              onChange={(event) => setEditingCompanyDraft((current) => ({ ...current, name: event.target.value }))}
-                            />
-                          </label>
-                          <label className="form-field">
-                            <span>Tenant ID or Domain</span>
-                            <input
-                              value={editingCompanyDraft.tenant}
-                              onChange={(event) => setEditingCompanyDraft((current) => ({ ...current, tenant: event.target.value }))}
-                            />
-                          </label>
-                        </div>
-                      ) : (
-                        <div className="tenant-info">
-                          <div className="tenant-name">{company.name}</div>
-                          <div className="tenant-meta">{company.tenant}</div>
-                        </div>
-                      )}
-                      <div className="company-actions">
-                        {isEditing ? (
-                          <>
-                            <button type="button" className="filter-btn active-all" onClick={() => handleSaveCompany(company.id)}>
-                              Save
-                            </button>
-                            <button type="button" className="filter-btn" onClick={handleCancelEditCompany}>
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <button type="button" className="filter-btn" onClick={() => handleStartEditCompany(company)}>
-                            Edit
-                          </button>
-                        )}
-                        <button type="button" className="filter-btn destructive" onClick={() => handleRemoveCompany(company.id)}>
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-row">Add companies here, then type a company name, tenant ID, or domain in any script tenant field.</div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="app-shell">
       <div className="toast-stack" aria-live="polite" aria-atomic="true">
@@ -2827,7 +2786,23 @@ export function App() {
             </div>
           ) : null}
           {settingsOpen ? (
-            renderSettingsPage()
+            <SettingsPage
+              companies={companies}
+              companyDraft={companyDraft}
+              companyImportInputRef={companyImportInputRef}
+              editingCompanyDraft={editingCompanyDraft}
+              editingCompanyId={editingCompanyId}
+              InfoTooltip={InfoTooltip}
+              onAddCompany={handleAddCompany}
+              onCancelEditCompany={handleCancelEditCompany}
+              onExportCompanies={handleExportCompanies}
+              onImportCompanies={handleImportCompanies}
+              onRemoveCompany={handleRemoveCompany}
+              onSaveCompany={handleSaveCompany}
+              onStartEditCompany={handleStartEditCompany}
+              setCompanyDraft={setCompanyDraft}
+              setEditingCompanyDraft={setEditingCompanyDraft}
+            />
           ) : selectedScript ? (
             <>
               <div className="dash-topstrip">
@@ -3110,6 +3085,11 @@ export function App() {
                         <div className="card-header">
                           <span className="card-title">Artifacts</span>
                           <span className="card-badge badge-neutral">{artifacts.length}</span>
+                          {artifacts.length ? (
+                            <button type="button" className="filter-btn destructive" onClick={handleClearArtifacts} disabled={clearingArtifacts}>
+                              {clearingArtifacts ? "Clearing..." : "Clear Artifacts"}
+                            </button>
+                          ) : null}
                         </div>
                         <div className="card-body">
                           {artifacts.length === 0 ? (

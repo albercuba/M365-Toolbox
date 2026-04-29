@@ -87,3 +87,16 @@ model Approval {
   @@index([status, createdAt])
   @@map("approvals")
 }
+
+model Company {
+  id        String   @id @db.Uuid
+  name      String
+  tenant    String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([name])
+  @@unique([tenant])
+  @@index([name])
+  @@map("companies")
+}

@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   buildArtifactArchive,
   cancelRun,
+  clearRunArtifacts,
   getRun,
   getRunArtifact,
   getRunArtifacts,
@@ -14,11 +15,59 @@ import {
 } from "../services/scriptRunner.js";
 import { verifyArtifactToken } from "../services/artifactTokens.js";
 import { getSystemStatus } from "../services/healthStatus.js";
+import {
+  createCompany,
+  deleteCompany,
+  listCompanies,
+  replaceCompanies,
+  updateCompany
+} from "../services/companyStore.js";
 
 export const scriptsRouter = Router();
 
 scriptsRouter.get("/scripts", (_req, res) => {
   res.json(listScripts());
+});
+
+scriptsRouter.get("/companies", async (_req, res, next) => {
+  try {
+    res.json(await listCompanies());
+  } catch (error) {
+    next(error);
+  }
+});
+
+scriptsRouter.post("/companies", async (req, res) => {
+  try {
+    res.status(201).json(await createCompany(req.body));
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
+scriptsRouter.put("/companies", async (req, res) => {
+  try {
+    res.json(await replaceCompanies(req.body?.companies || []));
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
+scriptsRouter.put("/companies/:id", async (req, res) => {
+  try {
+    res.json(await updateCompany(req.params.id, req.body));
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
+scriptsRouter.delete("/companies/:id", async (req, res) => {
+  try {
+    await deleteCompany(req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
 });
 
 scriptsRouter.get("/scripts/:id", (req, res) => {
@@ -78,6 +127,14 @@ scriptsRouter.post("/runs/:id/cancel", async (req, res) => {
 scriptsRouter.get("/runs/:id/artifacts", async (req, res) => {
   try {
     res.json(await getRunArtifacts(req.params.id));
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ message: error.message });
+  }
+});
+
+scriptsRouter.delete("/runs/:id/artifacts", async (req, res) => {
+  try {
+    res.json(await clearRunArtifacts(req.params.id));
   } catch (error) {
     res.status(error.statusCode || 400).json({ message: error.message });
   }

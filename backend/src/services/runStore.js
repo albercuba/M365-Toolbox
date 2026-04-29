@@ -478,3 +478,9 @@ export async function getRunArtifactRecord(runId, artifactId) {
     createdAt: asIso(artifact.createdAt)
   };
 }
+
+export async function deleteRunArtifactRecords(runId) {
+  return prisma.runArtifact.deleteMany({
+    where: { runId }
+  });
+}
