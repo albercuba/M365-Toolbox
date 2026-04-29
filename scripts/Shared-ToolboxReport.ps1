@@ -518,18 +518,18 @@ function Export-ToolboxHtmlReport {
     .topbar-time{margin-left:auto;color:var(--text3);font-size:.7rem}
     .page{max-width:1440px;margin:0 auto;padding:1.75rem 2rem 2rem;position:relative;z-index:1}
     .server-strip,.card,.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2)}
-    .server-strip{padding:1rem 1.5rem;display:flex;flex-wrap:wrap;gap:2rem;margin-bottom:1.25rem}
+    .server-strip{padding:1rem 1.5rem;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.25rem;margin-bottom:1.25rem}
     .strip-item{display:flex;flex-direction:column;gap:.2rem}
     .strip-label,.kpi-label{font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
     .strip-value{font-size:.82rem;color:var(--accent)}
-    .hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.85rem;margin-bottom:1.25rem}
-    .kpi{padding:1rem 1.1rem;position:relative;overflow:hidden}
+    .hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem;margin-bottom:1.25rem}
+    .kpi{min-width:0;min-height:98px;padding:1rem 1.1rem;position:relative;overflow:hidden}
     .kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
     .kpi.neutral::after{background:var(--accent)}
     .kpi.ok::after{background:var(--ok)}
     .kpi.warn::after{background:var(--warn)}
     .kpi.crit::after{background:var(--crit)}
-    .kpi-value{font-size:1.6rem;font-weight:700;line-height:1;color:var(--accent)}
+    .kpi-value{font-size:1.6rem;font-weight:700;line-height:1;color:var(--accent);margin-top:.25rem}
     .kpi.ok .kpi-value{color:var(--ok)}
     .kpi.warn .kpi-value{color:var(--warn)}
     .kpi.crit .kpi-value{color:var(--crit)}
@@ -567,7 +567,8 @@ function Export-ToolboxHtmlReport {
     .col-resizer{position:absolute;top:0;right:0;width:10px;height:100%;cursor:col-resize;user-select:none;touch-action:none}
     .col-resizer::after{content:'';position:absolute;top:20%;bottom:20%;right:4px;width:2px;border-radius:999px;background:transparent;transition:background .15s ease}
     th:hover .col-resizer::after,.col-resizer.active::after{background:var(--accent2)}
-    @media(max-width:700px){.page{padding:1rem}.topbar{padding:0 1rem}.hero{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:980px){.server-strip,.hero{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:700px){.page{padding:1rem}.topbar{padding:0 1rem}.server-strip,.hero{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
