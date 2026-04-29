@@ -2403,6 +2403,14 @@ export function App() {
           <div className="card-header">
             <span className="card-title">Companies</span>
             <div className="run-actions">
+              <span className="info-tooltip">
+                <button type="button" className="info-icon-btn" aria-label="Company CSV format">
+                  i
+                </button>
+                <span className="info-tooltip-panel" role="tooltip">
+                  CSV format: Company Name,Tenant ID or Domain. Example: Contoso,contoso.onmicrosoft.com. Wrap company names with commas in quotes.
+                </span>
+              </span>
               <input
                 ref={companyImportInputRef}
                 type="file"
@@ -2419,9 +2427,6 @@ export function App() {
             </div>
           </div>
           <div className="card-body">
-            <div className="empty-row compact settings-hint">
-              CSV import format: <code>Company Name,Tenant ID or Domain</code>. Example: <code>Contoso,contoso.onmicrosoft.com</code>.
-            </div>
             {companies.length ? (
               <div className="company-list">
                 {companies.map((company) => (

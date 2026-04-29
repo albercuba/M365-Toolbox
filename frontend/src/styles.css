@@ -1381,6 +1381,59 @@ textarea {
   padding: 0.75rem;
 }
 
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.info-icon-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: help;
+}
+
+.info-icon-btn:hover,
+.info-icon-btn:focus-visible {
+  border-color: var(--accent2);
+  color: var(--accent);
+  outline: none;
+}
+
+.info-tooltip-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  width: min(320px, 70vw);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  background: var(--bg2);
+  box-shadow: var(--shadow);
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 20;
+}
+
+.info-tooltip:hover .info-tooltip-panel,
+.info-tooltip:focus-within .info-tooltip-panel {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .recent-runs-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
