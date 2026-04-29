@@ -1113,8 +1113,79 @@ function findCompanyTenant(value, companies) {
   return match?.tenant || value;
 }
 
+function escapeCsvCell(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const nextChar = text[index + 1];
+
+    if (quoted) {
+      if (char === '"' && nextChar === '"') {
+        cell += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (char === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else if (char !== "\r") {
+      cell += char;
+    }
+  }
+
+  row.push(cell);
+  if (row.some((value) => String(value).trim())) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function parseCompaniesCsv(text) {
+  const rows = parseCsvRows(text);
+  if (!rows.length) {
+    return [];
+  }
+
+  const firstRow = rows[0].map((value) => String(value).trim().toLowerCase());
+  const hasHeader = firstRow.some((value) => value.includes("company") || value.includes("tenant") || value.includes("domain"));
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+
+  return dataRows
+    .map((row) => ({
+      id: createLocalId(),
+      name: String(row[0] || "").trim(),
+      tenant: String(row[1] || "").trim()
+    }))
+    .filter((company) => company.name && company.tenant);
+}
+
 function TenantLookupField({ field, value, onChange, companies }) {
   const [focused, setFocused] = useState(false);
+  const rootRef = useRef(null);
+  const menuRef = useRef(null);
   const query = String(value || "").trim().toLowerCase();
   const suggestions = companies
     .filter((company) => {
@@ -1126,10 +1197,14 @@ function TenantLookupField({ field, value, onChange, companies }) {
         company.tenant.toLowerCase().includes(query)
       );
     })
-    .slice(0, 8);
+    .slice(0, 50);
+  const menuStyle = useFloatingLayer(focused && suggestions.length > 0, rootRef, menuRef, {
+    matchWidth: true,
+    estimatedHeight: 320
+  });
 
   return (
-    <div className="form-field tenant-lookup-field">
+    <div className="form-field tenant-lookup-field" ref={rootRef}>
       <span>{field.label}</span>
       <input
         type="text"
@@ -1139,25 +1214,28 @@ function TenantLookupField({ field, value, onChange, companies }) {
         onBlur={() => window.setTimeout(() => setFocused(false), 120)}
         onChange={(event) => onChange(field.id, event.target.value)}
       />
-      {focused && suggestions.length ? (
-        <div className="tenant-lookup-menu">
-          {suggestions.map((company) => (
-            <button
-              key={company.id}
-              type="button"
-              className="tenant-lookup-option"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                onChange(field.id, company.tenant);
-                setFocused(false);
-              }}
-            >
-              <span className="tenant-lookup-name">{company.name}</span>
-              <span className="tenant-lookup-domain">{company.tenant}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {focused && suggestions.length && menuStyle
+        ? createPortal(
+            <div className="tenant-lookup-menu" ref={menuRef} style={menuStyle}>
+              {suggestions.map((company) => (
+                <button
+                  key={company.id}
+                  type="button"
+                  className="tenant-lookup-option"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    onChange(field.id, company.tenant);
+                    setFocused(false);
+                  }}
+                >
+                  <span className="tenant-lookup-name">{company.name}</span>
+                  <span className="tenant-lookup-domain">{company.tenant}</span>
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
       {field.helpText ? <small>{field.helpText}</small> : null}
     </div>
   );
@@ -1451,6 +1529,7 @@ function DateField({ label, value, onChange }) {
 
 export function App() {
   const reportCardRef = useRef(null);
+  const companyImportInputRef = useRef(null);
   const nextToastIdRef = useRef(0);
   const toastTimersRef = useRef(new Map());
   const [sidebarWidth, setSidebarWidth] = useState(280);
@@ -1801,6 +1880,58 @@ export function App() {
 
   const handleRemoveCompany = (companyId) => {
     setCompanies((current) => current.filter((company) => company.id !== companyId));
+  };
+
+  const handleExportCompanies = () => {
+    const rows = [
+      ["Company Name", "Tenant ID or Domain"],
+      ...companies.map((company) => [company.name, company.tenant])
+    ];
+    const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "m365-toolbox-companies.csv");
+    setSuccess("Companies exported.");
+  };
+
+  const handleImportCompanies = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const imported = parseCompaniesCsv(await file.text());
+      if (!imported.length) {
+        throw new Error("No companies found in the CSV file.");
+      }
+
+      let added = 0;
+      setCompanies((current) => {
+        const seen = new Set(current.flatMap((company) => [
+          company.name.toLowerCase(),
+          company.tenant.toLowerCase()
+        ]));
+        const next = [...current];
+
+        for (const company of imported) {
+          const nameKey = company.name.toLowerCase();
+          const tenantKey = company.tenant.toLowerCase();
+          if (seen.has(nameKey) || seen.has(tenantKey)) {
+            continue;
+          }
+          seen.add(nameKey);
+          seen.add(tenantKey);
+          next.push(company);
+          added += 1;
+        }
+
+        return next;
+      });
+      setSuccess(`Imported ${added} compan${added === 1 ? "y" : "ies"}.`);
+    } catch (importError) {
+      setError(importError.message);
+    }
   };
 
   const handleOpenRun = async (run) => {
@@ -2271,6 +2402,21 @@ export function App() {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Companies</span>
+            <div className="run-actions">
+              <input
+                ref={companyImportInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="visually-hidden"
+                onChange={handleImportCompanies}
+              />
+              <button type="button" className="filter-btn" onClick={() => companyImportInputRef.current?.click()}>
+                Import CSV
+              </button>
+              <button type="button" className="filter-btn" onClick={handleExportCompanies} disabled={!companies.length}>
+                Export CSV
+              </button>
+            </div>
           </div>
           <div className="card-body">
             {companies.length ? (
