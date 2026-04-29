@@ -203,6 +203,21 @@ The backend tracks:
 - timestamps
 - artifact inventory for exported files
 
+## Company tenant settings
+
+The frontend Settings page can store reusable company mappings in the browser. Add a `Company Name` and a `Tenant ID or Domain`, then type either the company name, tenant id, or domain in a script tenant field to resolve it before launch.
+
+Company mappings can be imported or exported as CSV. Use two columns:
+
+```csv
+Company Name,Tenant ID or Domain
+Contoso,contoso.onmicrosoft.com
+Fabrikam,fabrikam.com
+Northwind,00000000-0000-0000-0000-000000000000
+```
+
+The header row is optional but recommended. If a company name contains a comma, wrap it in quotes, for example `"Contoso, Ltd.",contoso.onmicrosoft.com`.
+
 High-level flow:
 
 ```text

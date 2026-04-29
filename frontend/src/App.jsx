@@ -2419,6 +2419,9 @@ export function App() {
             </div>
           </div>
           <div className="card-body">
+            <div className="empty-row compact settings-hint">
+              CSV import format: <code>Company Name,Tenant ID or Domain</code>. Example: <code>Contoso,contoso.onmicrosoft.com</code>.
+            </div>
             {companies.length ? (
               <div className="company-list">
                 {companies.map((company) => (
