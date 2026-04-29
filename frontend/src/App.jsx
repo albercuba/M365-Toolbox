@@ -1073,7 +1073,101 @@ function getThemePreference() {
   }
 }
 
-function Field({ field, value, onChange }) {
+function createLocalId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getCompanySettings() {
+  try {
+    const raw = window.localStorage.getItem("m365-toolbox-companies");
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed
+          .map((company) => ({
+            id: company.id || createLocalId(),
+            name: String(company.name || "").trim(),
+            tenant: String(company.tenant || "").trim()
+          }))
+          .filter((company) => company.name && company.tenant)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function findCompanyTenant(value, companies) {
+  const query = String(value || "").trim().toLowerCase();
+  if (!query) {
+    return "";
+  }
+
+  const match = companies.find(
+    (company) =>
+      company.name.toLowerCase() === query ||
+      company.tenant.toLowerCase() === query
+  );
+
+  return match?.tenant || value;
+}
+
+function TenantLookupField({ field, value, onChange, companies }) {
+  const [focused, setFocused] = useState(false);
+  const query = String(value || "").trim().toLowerCase();
+  const suggestions = companies
+    .filter((company) => {
+      if (!query) {
+        return true;
+      }
+      return (
+        company.name.toLowerCase().includes(query) ||
+        company.tenant.toLowerCase().includes(query)
+      );
+    })
+    .slice(0, 8);
+
+  return (
+    <div className="form-field tenant-lookup-field">
+      <span>{field.label}</span>
+      <input
+        type="text"
+        placeholder={companies.length ? "Type company, tenant ID, or domain" : field.placeholder || ""}
+        value={value ?? ""}
+        onFocus={() => setFocused(true)}
+        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+        onChange={(event) => onChange(field.id, event.target.value)}
+      />
+      {focused && suggestions.length ? (
+        <div className="tenant-lookup-menu">
+          {suggestions.map((company) => (
+            <button
+              key={company.id}
+              type="button"
+              className="tenant-lookup-option"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(field.id, company.tenant);
+                setFocused(false);
+              }}
+            >
+              <span className="tenant-lookup-name">{company.name}</span>
+              <span className="tenant-lookup-domain">{company.tenant}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {field.helpText ? <small>{field.helpText}</small> : null}
+    </div>
+  );
+}
+
+function Field({ field, value, onChange, companies = [] }) {
+  if (field.id === "tenantId") {
+    return <TenantLookupField field={field} value={value} onChange={onChange} companies={companies} />;
+  }
+
   if (field.type === "checkbox") {
     return (
       <label className="checkbox-field">
@@ -1382,6 +1476,9 @@ export function App() {
   const [expandedCategories, setExpandedCategories] = useState({});
   const [scriptSearch, setScriptSearch] = useState("");
   const [favoriteScriptIds, setFavoriteScriptIds] = useState(() => getFavoriteScriptIds());
+  const [companies, setCompanies] = useState(() => getCompanySettings());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [companyDraft, setCompanyDraft] = useState({ name: "", tenant: "" });
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [modeFilter, setModeFilter] = useState("all");
   const [theme, setTheme] = useState(() => getThemePreference());
@@ -1633,7 +1730,16 @@ export function App() {
     }
   }, [favoriteScriptIds]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("m365-toolbox-companies", JSON.stringify(companies));
+    } catch {
+      // Ignore storage errors.
+    }
+  }, [companies]);
+
   const handleScriptSelect = (script) => {
+    setSettingsOpen(false);
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
     setExpandedCategories({ [script.category || "Other"]: true });
@@ -1647,6 +1753,7 @@ export function App() {
   };
 
   const handleGoHome = () => {
+    setSettingsOpen(false);
     setSelectedScript(null);
     setFormValues({});
     setExpandedCategories({});
@@ -1655,7 +1762,49 @@ export function App() {
     setDevicePromptDismissed(false);
   };
 
+  const handleOpenSettings = () => {
+    setSettingsOpen(true);
+    setSelectedScript(null);
+    setFormValues({});
+    setActiveRun(null);
+    setArtifacts([]);
+    setRunDetailsOpen(true);
+    setRecentRunsOpen(true);
+    setDevicePromptDismissed(false);
+  };
+
+  const handleAddCompany = (event) => {
+    event.preventDefault();
+    const name = companyDraft.name.trim();
+    const tenant = companyDraft.tenant.trim();
+
+    if (!name || !tenant) {
+      setError("Company name and tenant ID or domain are required.");
+      return;
+    }
+
+    const duplicate = companies.some(
+      (company) =>
+        company.name.toLowerCase() === name.toLowerCase() ||
+        company.tenant.toLowerCase() === tenant.toLowerCase()
+    );
+
+    if (duplicate) {
+      setError("That company name or tenant value already exists.");
+      return;
+    }
+
+    setCompanies((current) => [...current, { id: createLocalId(), name, tenant }]);
+    setCompanyDraft({ name: "", tenant: "" });
+    setSuccess(`Added ${name}.`);
+  };
+
+  const handleRemoveCompany = (companyId) => {
+    setCompanies((current) => current.filter((company) => company.id !== companyId));
+  };
+
   const handleOpenRun = async (run) => {
+    setSettingsOpen(false);
     setArtifacts([]);
     setRunDetailsOpen(true);
     setRecentRunsOpen(true);
@@ -1766,10 +1915,15 @@ export function App() {
     setSuccess("");
 
     try {
+      const resolvedFormValues = { ...formValues };
+      if (selectedScript.fields.some((field) => field.id === "tenantId")) {
+        resolvedFormValues.tenantId = findCompanyTenant(formValues.tenantId, companies);
+      }
+
       const response = await fetch(`${apiBase}/scripts/${selectedScript.id}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formValues, approvalConfirmed })
+        body: JSON.stringify({ ...resolvedFormValues, approvalConfirmed })
       });
 
       const data = await parseApiResponse(response);
@@ -2083,6 +2237,66 @@ export function App() {
     );
   };
 
+  const renderSettingsPage = () => (
+    <div className="dash-page settings-page">
+      <div className="sections">
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Settings</span>
+            <span className="card-badge badge-neutral">{companies.length} companies</span>
+          </div>
+          <div className="card-body">
+            <form className="company-form" onSubmit={handleAddCompany}>
+              <label className="form-field">
+                <span>Company Name</span>
+                <input
+                  value={companyDraft.name}
+                  onChange={(event) => setCompanyDraft((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Contoso"
+                />
+              </label>
+              <label className="form-field">
+                <span>Tenant ID or Domain</span>
+                <input
+                  value={companyDraft.tenant}
+                  onChange={(event) => setCompanyDraft((current) => ({ ...current, tenant: event.target.value }))}
+                  placeholder="contoso.onmicrosoft.com"
+                />
+              </label>
+              <button type="submit" className="add-btn">Add Company</button>
+            </form>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Companies</span>
+          </div>
+          <div className="card-body">
+            {companies.length ? (
+              <div className="company-list">
+                {companies.map((company) => (
+                  <div key={company.id} className="company-item">
+                    <div className="tenant-avatar">{company.name.slice(0, 2).toUpperCase()}</div>
+                    <div className="tenant-info">
+                      <div className="tenant-name">{company.name}</div>
+                      <div className="tenant-meta">{company.tenant}</div>
+                    </div>
+                    <button type="button" className="filter-btn destructive" onClick={() => handleRemoveCompany(company.id)}>
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-row">Add companies here, then type a company name, tenant ID, or domain in any script tenant field.</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="app-shell">
       <div className="toast-stack" aria-live="polite" aria-atomic="true">
@@ -2281,6 +2495,21 @@ export function App() {
                 </svg>
                 <span>GitHub</span>
               </a>
+              <button
+                type="button"
+                className={`sidebar-repo-link sidebar-settings-link${settingsOpen ? " active" : ""}`}
+                onClick={handleOpenSettings}
+                aria-label="Open settings"
+                title="Settings"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.05-1.6a.5.5 0 0 0 .12-.64l-1.94-3.36a.5.5 0 0 0-.61-.22l-2.42.98a7.2 7.2 0 0 0-1.7-.98L14.56 2.6A.5.5 0 0 0 14.07 2h-4.14a.5.5 0 0 0-.49.4L9.07 5a7.2 7.2 0 0 0-1.7.98L4.95 5a.5.5 0 0 0-.61.22L2.4 8.58a.5.5 0 0 0 .12.64l2.05 1.6c-.04.32-.07.65-.07.98s.02.66.07.98l-2.05 1.6a.5.5 0 0 0-.12.64l1.94 3.36a.5.5 0 0 0 .61.22l2.42-.98c.52.4 1.09.73 1.7.98l.37 2.6a.5.5 0 0 0 .49.4h4.14a.5.5 0 0 0 .49-.4l.37-2.6c.61-.25 1.18-.58 1.7-.98l2.42.98a.5.5 0 0 0 .61-.22l1.94-3.36a.5.5 0 0 0-.12-.64Zm-7.43 2.27A3.25 3.25 0 1 1 15.25 12 3.25 3.25 0 0 1 12 15.25Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span>Settings</span>
+              </button>
             </div>
           </div>
         </aside>
@@ -2334,7 +2563,9 @@ export function App() {
               ) : null}
             </div>
           ) : null}
-          {selectedScript ? (
+          {settingsOpen ? (
+            renderSettingsPage()
+          ) : selectedScript ? (
             <>
               <div className="dash-topstrip">
                 <div className="strip-item">
@@ -2441,7 +2672,7 @@ export function App() {
                           ) : null}
                           <form className="settings-row" onSubmit={handleSubmit}>
                             {selectedScript.fields.map((field) => (
-                              <Field key={field.id} field={field} value={formValues[field.id]} onChange={handleChange} />
+                              <Field key={field.id} field={field} value={formValues[field.id]} onChange={handleChange} companies={companies} />
                             ))}
                             <button className="add-btn" type="submit" disabled={submitting}>
                               {submitting ? "Starting..." : selectedScript.approvalRequired ? "Approve and Run" : "Run in Toolbox"}

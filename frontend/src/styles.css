@@ -549,13 +549,18 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  border: 0;
+  background: transparent;
   color: var(--text2);
   text-decoration: none;
   font-size: 0.68rem;
   font-family: var(--mono);
+  padding: 0;
+  cursor: pointer;
 }
 
-.sidebar-repo-link:hover {
+.sidebar-repo-link:hover,
+.sidebar-repo-link.active {
   color: var(--accent);
 }
 
@@ -994,6 +999,10 @@ textarea {
   gap: 0.45rem;
 }
 
+.tenant-lookup-field {
+  position: relative;
+}
+
 .form-field span {
   font-family: var(--mono);
   font-size: 0.65rem;
@@ -1289,6 +1298,77 @@ textarea {
 .form-field select:focus,
 .form-field textarea:focus {
   border-color: var(--accent2);
+}
+
+.tenant-lookup-menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% - 0.15rem);
+  left: 0;
+  right: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 0.35rem;
+}
+
+.tenant-lookup-option {
+  width: 100%;
+  display: grid;
+  gap: 0.12rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  border-radius: calc(var(--r) - 2px);
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+}
+
+.tenant-lookup-option:hover {
+  background: var(--bg3);
+}
+
+.tenant-lookup-name,
+.tenant-lookup-domain {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-lookup-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tenant-lookup-domain {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--text3);
+}
+
+.company-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.company-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.company-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg3);
+  padding: 0.75rem;
 }
 
 .recent-runs-filters {
@@ -1761,6 +1841,10 @@ tr:last-child td {
 
   .table-actions {
     flex-direction: column;
+  }
+
+  .company-form {
+    grid-template-columns: 1fr;
   }
 
   .report-frame {
