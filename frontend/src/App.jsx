@@ -1241,6 +1241,39 @@ function TenantLookupField({ field, value, onChange, companies }) {
   );
 }
 
+function InfoTooltip({ label, children }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const panelRef = useRef(null);
+  const panelStyle = useFloatingLayer(open, rootRef, panelRef, {
+    minWidth: 300,
+    estimatedHeight: 110
+  });
+
+  return (
+    <span
+      className="info-tooltip"
+      ref={rootRef}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+    >
+      <button type="button" className="info-icon-btn" aria-label={label}>
+        i
+      </button>
+      {open && panelStyle
+        ? createPortal(
+            <span className="info-tooltip-panel" ref={panelRef} style={panelStyle} role="tooltip">
+              {children}
+            </span>,
+            document.body
+          )
+        : null}
+    </span>
+  );
+}
+
 function Field({ field, value, onChange, companies = [] }) {
   if (field.id === "tenantId") {
     return <TenantLookupField field={field} value={value} onChange={onChange} companies={companies} />;
@@ -2403,14 +2436,9 @@ export function App() {
           <div className="card-header">
             <span className="card-title">Companies</span>
             <div className="run-actions">
-              <span className="info-tooltip">
-                <button type="button" className="info-icon-btn" aria-label="Company CSV format">
-                  i
-                </button>
-                <span className="info-tooltip-panel" role="tooltip">
-                  CSV format: Company Name,Tenant ID or Domain. Example: Contoso,contoso.onmicrosoft.com. Wrap company names with commas in quotes.
-                </span>
-              </span>
+              <InfoTooltip label="Company CSV format">
+                CSV format: Company Name,Tenant ID or Domain. Example: Contoso,contoso.onmicrosoft.com. Wrap company names with commas in quotes.
+              </InfoTooltip>
               <input
                 ref={companyImportInputRef}
                 type="file"

@@ -1382,7 +1382,6 @@ textarea {
 }
 
 .info-tooltip {
-  position: relative;
   display: inline-flex;
   align-items: center;
 }
@@ -1408,10 +1407,7 @@ textarea {
 }
 
 .info-tooltip-panel {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 0.5rem);
-  width: min(320px, 70vw);
+  width: min(320px, calc(100vw - 1.5rem));
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--border2);
   border-radius: var(--r);
@@ -1421,17 +1417,7 @@ textarea {
   font-family: var(--mono);
   font-size: 0.66rem;
   line-height: 1.45;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(4px);
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  z-index: 20;
-}
-
-.info-tooltip:hover .info-tooltip-panel,
-.info-tooltip:focus-within .info-tooltip-panel {
-  opacity: 1;
-  transform: translateY(0);
+  z-index: 720;
 }
 
 .recent-runs-filters {
