@@ -317,6 +317,7 @@ textarea {
 .sidebar-search {
   display: block;
   margin-top: 0.7rem;
+  position: relative;
 }
 
 .sidebar-search input {
@@ -327,12 +328,36 @@ textarea {
   color: var(--text);
   font-family: var(--mono);
   font-size: 0.72rem;
-  padding: 0.58rem 0.72rem;
+  padding: 0.58rem 2.15rem 0.58rem 0.72rem;
   outline: none;
 }
 
 .sidebar-search input:focus {
   border-color: var(--accent2);
+}
+
+.sidebar-search-clear {
+  position: absolute;
+  right: 0.38rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.45rem;
+  height: 1.45rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text3);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidebar-search-clear:hover,
+.sidebar-search-clear:focus-visible {
+  border-color: var(--border2);
+  background: var(--bg2);
+  color: var(--accent);
+  outline: none;
 }
 
 .sidebar-filter-group {

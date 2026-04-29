@@ -2646,6 +2646,11 @@ export function App() {
                 value={scriptSearch}
                 onChange={(event) => setScriptSearch(event.target.value)}
               />
+              {scriptSearch ? (
+                <button type="button" className="sidebar-search-clear" onClick={() => setScriptSearch("")} aria-label="Clear script search">
+                  ×
+                </button>
+              ) : null}
             </label>
             <div className="sidebar-filter-group">
               <div className="sidebar-filter-label">Filters</div>
