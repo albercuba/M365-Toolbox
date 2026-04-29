@@ -3124,7 +3124,6 @@ export function App() {
                           <div className="card-header">
                             <span className="card-title">HTML Report</span>
                             <span className="card-badge badge-ok">preview</span>
-                            {renderReportExportActions()}
                           </div>
                           <div className="card-body report-card-body">
                             <iframe
