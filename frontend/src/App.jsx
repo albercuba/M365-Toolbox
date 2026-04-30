@@ -2062,6 +2062,16 @@ export function App() {
         throw new Error(fullRun.message || "Failed to load run details.");
       }
       setActiveRun(fullRun);
+      const fullRunArtifacts = fullRun.artifacts?.files || [];
+      setArtifacts(fullRunArtifacts);
+      if (fullRun.artifacts?.htmlPreviewUrl || fullRunArtifacts.some((artifact) => artifact.type === "html")) {
+        setRunDetailsOpen(false);
+        setRecentRunsOpen(false);
+        window.requestAnimationFrame(() => {
+          reportCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          reportCardRef.current?.focus({ preventScroll: true });
+        });
+      }
     } catch (openError) {
       setError(openError.message);
     }
@@ -2460,26 +2470,29 @@ export function App() {
                 </tr>
               </thead>
               <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id}>
-                    <td>{run.scriptName}</td>
-                    <td>{formatRunTenant(run)}</td>
-                    <td>
-                      <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
-                        {run.status}
-                      </span>
-                      {run.status === "queued" && run.queuePosition ? (
-                        <div className="table-subtext">Queue {run.queuePosition} of {run.queueSize || run.queuePosition}</div>
-                      ) : null}
-                    </td>
-                    <td>{formatDate(run.requestedAt || run.startedAt)}</td>
-                    <td className="table-actions">
-                      <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
-                        Open
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {runs.map((run) => {
+                  const runHasHtml = Boolean(run.artifacts?.htmlPreviewUrl || run.artifacts?.files?.some((artifact) => artifact.type === "html"));
+                  return (
+                    <tr key={run.id}>
+                      <td>{run.scriptName}</td>
+                      <td>{formatRunTenant(run)}</td>
+                      <td>
+                        <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
+                          {run.status}
+                        </span>
+                        {run.status === "queued" && run.queuePosition ? (
+                          <div className="table-subtext">Queue {run.queuePosition} of {run.queueSize || run.queuePosition}</div>
+                        ) : null}
+                      </td>
+                      <td>{formatDate(run.requestedAt || run.startedAt)}</td>
+                      <td className="table-actions">
+                        <button type="button" className="filter-btn active-all" onClick={() => handleOpenRun(run)}>
+                          {runHasHtml ? "Open Report" : "Open"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
