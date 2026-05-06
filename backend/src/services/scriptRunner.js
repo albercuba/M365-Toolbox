@@ -51,23 +51,29 @@ function inferArtifactsFromOutput(run) {
   const discovered = [];
   const seen = new Set();
   const output = [run?.stdout, run?.stderr].filter(Boolean).join("\n");
+  const artifactPatterns = [
+    /exported to:\s*([^\r\n]+)/gi,
+    /(?:Status file|Error log|HTML dashboard)\s*:\s*([^\r\n]+)/gi
+  ];
 
-  for (const match of output.matchAll(/exported to:\s*([^\r\n]+)/gi)) {
-    const artifactPath = match[1]?.trim();
-    if (!artifactPath || seen.has(artifactPath) || !fs.existsSync(artifactPath)) {
-      continue;
+  for (const pattern of artifactPatterns) {
+    for (const match of output.matchAll(pattern)) {
+      const artifactPath = match[1]?.trim();
+      if (!artifactPath || seen.has(artifactPath) || !fs.existsSync(artifactPath)) {
+        continue;
+      }
+
+      seen.add(artifactPath);
+      const stat = fs.statSync(artifactPath);
+      discovered.push({
+        id: path.basename(artifactPath),
+        name: path.basename(artifactPath),
+        path: artifactPath,
+        type: path.extname(artifactPath).slice(1).toLowerCase() || "file",
+        size: stat.size,
+        createdAt: stat.mtime.toISOString()
+      });
     }
-
-    seen.add(artifactPath);
-    const stat = fs.statSync(artifactPath);
-    discovered.push({
-      id: path.basename(artifactPath),
-      name: path.basename(artifactPath),
-      path: artifactPath,
-      type: path.extname(artifactPath).slice(1).toLowerCase() || "file",
-      size: stat.size,
-      createdAt: stat.mtime.toISOString()
-    });
   }
 
   return discovered;
