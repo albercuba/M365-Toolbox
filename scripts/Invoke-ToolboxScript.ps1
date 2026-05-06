@@ -280,6 +280,35 @@ function Convert-ToolboxOutputRecord {
     }
 }
 
+function Convert-ToolboxCliXmlText {
+    param(
+        [string]$Text
+    )
+
+    if (-not $Text -or -not $Text.TrimStart().StartsWith('#< CLIXML')) {
+        return $Text
+    }
+
+    try {
+        $xmlText = $Text -replace '^\s*#< CLIXML\s*', ''
+        $xml = [xml]$xmlText
+        $namespaceManager = [System.Xml.XmlNamespaceManager]::new($xml.NameTable)
+        $namespaceManager.AddNamespace('ps', 'http://schemas.microsoft.com/powershell/2004/04')
+        $strings = $xml.SelectNodes('//ps:S', $namespaceManager) | ForEach-Object {
+            ([System.Net.WebUtility]::HtmlDecode($_.'#text') -replace '_x001B_\[[0-9;]*m', '').Trim()
+        } | Where-Object { $_ }
+
+        if ($strings) {
+            return ($strings -join [Environment]::NewLine)
+        }
+    }
+    catch {
+        return $Text
+    }
+
+    return $Text
+}
+
 function Split-ScriptInvocationArguments {
     param(
         [string[]]$ArgumentList
@@ -371,6 +400,8 @@ catch {
     $null = $childArguments.Add("-NoProfile")
     $null = $childArguments.Add("-ExecutionPolicy")
     $null = $childArguments.Add("Bypass")
+    $null = $childArguments.Add("-OutputFormat")
+    $null = $childArguments.Add("Text")
     $null = $childArguments.Add("-EncodedCommand")
     $null = $childArguments.Add($encodedCommand)
 
@@ -400,7 +431,9 @@ try {
     Write-Host "[+] PowerShell environment ready." -ForegroundColor Green
     Write-ToolboxProgressEvent -Message "Starting script execution"
     Write-Host "[+] Starting script execution..." -ForegroundColor Cyan
-    & pwsh @childArguments
+    & pwsh @childArguments 2>&1 | ForEach-Object {
+        Convert-ToolboxCliXmlText -Text ([string]$_)
+    }
     $childExitCode = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
     $afterSnapshot = Get-DirectorySnapshot -Roots $observedRoots
     Emit-NewArtifactEvents -Before $beforeSnapshot -After $afterSnapshot
