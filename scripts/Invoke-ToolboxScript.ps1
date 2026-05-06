@@ -329,28 +329,50 @@ function Get-ChildPowerShellArguments {
         [string[]]$PositionalArguments = @()
     )
 
+    $payload = @{
+        scriptPath  = $TargetScriptPath
+        named       = $NamedArguments
+        positional  = @($PositionalArguments)
+    } | ConvertTo-Json -Depth 10 -Compress
+
+    $encodedPayload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
+    $commandTemplate = @'
+$ErrorActionPreference = 'Stop'
+$InvocationJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('__INVOCATION_PAYLOAD__'))
+
+try {
+    $payload = $InvocationJson | ConvertFrom-Json -Depth 10
+    $namedArguments = @{}
+
+    foreach ($property in $payload.named.PSObject.Properties) {
+        if ($property.Value -is [System.Array]) {
+            $namedArguments[$property.Name] = @($property.Value)
+        }
+        else {
+            $namedArguments[$property.Name] = $property.Value
+        }
+    }
+
+    $positionalArguments = @($payload.positional)
+    $scriptPath = [string]$payload.scriptPath
+    & $scriptPath @namedArguments @positionalArguments
+    $exitCode = if ($null -ne $global:LASTEXITCODE) { [int]$global:LASTEXITCODE } else { 0 }
+    exit $exitCode
+}
+catch {
+    Write-Error $_
+    exit 1
+}
+'@
+    $command = $commandTemplate.Replace('__INVOCATION_PAYLOAD__', $encodedPayload)
+
+    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
     $childArguments = [System.Collections.Generic.List[string]]::new()
     $null = $childArguments.Add("-NoProfile")
     $null = $childArguments.Add("-ExecutionPolicy")
     $null = $childArguments.Add("Bypass")
-    $null = $childArguments.Add("-File")
-    $null = $childArguments.Add($TargetScriptPath)
-
-    foreach ($entry in $NamedArguments.GetEnumerator() | Sort-Object Name) {
-        $null = $childArguments.Add("-$($entry.Name)")
-
-        if ($entry.Value -isnot [bool] -or $entry.Value) {
-            if ($entry.Value -isnot [bool]) {
-                foreach ($value in @($entry.Value)) {
-                    $null = $childArguments.Add([string]$value)
-                }
-            }
-        }
-    }
-
-    foreach ($argument in $PositionalArguments) {
-        $null = $childArguments.Add([string]$argument)
-    }
+    $null = $childArguments.Add("-EncodedCommand")
+    $null = $childArguments.Add($encodedCommand)
 
     return @($childArguments)
 }
