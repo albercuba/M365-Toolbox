@@ -215,7 +215,7 @@ function Initialize-OutputPath {
     param([string]$Path)
 
     if (-not (Test-Path -LiteralPath $Path)) {
-        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+        New-Item -ItemType Directory -Path $Path -Force -WhatIf:$false | Out-Null
     }
 
     return (Resolve-Path -LiteralPath $Path).Path
@@ -971,7 +971,7 @@ function Get-IncidentPackagePath {
     $safeName = Get-SafeFileBaseName -Value $Upn
     $packagePath = Join-Path $DestinationPath ("IncidentPackage_{0}" -f $safeName)
     if (-not (Test-Path -LiteralPath $packagePath)) {
-        New-Item -ItemType Directory -Path $packagePath -Force | Out-Null
+        New-Item -ItemType Directory -Path $packagePath -Force -WhatIf:$false | Out-Null
     }
 
     return $packagePath
@@ -1013,7 +1013,7 @@ function Export-IncidentPackageSummary {
         ExportAuditLog = $Row.ExportAuditLog
     }
 
-    $summary | ConvertTo-Json -Depth 6 | Out-File -LiteralPath $summaryPath -Encoding utf8
+    $summary | ConvertTo-Json -Depth 6 | Out-File -LiteralPath $summaryPath -Encoding utf8 -WhatIf:$false
     return $packagePath
 }
 
@@ -1479,7 +1479,7 @@ enableResizableColumns();
 </html>
 "@
 
-    $html | Out-File -LiteralPath $Path -Encoding utf8
+    $html | Out-File -LiteralPath $Path -Encoding utf8 -WhatIf:$false
     Write-Host "[+] HTML dashboard exported to: $Path" -ForegroundColor Green
 }
 
@@ -1516,9 +1516,9 @@ function Save-Outputs {
     $errorFile = Join-Path $DestinationPath ("CompromisedAccountRemediation_Errors_{0}.log" -f $script:Timestamp)
     $htmlFile = Add-TimestampToPath -Path $(if ($ExportHtml) { $ExportHtml } else { $DestinationPath }) -BaseName 'CompromisedAccountRemediation' -Extension '.html'
 
-    $Results | Export-Csv -Path $statusFile -NoTypeInformation
+    $Results | Export-Csv -Path $statusFile -NoTypeInformation -WhatIf:$false
     if ($script:Errors.Count -gt 0) {
-        $script:Errors | Out-File -FilePath $errorFile -Encoding utf8
+        $script:Errors | Out-File -FilePath $errorFile -Encoding utf8 -WhatIf:$false
     }
     Export-HtmlReport -Results $Results -Path $htmlFile
     Write-ToolboxArtifactEvent -Path $statusFile -Kind 'csv'
