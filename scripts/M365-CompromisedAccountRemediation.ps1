@@ -1483,6 +1483,29 @@ enableResizableColumns();
     Write-Host "[+] HTML dashboard exported to: $Path" -ForegroundColor Green
 }
 
+function Write-ToolboxArtifactEvent {
+    param(
+        [string]$Path,
+        [string]$Kind
+    )
+
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return
+    }
+
+    $item = Get-Item -LiteralPath $Path
+    $payload = [ordered]@{
+        type      = 'artifact'
+        timestamp = (Get-Date).ToString('o')
+        path      = $item.FullName
+        kind      = $Kind
+        size      = $item.Length
+        name      = $item.Name
+    }
+
+    Write-Output ("::toolbox::{0}" -f ($payload | ConvertTo-Json -Depth 5 -Compress))
+}
+
 function Save-Outputs {
     param(
         [object[]]$Results,
@@ -1498,6 +1521,11 @@ function Save-Outputs {
         $script:Errors | Out-File -FilePath $errorFile -Encoding utf8
     }
     Export-HtmlReport -Results $Results -Path $htmlFile
+    Write-ToolboxArtifactEvent -Path $statusFile -Kind 'csv'
+    if ($script:Errors.Count -gt 0) {
+        Write-ToolboxArtifactEvent -Path $errorFile -Kind 'log'
+    }
+    Write-ToolboxArtifactEvent -Path $htmlFile -Kind 'html'
 
     Write-Section 'OUTPUT'
     Write-Host "Status file    : $statusFile" -ForegroundColor Yellow
