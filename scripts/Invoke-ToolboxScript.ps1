@@ -295,8 +295,13 @@ function Split-ScriptInvocationArguments {
             $name = $Matches[1]
 
             if (($index + 1) -lt $ArgumentList.Count -and $ArgumentList[$index + 1] -notmatch '^-{1,2}[^\\/].*') {
-                $namedArguments[$name] = $ArgumentList[$index + 1]
-                $index++
+                $values = [System.Collections.Generic.List[string]]::new()
+                while (($index + 1) -lt $ArgumentList.Count -and $ArgumentList[$index + 1] -notmatch '^-{1,2}[^\\/].*') {
+                    $index++
+                    $values.Add($ArgumentList[$index])
+                }
+
+                $namedArguments[$name] = if ($values.Count -eq 1) { $values[0] } else { @($values) }
             }
             else {
                 $namedArguments[$name] = $true
@@ -336,7 +341,9 @@ function Get-ChildPowerShellArguments {
 
         if ($entry.Value -isnot [bool] -or $entry.Value) {
             if ($entry.Value -isnot [bool]) {
-                $null = $childArguments.Add([string]$entry.Value)
+                foreach ($value in @($entry.Value)) {
+                    $null = $childArguments.Add([string]$value)
+                }
             }
         }
     }
