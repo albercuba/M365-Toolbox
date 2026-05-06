@@ -1168,18 +1168,42 @@ function Export-MessageTraceReports {
     )
 
     $safeName = Get-SafeFileBaseName -Value $Context.Upn
-    $outgoing = @(Get-MessageTrace -SenderAddress $Context.Upn -StartDate $StartDate -EndDate $EndDate -PageSize 5000 -ErrorAction Stop)
-    $incoming = @(Get-MessageTrace -RecipientAddress $Context.Upn -StartDate $StartDate -EndDate $EndDate -PageSize 5000 -ErrorAction Stop)
+    $messageTraceV2 = Get-Command -Name Get-MessageTraceV2 -ErrorAction SilentlyContinue
+    if ($messageTraceV2) {
+        $outgoing = @(Get-MessageTraceV2 -SenderAddress $Context.Upn -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -ErrorAction Stop)
+        $incoming = @(Get-MessageTraceV2 -RecipientAddress $Context.Upn -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -ErrorAction Stop)
+    }
+    else {
+        $outgoing = @(Get-MessageTrace -SenderAddress $Context.Upn -StartDate $StartDate -EndDate $EndDate -PageSize 5000 -WarningAction SilentlyContinue -ErrorAction Stop)
+        $incoming = @(Get-MessageTrace -RecipientAddress $Context.Upn -StartDate $StartDate -EndDate $EndDate -PageSize 5000 -WarningAction SilentlyContinue -ErrorAction Stop)
+    }
 
     $outgoingPath = Join-Path $DestinationPath ("{0}_OutgoingMessageTrace_{1}.csv" -f $safeName, $script:Timestamp)
     $incomingPath = Join-Path $DestinationPath ("{0}_IncomingMessageTrace_{1}.csv" -f $safeName, $script:Timestamp)
+    $messageTraceColumns = @(
+        @{ Name = 'Received'; Expression = {
+                if ($_.PSObject.Properties.Name -contains 'Received') { $_.Received }
+                elseif ($_.PSObject.Properties.Name -contains 'ReceivedTime') { $_.ReceivedTime }
+                elseif ($_.PSObject.Properties.Name -contains 'Received Time') { $_.'Received Time' }
+                else { $null }
+            }
+        },
+        'SenderAddress',
+        'RecipientAddress',
+        'Subject',
+        'Status',
+        'MessageTraceId',
+        'Size',
+        'FromIP',
+        'ToIP'
+    )
 
     if ($outgoing.Count -gt 0) {
-        $outgoing | Select-Object Received,SenderAddress,RecipientAddress,Subject,Status,MessageTraceId,Size,FromIP,ToIP |
+        $outgoing | Select-Object $messageTraceColumns |
             Export-Csv -Path $outgoingPath -NoTypeInformation
     }
     if ($incoming.Count -gt 0) {
-        $incoming | Select-Object Received,SenderAddress,RecipientAddress,Subject,Status,MessageTraceId,Size,FromIP,ToIP |
+        $incoming | Select-Object $messageTraceColumns |
             Export-Csv -Path $incomingPath -NoTypeInformation
     }
 
@@ -1355,11 +1379,11 @@ function Export-HtmlReport {
   .card-title{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);flex:1}
   .card-badge{font-size:.7rem;padding:.18rem .55rem;border-radius:4px;background:rgba(15,124,192,.1);color:var(--accent)}
   .card-body{padding:1.25rem}
-  .table-scroll{max-height:620px;overflow:auto;border:1px solid var(--border);border-radius:var(--r)}
+  .table-scroll{max-height:620px;overflow:auto;overflow-x:hidden;border:1px solid var(--border);border-radius:var(--r)}
   table{width:100%;border-collapse:collapse;font-size:.77rem;table-layout:fixed}
   thead{background:var(--bg3);position:sticky;top:0;z-index:1}
-  th{position:relative;padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
-  td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;word-break:break-word}
+  th{position:relative;padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:normal;overflow-wrap:anywhere}
+  td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;white-space:normal;word-break:normal;overflow-wrap:anywhere}
   tr:last-child td{border-bottom:none}
   tbody tr:hover td{background:rgba(15,124,192,.05)}
   .pill{display:inline-block;padding:.12rem .45rem;border-radius:4px;font-size:.7rem}
@@ -1419,7 +1443,6 @@ function enableResizableColumns(){
   document.querySelectorAll('.table-scroll table').forEach(function(table){
     const headers=table.querySelectorAll('thead th');
     if(!headers.length){return;}
-    table.style.width='max-content';
     table.style.minWidth='100%';
     headers.forEach(function(header){
       if(header.querySelector('.col-resizer')){return;}
