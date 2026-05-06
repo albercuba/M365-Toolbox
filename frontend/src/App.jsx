@@ -15,9 +15,12 @@ function extractDeviceCodePrompt(output) {
   const cleanOutput = stripAnsi(output);
   if (!cleanOutput) return null;
 
-  const sentenceMatch = cleanOutput.match(
-    /To sign in,\s*use a web browser to open the page\s*(https:\/\/[^\s]+)\s*and enter the code\s*([A-Z0-9-]+)\s*to authenticate\.?/i
-  );
+  const sentenceMatches = [
+    ...cleanOutput.matchAll(
+      /To sign in,\s*use a web browser to open the page\s*(https:\/\/[^\s]+)\s*and enter the code\s*([A-Z0-9-]+)\s*to authenticate\.?/gi
+    )
+  ];
+  const sentenceMatch = sentenceMatches.at(-1);
   if (sentenceMatch) {
     return {
       url: sentenceMatch[1],
@@ -1548,6 +1551,7 @@ function DateField({ label, value, onChange }) {
 export function App() {
   const reportCardRef = useRef(null);
   const companyImportInputRef = useRef(null);
+  const lastDevicePromptCodeRef = useRef("");
   const nextToastIdRef = useRef(0);
   const toastTimersRef = useRef(new Map());
   const [sidebarWidth, setSidebarWidth] = useState(280);
@@ -2310,6 +2314,13 @@ export function App() {
 
   const devicePrompt = extractDeviceCodePrompt([activeRun?.stdout, activeRun?.stderr].filter(Boolean).join("\n"));
   const showDevicePrompt = Boolean(devicePrompt?.code) && activeRun?.status === "running" && !devicePromptDismissed;
+  useEffect(() => {
+    const nextCode = devicePrompt?.code || "";
+    if (nextCode && nextCode !== lastDevicePromptCodeRef.current) {
+      lastDevicePromptCodeRef.current = nextCode;
+      setDevicePromptDismissed(false);
+    }
+  }, [devicePrompt?.code]);
   const activeScriptDefinition = activeRun
     ? scripts.find((script) => script.id === activeRun.scriptId) || selectedScript
     : selectedScript;
