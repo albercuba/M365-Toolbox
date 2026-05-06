@@ -1379,11 +1379,24 @@ function Export-HtmlReport {
   .card-title{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);flex:1}
   .card-badge{font-size:.7rem;padding:.18rem .55rem;border-radius:4px;background:rgba(15,124,192,.1);color:var(--accent)}
   .card-body{padding:1.25rem}
-  .table-scroll{max-height:620px;overflow:auto;overflow-x:hidden;border:1px solid var(--border);border-radius:var(--r)}
+  .table-scroll{max-height:620px;overflow:auto;border:1px solid var(--border);border-radius:var(--r)}
   table{width:100%;border-collapse:collapse;font-size:.77rem;table-layout:fixed}
   thead{background:var(--bg3);position:sticky;top:0;z-index:1}
   th{position:relative;padding:.55rem .9rem;text-align:left;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);white-space:normal;overflow-wrap:anywhere}
   td{padding:.5rem .9rem;border-bottom:1px solid var(--border);color:var(--text);font-size:.76rem;vertical-align:top;white-space:normal;word-break:normal;overflow-wrap:anywhere}
+  td.col-upn{font-weight:700;color:var(--accent)}
+  td.col-actions{white-space:nowrap}
+  .details-row td{padding:0;background:var(--bg3)}
+  .details-row[hidden]{display:none}
+  .details-panel{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.85rem;padding:1rem}
+  .detail-group{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:.85rem}
+  .detail-title{font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:.55rem}
+  .detail-list{display:grid;gap:.55rem}
+  .detail-item{display:grid;gap:.22rem}
+  .detail-label{font-size:.62rem;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:.08em}
+  .detail-value{font-family:var(--mono);font-size:.72rem;color:var(--text);overflow-wrap:anywhere}
+  .detail-toggle{border:1px solid var(--border);background:var(--bg2);color:var(--accent);border-radius:4px;padding:.22rem .55rem;font-family:var(--mono);font-size:.7rem;cursor:pointer}
+  .detail-toggle:hover{background:rgba(15,124,192,.08)}
   tr:last-child td{border-bottom:none}
   tbody tr:hover td{background:rgba(15,124,192,.05)}
   .pill{display:inline-block;padding:.12rem .45rem;border-radius:4px;font-size:.7rem}
@@ -1439,6 +1452,53 @@ function detailCell(v){
   if(!details || details===status){return pill(status);}
   return pill(status) + '<div style="margin-top:.3rem">' + esc(details) + '</div>';
 }
+function detailValue(v){
+  const raw=String(v==null?'':v);
+  return raw ? detailCell(raw) : '—';
+}
+function actionSummary(row, keys){
+  const statuses=keys.map(function(key){return actionStatus(row[key]);}).filter(Boolean);
+  if(statuses.some(function(status){return status==='Failed';})){return pill('Failed');}
+  if(statuses.some(function(status){return status==='Partial';})){return pill('Partial');}
+  if(statuses.some(function(status){return status==='Success';})){return pill('Success');}
+  if(statuses.some(function(status){return status==='WhatIf';})){return pill('WhatIf');}
+  if(statuses.some(function(status){return status==='Skipped';})){return pill('Skipped');}
+  if(statuses.some(function(status){return status==='NotApplicable';})){return pill('NotApplicable');}
+  return '—';
+}
+function detailItem(label,value){
+  return '<div class="detail-item"><div class="detail-label">'+esc(label)+'</div><div class="detail-value">'+detailValue(value)+'</div></div>';
+}
+function detailGroup(title,items){
+  return '<div class="detail-group"><div class="detail-title">'+esc(title)+'</div><div class="detail-list">'+items.join('')+'</div></div>';
+}
+function userDetailPanel(row){
+  return '<div class="details-panel">'+[
+    detailGroup('Account',[
+      detailItem('Disable user',row.DisableUser),
+      detailItem('Revoke sessions',row.RevokeSessions),
+      detailItem('Reset password',row.ResetPassword),
+      detailItem('Generated password',row.GeneratedPassword),
+      detailItem('Review MFA',row.ReviewMfaMethods),
+      detailItem('Remove MFA',row.RemoveMfaMethods)
+    ]),
+    detailGroup('Mailbox',[
+      detailItem('Review inbox rules',row.ReviewInboxRules),
+      detailItem('Disable inbox rules',row.DisableInboxRules),
+      detailItem('Forwarding review',row.ReviewMailboxForwarding),
+      detailItem('Forwarding removal',row.RemoveMailboxForwarding),
+      detailItem('Delegate review',row.ReviewMailboxDelegates),
+      detailItem('Delegate removal',row.RemoveMailboxDelegates),
+      detailItem('Signature',row.DisableSignature),
+      detailItem('Protocols',row.DisableMailboxProtocols)
+    ]),
+    detailGroup('Evidence',[
+      detailItem('Recent sign-ins',row.ReviewRecentSignIns),
+      detailItem('Audit export',row.ExportAuditLog),
+      detailItem('Incident package',row.IncidentPackagePath)
+    ])
+  ].join('')+'</div>';
+}
 function enableResizableColumns(){
   document.querySelectorAll('.table-scroll table').forEach(function(table){
     const headers=table.querySelectorAll('thead th');
@@ -1490,12 +1550,26 @@ const selectedReviewActions=DATA.selectedActions.filter(action=>DATA.reviewActio
 const selectedRemediationActions=DATA.selectedActions.filter(action=>!DATA.reviewActions.includes(action));
 const selectedHighImpactActions=DATA.selectedActions.filter(action=>DATA.highImpactActions.includes(action));
 let actionCard='<div class="card"><div class="card-header"><span class="card-title">Workflow Summary</span><span class="card-badge">'+DATA.selectedActions.length+' action(s)</span></div><div class="card-body"><div class="errors"><div class="error-item" style="color:var(--text)"><strong>Review actions:</strong> '+esc(selectedReviewActions.join(', ') || 'None')+'</div><div class="error-item" style="color:var(--text)"><strong>Remediation actions:</strong> '+esc(selectedRemediationActions.join(', ') || 'None')+'</div><div class="error-item" style="color:var(--text)"><strong>High-impact actions:</strong> '+esc(selectedHighImpactActions.join(', ') || 'None')+'</div></div></div></div>';
-let resultTable='<div class="card"><div class="card-header"><span class="card-title">Per-User Results</span><span class="card-badge">'+DATA.rows.length+' row(s)</span></div><div class="card-body"><div class="table-scroll"><table><thead><tr><th>UPN</th><th>User</th><th>Mailbox</th><th>Guest</th><th>Synced</th><th>Disable</th><th>Revoke</th><th>Reset</th><th>Review MFA</th><th>Remove MFA</th><th>Review Rules</th><th>Disable Rules</th><th>Forwarding</th><th>Delegates</th><th>Recent Sign-Ins</th><th>Protocols</th><th>Audit</th><th>Package</th></tr></thead><tbody>';
-for(const row of DATA.rows){resultTable+='<tr><td>'+esc(row.UserPrincipalName || row.UPN || '')+'</td><td>'+pill(String(Boolean(row.UserFound)))+'</td><td>'+pill(String(Boolean(row.MailboxFound)))+'</td><td>'+pill(String(Boolean(row.IsGuest)))+'</td><td>'+pill(String(Boolean(row.IsSynced)))+'</td><td>'+pill(row.DisableUser)+'</td><td>'+pill(row.RevokeSessions)+'</td><td>'+pill(row.ResetPassword)+'</td><td>'+detailCell(row.ReviewMfaMethods)+'</td><td>'+detailCell(row.RemoveMfaMethods)+'</td><td>'+detailCell(row.ReviewInboxRules)+'</td><td>'+detailCell(row.DisableInboxRules)+'</td><td>'+detailCell(row.ReviewMailboxForwarding || row.RemoveMailboxForwarding)+'</td><td>'+detailCell(row.ReviewMailboxDelegates || row.RemoveMailboxDelegates)+'</td><td>'+detailCell(row.ReviewRecentSignIns)+'</td><td>'+detailCell(row.DisableMailboxProtocols)+'</td><td>'+detailCell(row.ExportAuditLog)+'</td><td>'+esc(row.IncidentPackagePath || '—')+'</td></tr>';}
+let resultTable='<div class="card"><div class="card-header"><span class="card-title">Per-User Results</span><span class="card-badge">'+DATA.rows.length+' row(s)</span></div><div class="card-body"><div class="table-scroll"><table><thead><tr><th style="width:24%">UPN</th><th>User</th><th>Mailbox</th><th>Guest</th><th>Synced</th><th>Containment</th><th>Mailbox Actions</th><th>Audit</th><th style="width:8%">Details</th></tr></thead><tbody>';
+DATA.rows.forEach(function(row,index){
+  const detailId='user-detail-'+index;
+  resultTable+='<tr><td class="col-upn">'+esc(row.UserPrincipalName || row.UPN || '')+'</td><td>'+pill(String(Boolean(row.UserFound)))+'</td><td>'+pill(String(Boolean(row.MailboxFound)))+'</td><td>'+pill(String(Boolean(row.IsGuest)))+'</td><td>'+pill(String(Boolean(row.IsSynced)))+'</td><td>'+actionSummary(row,['DisableUser','RevokeSessions','ResetPassword','RemoveMfaMethods'])+'</td><td>'+actionSummary(row,['DisableInboxRules','RemoveMailboxForwarding','RemoveMailboxDelegates','DisableSignature','DisableMailboxProtocols'])+'</td><td>'+pill(row.ExportAuditLog)+'</td><td class="col-actions"><button class="detail-toggle" type="button" data-target="'+detailId+'" aria-expanded="false">Details</button></td></tr>';
+  resultTable+='<tr id="'+detailId+'" class="details-row" hidden><td colspan="9">'+userDetailPanel(row)+'</td></tr>';
+});
 resultTable+='</tbody></table></div></div></div>';
 let errorsCard='';
 if(DATA.errors.length){errorsCard='<div class="card"><div class="card-header"><span class="card-title">Errors</span><span class="card-badge">'+DATA.errors.length+'</span></div><div class="card-body"><div class="errors">'+DATA.errors.map(function(error){return '<div class="error-item">'+esc(error)+'</div>';}).join('')+'</div></div></div>';}
 document.getElementById('sections').innerHTML=actionCard+resultTable+errorsCard;
+document.querySelectorAll('.detail-toggle').forEach(function(button){
+  button.addEventListener('click', function(){
+    const target=document.getElementById(button.dataset.target);
+    if(!target){return;}
+    const expanded=button.getAttribute('aria-expanded')==='true';
+    target.hidden=expanded;
+    button.setAttribute('aria-expanded', String(!expanded));
+    button.textContent=expanded ? 'Details' : 'Hide';
+  });
+});
 enableResizableColumns();
 </script>
 </body>
