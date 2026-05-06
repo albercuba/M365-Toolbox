@@ -1574,13 +1574,13 @@ function Invoke-CompromisedAccountRemediation {
             foreach ($action in $Actions) {
                 switch ($action) {
                     'DisableUser' {
-                        $row.DisableUser = Invoke-DisableUser -Context $context -WhatIf:$WhatIfPreference
+                        $row.DisableUser = Invoke-DisableUser -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'RevokeSessions' {
-                        $row.RevokeSessions = Invoke-RevokeSessions -Context $context -WhatIf:$WhatIfPreference
+                        $row.RevokeSessions = Invoke-RevokeSessions -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'ResetPassword' {
-                        $passwordResult = Invoke-ResetPassword -Context $context -IncludePassword:$IncludeGeneratedPasswordsInResults -WhatIf:$WhatIfPreference
+                        $passwordResult = Invoke-ResetPassword -Context $context -IncludePassword:$IncludeGeneratedPasswordsInResults -WhatIf:$WhatIfPreference -Confirm:$false
                         $row.ResetPassword = $passwordResult.Status
                         $row.GeneratedPassword = if ($IncludeGeneratedPasswordsInResults) { $passwordResult.Password } else { '[suppressed]' }
                     }
@@ -1588,34 +1588,34 @@ function Invoke-CompromisedAccountRemediation {
                         $row.ReviewMfaMethods = Get-MfaReview -Context $context
                     }
                     'RemoveMfaMethods' {
-                        $row.RemoveMfaMethods = Invoke-RemoveMfaMethods -Context $context -WhatIf:$WhatIfPreference
+                        $row.RemoveMfaMethods = Invoke-RemoveMfaMethods -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'ReviewInboxRules' {
                         $row.ReviewInboxRules = Get-InboxRuleReview -Context $context
                     }
                     'DisableInboxRules' {
-                        $row.DisableInboxRules = Invoke-DisableInboxRules -Context $context -WhatIf:$WhatIfPreference
+                        $row.DisableInboxRules = Invoke-DisableInboxRules -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'ReviewMailboxForwarding' {
                         $row.ReviewMailboxForwarding = Get-MailboxForwardingReview -Context $context
                     }
                     'RemoveMailboxForwarding' {
-                        $row.RemoveMailboxForwarding = Invoke-RemoveMailboxForwarding -Context $context -WhatIf:$WhatIfPreference
+                        $row.RemoveMailboxForwarding = Invoke-RemoveMailboxForwarding -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'DisableSignature' {
-                        $row.DisableSignature = Invoke-DisableSignature -Context $context -WhatIf:$WhatIfPreference
+                        $row.DisableSignature = Invoke-DisableSignature -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'ReviewMailboxDelegates' {
                         $row.ReviewMailboxDelegates = Get-MailboxDelegateReview -Context $context
                     }
                     'RemoveMailboxDelegates' {
-                        $row.RemoveMailboxDelegates = Invoke-RemoveMailboxDelegates -Context $context -WhatIf:$WhatIfPreference
+                        $row.RemoveMailboxDelegates = Invoke-RemoveMailboxDelegates -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'ReviewRecentSignIns' {
                         $row.ReviewRecentSignIns = Get-RecentSignInReview -Context $context
                     }
                     'DisableMailboxProtocols' {
-                        $row.DisableMailboxProtocols = Invoke-DisableMailboxProtocols -Context $context -WhatIf:$WhatIfPreference
+                        $row.DisableMailboxProtocols = Invoke-DisableMailboxProtocols -Context $context -WhatIf:$WhatIfPreference -Confirm:$false
                     }
                     'ExportAuditLog' {
                         $auditDestination = if ($ExportIncidentPackage) {
