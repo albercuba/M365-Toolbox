@@ -57,7 +57,7 @@ function buildCompromisedAccountArgs(script, payload) {
   const actions = normalizeListValue(payload.actions);
 
   if (upns.length > 0) args.push("-UserPrincipalName", upns.join(","));
-  if (actions.length > 0) args.push("-Actions", actions.join(","));
+  if (actions.length > 0) args.push("-Actions", ...actions);
   if (payload.auditLogDays) args.push("-AuditLogDays", String(payload.auditLogDays));
   if (payload.tenantId) args.push("-TenantId", String(payload.tenantId));
   if (payload.includeGeneratedPasswordsInResults) args.push("-IncludeGeneratedPasswordsInResults");
