@@ -90,6 +90,20 @@ function getRunUserLabel(run) {
   return run?.createdByDisplayName || run?.createdByUsername || run?.requestedBy || "Unknown";
 }
 
+function createMsalClient(authConfig) {
+  return new PublicClientApplication({
+    auth: {
+      clientId: authConfig.clientId,
+      authority: authConfig.authorityUrl || `https://login.microsoftonline.com/${authConfig.tenantId}`,
+      redirectUri: window.location.origin,
+      navigateToLoginRequestUrl: false
+    },
+    cache: {
+      cacheLocation: "sessionStorage"
+    }
+  });
+}
+
 function normalizeDefaults(fields) {
   return fields.reduce((acc, field) => {
     acc[field.id] = field.defaultValue ?? (field.type === "checkbox" ? false : "");
@@ -1715,6 +1729,25 @@ export function App() {
         ]);
         const configData = await parseApiResponse(configResponse);
         setAuthConfig(configData);
+
+        if (configData.enabled && configData.clientId && configData.tenantId && configData.scope) {
+          const msal = createMsalClient(configData);
+          await msal.initialize();
+          const redirectResult = await msal.handleRedirectPromise();
+          if (redirectResult?.accessToken) {
+            const response = await apiFetch(`${apiBase}/auth/microsoft`, {
+              method: "POST",
+              body: JSON.stringify({ token: redirectResult.accessToken })
+            });
+            const data = await parseApiResponse(response);
+            if (!response.ok) {
+              throw new Error(data.message || "Microsoft login failed.");
+            }
+            setAuthUser(data.user);
+            return;
+          }
+        }
+
         if (meResponse.ok) {
           const meData = await parseApiResponse(meResponse);
           setAuthUser(meData.user);
@@ -1759,33 +1792,16 @@ export function App() {
         throw new Error("Microsoft login is not fully configured.");
       }
 
-      const msal = new PublicClientApplication({
-        auth: {
-          clientId: authConfig.clientId,
-          authority: authConfig.authorityUrl || `https://login.microsoftonline.com/${authConfig.tenantId}`,
-          redirectUri: window.location.origin
-        },
-        cache: {
-          cacheLocation: "sessionStorage"
-        }
-      });
+      const msal = createMsalClient(authConfig);
       await msal.initialize();
-      const tokenResponse = await msal.loginPopup({
+      await msal.loginRedirect({
         scopes: [authConfig.scope]
       });
-      const response = await apiFetch(`${apiBase}/auth/microsoft`, {
-        method: "POST",
-        body: JSON.stringify({ token: tokenResponse.accessToken })
-      });
-      const data = await parseApiResponse(response);
-      if (!response.ok) {
-        throw new Error(data.message || "Microsoft login failed.");
-      }
-      setAuthUser(data.user);
     } catch (loginErrorValue) {
       setLoginError(loginErrorValue.message);
-    } finally {
       setLoginLoading(false);
+    } finally {
+      // Redirect flow navigates away on success, so keep the button busy until then.
     }
   };
 
