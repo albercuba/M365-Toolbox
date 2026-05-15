@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireAuth, requireCanRunScript, requireRole } from "../middleware/auth.js";
 import {
   buildArtifactArchive,
   cancelRun,
@@ -25,6 +26,8 @@ import {
 
 export const scriptsRouter = Router();
 
+scriptsRouter.use(requireAuth);
+
 scriptsRouter.get("/scripts", (_req, res) => {
   res.json(listScripts());
 });
@@ -37,7 +40,7 @@ scriptsRouter.get("/companies", async (_req, res, next) => {
   }
 });
 
-scriptsRouter.post("/companies", async (req, res) => {
+scriptsRouter.post("/companies", requireRole("administrator"), async (req, res) => {
   try {
     res.status(201).json(await createCompany(req.body));
   } catch (error) {
@@ -45,7 +48,7 @@ scriptsRouter.post("/companies", async (req, res) => {
   }
 });
 
-scriptsRouter.put("/companies", async (req, res) => {
+scriptsRouter.put("/companies", requireRole("administrator"), async (req, res) => {
   try {
     res.json(await replaceCompanies(req.body?.companies || []));
   } catch (error) {
@@ -53,7 +56,7 @@ scriptsRouter.put("/companies", async (req, res) => {
   }
 });
 
-scriptsRouter.put("/companies/:id", async (req, res) => {
+scriptsRouter.put("/companies/:id", requireRole("administrator"), async (req, res) => {
   try {
     res.json(await updateCompany(req.params.id, req.body));
   } catch (error) {
@@ -61,7 +64,7 @@ scriptsRouter.put("/companies/:id", async (req, res) => {
   }
 });
 
-scriptsRouter.delete("/companies/:id", async (req, res) => {
+scriptsRouter.delete("/companies/:id", requireRole("administrator"), async (req, res) => {
   try {
     await deleteCompany(req.params.id);
     res.status(204).end();
@@ -78,12 +81,13 @@ scriptsRouter.get("/scripts/:id", (req, res) => {
   }
 });
 
-scriptsRouter.post("/scripts/:id/run", async (req, res) => {
+scriptsRouter.post("/scripts/:id/run", requireCanRunScript, async (req, res) => {
   try {
     const { approvalConfirmed, ...payload } = req.body || {};
     const run = await startRun(req.params.id, payload, {
       approvalConfirmed: Boolean(approvalConfirmed),
-      requestedBy: req.get("x-requested-by") || null
+      requestedBy: req.user.displayName || req.user.username,
+      user: req.user
     });
     res.status(202).json(run);
   } catch (error) {
@@ -132,7 +136,7 @@ scriptsRouter.get("/runs/:id/artifacts", async (req, res) => {
   }
 });
 
-scriptsRouter.delete("/runs/:id/artifacts", async (req, res) => {
+scriptsRouter.delete("/runs/:id/artifacts", requireRole("administrator"), async (req, res) => {
   try {
     res.json(await clearRunArtifacts(req.params.id));
   } catch (error) {

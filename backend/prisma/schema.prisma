@@ -6,6 +6,17 @@ datasource db {
   provider = "postgresql"
 }
 
+enum AuthProvider {
+  local
+  microsoft
+}
+
+enum UserRole {
+  administrator
+  privileged_user
+  restricted_user
+}
+
 model Run {
   id                 String        @id @db.Uuid
   scriptId           String        @map("script_id")
@@ -33,6 +44,11 @@ model Run {
   command            String?
   commandArgs        Json?         @map("command_args")
   scriptPath         String?       @map("script_path")
+  createdByUserId    String?       @db.Uuid @map("created_by_user_id")
+  createdByUsername  String?       @map("created_by_username")
+  createdByDisplayName String?     @map("created_by_display_name")
+  createdByAuthProvider AuthProvider? @map("created_by_auth_provider")
+  createdByUser      User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   logs               RunLog[]
   artifacts          RunArtifact[]
   approval           Approval?
@@ -42,6 +58,7 @@ model Run {
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantHint, createdAt(sort: Desc)])
   @@index([requestedBy, createdAt(sort: Desc)])
+  @@index([createdByUserId, createdAt(sort: Desc)])
   @@map("runs")
 }
 
@@ -99,4 +116,50 @@ model Company {
   @@unique([tenant])
   @@index([name])
   @@map("companies")
+}
+
+model User {
+  id                 String       @id @db.Uuid
+  username           String       @unique
+  passwordHash       String?      @map("password_hash")
+  displayName        String?      @map("display_name")
+  email              String?      @unique
+  authProvider       AuthProvider @map("auth_provider")
+  entraObjectId      String?      @unique @map("entra_object_id")
+  role               UserRole
+  mustChangePassword Boolean      @default(false) @map("must_change_password")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+  lastLoginAt        DateTime?    @map("last_login_at")
+  runs               Run[]
+
+  @@index([authProvider])
+  @@index([role])
+  @@map("users")
+}
+
+model MicrosoftAuthConfig {
+  id           String   @id @default("singleton")
+  tenantId     String?  @map("tenant_id")
+  clientId     String?  @map("client_id")
+  apiClientId  String?  @map("api_client_id")
+  authorityUrl String?  @map("authority_url")
+  enabled      Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("microsoft_auth_config")
+}
+
+model EntraGroupRoleMapping {
+  id           String   @id @db.Uuid
+  groupName    String   @map("group_name")
+  groupId      String?  @unique @map("group_id")
+  assignedRole UserRole @map("assigned_role")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([groupName])
+  @@index([assignedRole])
+  @@map("entra_group_role_mappings")
 }

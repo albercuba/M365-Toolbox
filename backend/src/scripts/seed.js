@@ -1,1 +1,6 @@
-console.log("No seed data is configured for M365 Toolbox.");
+import { ensureDefaultAdmin } from "../services/auth.js";
+import { ensureDatabaseReady } from "../services/db.js";
+
+await ensureDatabaseReady();
+await ensureDefaultAdmin();
+console.log("Default local administrator is present.");

@@ -13,6 +13,20 @@ function renderSettings(overrides = {}) {
         tenant: "contoso.onmicrosoft.com"
       }
     ],
+    apiBase: "/api",
+    apiFetch: vi.fn((url) => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(url.includes("group-role-mappings") ? [] : { enabled: false, tenantId: "", clientId: "", apiClientId: "", authorityUrl: "" })
+    })),
+    currentUser: {
+      id: "user-1",
+      username: "admin",
+      displayName: "Default Administrator",
+      authProvider: "local",
+      role: "administrator",
+      mustChangePassword: true
+    },
+    isAdministrator: true,
     companyDraft: { name: "", tenant: "" },
     companyImportInputRef: createRef(),
     editingCompanyDraft: { name: "", tenant: "" },

@@ -105,6 +105,11 @@ function normalizeRunRecord(run, { exposeSensitiveParameters = false, includeLog
     tenantId: run.tenantId || null,
     tenantHint: run.tenantHint || null,
     requestedBy: run.requestedBy || null,
+    createdByUserId: run.createdByUserId || null,
+    createdByUsername: run.createdByUsername || null,
+    createdByDisplayName: run.createdByDisplayName || null,
+    createdByAuthProvider: run.createdByAuthProvider || null,
+    launchedBy: run.createdByDisplayName || run.createdByUsername || run.requestedBy || null,
     payload,
     parameters: payload,
     parametersRedacted,
@@ -236,6 +241,10 @@ function toDbPatch(patch = {}) {
   if ("parameters" in next) payload.parameters = next.parameters;
   if ("tenantId" in next) payload.tenantId = next.tenantId;
   if ("tenantHint" in next) payload.tenantHint = next.tenantHint;
+  if ("createdByUserId" in next) payload.createdByUserId = next.createdByUserId;
+  if ("createdByUsername" in next) payload.createdByUsername = next.createdByUsername;
+  if ("createdByDisplayName" in next) payload.createdByDisplayName = next.createdByDisplayName;
+  if ("createdByAuthProvider" in next) payload.createdByAuthProvider = next.createdByAuthProvider;
 
   return payload;
 }
@@ -254,6 +263,10 @@ export async function createRun(data) {
       tenantId: tenantInfo.tenantId,
       tenantHint: tenantInfo.tenantHint,
       requestedBy: data.requestedBy || null,
+      createdByUserId: data.createdByUserId || null,
+      createdByUsername: data.createdByUsername || null,
+      createdByDisplayName: data.createdByDisplayName || null,
+      createdByAuthProvider: data.createdByAuthProvider || null,
       parameters,
       parametersRedacted,
       result: data.result || {},

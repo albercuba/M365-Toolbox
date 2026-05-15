@@ -6,6 +6,8 @@ M365 Toolbox is a web-based console for approved Microsoft 365 PowerShell operat
 
 - Presents a categorized script catalog for Microsoft 365 operations
 - Runs allowlisted PowerShell scripts through a controlled backend wrapper
+- Requires sign-in with local Toolbox users or Microsoft Entra ID
+- Enforces role-based authorization for administrators, privileged users, and restricted users
 - Prompts for Microsoft device-code sign-in when a script requires authentication
 - Tracks run status, command details, stdout, stderr, exit code, and artifacts
 - Renders HTML reports inline in the UI and supports direct download
@@ -205,7 +207,7 @@ The backend tracks:
 
 ## Company tenant settings
 
-The frontend Settings page can store reusable company mappings in the browser. Add a `Company Name` and a `Tenant ID or Domain`, then type either the company name, tenant id, or domain in a script tenant field to resolve it before launch.
+The Settings page can store reusable company mappings in PostgreSQL. Administrators add a `Company Name` and a `Tenant ID or Domain`, then operators type either the company name, tenant id, or domain in a script tenant field to resolve it before launch.
 
 Company mappings can be imported or exported as CSV. Use two columns:
 
@@ -215,6 +217,39 @@ Contoso,contoso.onmicrosoft.com
 Fabrikam,fabrikam.com
 Northwind,00000000-0000-0000-0000-000000000000
 ```
+
+## Authentication and roles
+
+M365 Toolbox shows a login page before the app shell. The backend creates a local administrator on startup if it does not already exist:
+
+- username: `admin`
+- password: `admin`
+- role: `administrator`
+
+The password is stored as a bcrypt hash, and the default account is marked for password change. After first login, open Settings and change the password before using the toolbox for production work. Existing `admin` accounts are never overwritten or reset by startup.
+
+Roles are enforced by the backend:
+
+- `administrator`: can run every script, edit company mappings, edit authentication settings, and manage Microsoft group role mappings.
+- `privileged_user`: can run every script, but cannot edit administrator-only settings.
+- `restricted_user`: can run only non-remediation scripts. Remediation and high-impact workflows are blocked with `403` even if called directly through the API.
+
+Local users authenticate with the username and password stored in PostgreSQL. Microsoft users authenticate in the SPA through MSAL, then the backend validates the Microsoft access token against Entra OpenID/JWKS metadata and creates a Toolbox session cookie.
+
+### Microsoft Entra login setup
+
+Administrators configure Microsoft login in Settings under `Microsoft App Registration Configuration`.
+
+Create or use app registrations that allow SPA sign-in and API access:
+
+1. Register a frontend SPA app and add the Toolbox frontend origin as the redirect URI, for example `https://toolbox.example.com`.
+2. Register or expose a backend/API application ID URI and a delegated scope named `access_as_user`.
+3. Grant the frontend app permission to request `api://<backend-api-client-id>/access_as_user`.
+4. Configure the API token to include group object ID claims, or group names only if your tenant emits them safely.
+5. In Toolbox Settings, set tenant ID, frontend client ID, backend API audience/client ID, optional authority URL, and enable Microsoft login.
+6. Add Entra group mappings to one of `administrator`, `privileged_user`, or `restricted_user`.
+
+Role resolution prefers configured group object IDs. Group-name matching is only used when a mapping has no object ID and the token contains safe group-name claims. If the token has group overage claims or no configured mapping matches, Microsoft login fails with a clear authorization error.
 
 The header row is optional but recommended. If a company name contains a comma, wrap it in quotes, for example `"Contoso, Ltd.",contoso.onmicrosoft.com`.
 
@@ -244,6 +279,10 @@ Runtime controls available through environment variables:
   Controls how the API and worker connect to Redis for BullMQ.
 - `ARTIFACT_TOKEN_SECRET`
   Signs short-lived artifact, HTML preview, and ZIP bundle URLs.
+- `AUTH_SESSION_SECRET`
+  Signs Toolbox HTTP-only session cookies. Use a long random value in production.
+- `AUTH_SESSION_TTL_SECONDS`
+  Optional session lifetime override. Defaults to 8 hours.
 
 By default, Docker mounts:
 
@@ -422,6 +461,8 @@ The production compose file supports these environment overrides:
   Optional PostgreSQL connection string override if you are not using the bundled `postgres` service defaults
 - `ARTIFACT_TOKEN_SECRET`
   Required HMAC secret used for signed artifact and report preview links
+- `AUTH_SESSION_SECRET`
+  Required secret used for HTTP-only login sessions
 
 Example:
 
@@ -429,6 +470,7 @@ Example:
 $env:FRONTEND_ORIGIN="https://toolbox.example.com"
 $env:FRONTEND_PORT="80"
 $env:ARTIFACT_TOKEN_SECRET="replace-with-a-long-random-secret"
+$env:AUTH_SESSION_SECRET="replace-with-another-long-random-secret"
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -455,6 +497,8 @@ Recommended variables for Coolify or Portainer:
   Optional PostgreSQL connection string override if your platform manages the database separately
 - `ARTIFACT_TOKEN_SECRET`
   Required HMAC secret used for signed artifact, HTML preview, and ZIP bundle links
+- `AUTH_SESSION_SECRET`
+  Required secret used for HTTP-only login sessions
 
 When to rebuild:
 
@@ -522,7 +566,6 @@ Before local development, make sure Redis is available on `redis://127.0.0.1:637
 
 The current implementation focuses on safe execution, persistent run visibility, and better operator feedback. The next natural product steps are:
 
-- authentication and RBAC for multi-user environments
 - richer approval workflows with requester and approver identities
 - stronger artifact management and retention controls
 - localization when multilingual support becomes a priority

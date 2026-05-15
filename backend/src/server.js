@@ -1,7 +1,12 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import morgan from "morgan";
+import { authRouter } from "./routes/auth.js";
+import { authSettingsRouter } from "./routes/authSettings.js";
 import { scriptsRouter } from "./routes/scripts.js";
+import { attachUser } from "./middleware/auth.js";
+import { ensureDefaultAdmin } from "./services/auth.js";
 import { ensureDatabaseReady } from "./services/db.js";
 
 const app = express();
@@ -69,6 +74,7 @@ function isAllowedToolboxOrigin(origin) {
 
 app.use(
   cors({
+    credentials: true,
     origin(origin, callback) {
       if (isAllowedToolboxOrigin(origin)) {
         callback(null, true);
@@ -79,8 +85,10 @@ app.use(
     }
   })
 );
+app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
+app.use(attachUser);
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -90,6 +98,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.use("/api", authRouter);
+app.use("/api", authSettingsRouter);
 app.use("/api", scriptsRouter);
 
 app.use("/api", (_req, res) => {
@@ -102,6 +112,7 @@ app.use((error, _req, res, _next) => {
 });
 
 await ensureDatabaseReady();
+await ensureDefaultAdmin();
 
 app.listen(port, () => {
   console.log(`M365 Toolbox API listening on port ${port}`);

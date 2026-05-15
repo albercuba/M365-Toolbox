@@ -224,6 +224,11 @@ export async function startRun(scriptId, payload = {}, options = {}) {
     queuedAt: requestedAt,
     lastActivityAt: requestedAt,
     parameters: validatedPayload,
+    requestedBy: options.requestedBy || null,
+    createdByUserId: options.user?.id || null,
+    createdByUsername: options.user?.username || null,
+    createdByDisplayName: options.user?.displayName || null,
+    createdByAuthProvider: options.user?.authProvider || null,
     currentStep: "Queued for worker execution",
     result: {
       events: [

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { PublicClientApplication } from "@azure/msal-browser";
 import { SettingsPage } from "./components/SettingsPage.jsx";
 
 const apiBase = "/api";
@@ -55,6 +56,38 @@ async function parseApiResponse(response) {
   throw new Error(
     `API returned ${response.status} ${response.statusText}: ${compactText.slice(0, 180) || "Empty response"}`
   );
+}
+
+function apiFetch(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    credentials: "include",
+    headers: {
+      ...(options.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {})
+    }
+  });
+}
+
+function getRoleLabel(role) {
+  return String(role || "")
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function isAdministrator(user) {
+  return user?.role === "administrator";
+}
+
+function canRunScript(user, script) {
+  if (!user || !script) return false;
+  if (user.role === "administrator" || user.role === "privileged_user") return true;
+  return script.mode !== "remediation" && !script.approvalRequired;
+}
+
+function getRunUserLabel(run) {
+  return run?.createdByDisplayName || run?.createdByUsername || run?.requestedBy || "Unknown";
 }
 
 function normalizeDefaults(fields) {
@@ -1003,7 +1036,7 @@ async function fetchHtmlReport(url) {
     throw new Error("No HTML preview is available for this run yet.");
   }
 
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   const contentType = response.headers.get("content-type") || "";
   const text = await response.text();
 
@@ -1548,6 +1581,65 @@ function DateField({ label, value, onChange }) {
   );
 }
 
+function LoginPage({
+  authConfig,
+  authLoading,
+  loginLoading,
+  error,
+  onLocalLogin,
+  onMicrosoftLogin
+}) {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+
+  return (
+    <div className="login-page">
+      <form
+        className="login-panel"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onLocalLogin(username, password);
+        }}
+      >
+        <div>
+          <div className="login-kicker">M365 Toolbox</div>
+          <h1>Sign in</h1>
+          <p>Use a local Toolbox account or Microsoft Entra ID to continue.</p>
+        </div>
+        {error ? <div className="flash flash-error soft">{error}</div> : null}
+        <label className="form-field">
+          <span>Username</span>
+          <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+        </label>
+        <label className="form-field">
+          <span>Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+        <button type="submit" className="add-btn" disabled={loginLoading || authLoading}>
+          {loginLoading ? "Signing in..." : "Login"}
+        </button>
+        <div className="login-separator"><span>or</span></div>
+        <button
+          type="button"
+          className="filter-btn active-all login-microsoft"
+          onClick={onMicrosoftLogin}
+          disabled={loginLoading || authLoading || !authConfig?.enabled}
+        >
+          Login with Microsoft
+        </button>
+        {!authConfig?.enabled ? (
+          <div className="empty-row compact">Microsoft login is not enabled yet. Sign in as an administrator to configure it.</div>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
 export function App() {
   const reportCardRef = useRef(null);
   const companyImportInputRef = useRef(null);
@@ -1594,10 +1686,121 @@ export function App() {
   const [runOffset, setRunOffset] = useState(0);
   const [runTotal, setRunTotal] = useState(0);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [authConfig, setAuthConfig] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const runPageSize = 12;
   const activeRunIsBusy = Boolean(activeRun && ["running", "queued", "canceling"].includes(activeRun.status));
+  const adminUser = isAdministrator(authUser);
+
+  const refreshSession = useCallback(async () => {
+    const response = await apiFetch(`${apiBase}/auth/me`);
+    const data = await parseApiResponse(response);
+    if (!response.ok) {
+      throw new Error(data.message || "Authentication is required.");
+    }
+    setAuthUser(data.user);
+    return data.user;
+  }, []);
+
+  useEffect(() => {
+    const loadAuth = async () => {
+      setAuthLoading(true);
+      try {
+        const [configResponse, meResponse] = await Promise.all([
+          apiFetch(`${apiBase}/auth/config`),
+          apiFetch(`${apiBase}/auth/me`)
+        ]);
+        const configData = await parseApiResponse(configResponse);
+        setAuthConfig(configData);
+        if (meResponse.ok) {
+          const meData = await parseApiResponse(meResponse);
+          setAuthUser(meData.user);
+        } else {
+          setAuthUser(null);
+        }
+      } catch (loadAuthError) {
+        setLoginError(loadAuthError.message);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    loadAuth();
+  }, []);
+
+  const handleLocalLogin = async (username, password) => {
+    setLoginLoading(true);
+    setLoginError("");
+    try {
+      const response = await apiFetch(`${apiBase}/auth/login`, {
+        method: "POST",
+        body: JSON.stringify({ username, password })
+      });
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Login failed.");
+      }
+      setAuthUser(data.user);
+    } catch (loginErrorValue) {
+      setLoginError(loginErrorValue.message);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleMicrosoftLogin = async () => {
+    setLoginLoading(true);
+    setLoginError("");
+    try {
+      if (!authConfig?.enabled || !authConfig.clientId || !authConfig.tenantId || !authConfig.scope) {
+        throw new Error("Microsoft login is not fully configured.");
+      }
+
+      const msal = new PublicClientApplication({
+        auth: {
+          clientId: authConfig.clientId,
+          authority: authConfig.authorityUrl || `https://login.microsoftonline.com/${authConfig.tenantId}`,
+          redirectUri: window.location.origin
+        },
+        cache: {
+          cacheLocation: "sessionStorage"
+        }
+      });
+      await msal.initialize();
+      const tokenResponse = await msal.loginPopup({
+        scopes: [authConfig.scope]
+      });
+      const response = await apiFetch(`${apiBase}/auth/microsoft`, {
+        method: "POST",
+        body: JSON.stringify({ token: tokenResponse.accessToken })
+      });
+      const data = await parseApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.message || "Microsoft login failed.");
+      }
+      setAuthUser(data.user);
+    } catch (loginErrorValue) {
+      setLoginError(loginErrorValue.message);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await apiFetch(`${apiBase}/auth/logout`, { method: "POST" }).catch(() => null);
+    setAuthUser(null);
+    setSelectedScript(null);
+    setActiveRun(null);
+    setArtifacts([]);
+  };
 
   const loadRuns = useCallback(async (nextOffset = runOffset) => {
+    if (!authUser) {
+      return;
+    }
     setRunsLoading(true);
     try {
       const query = buildRunHistoryQuery({
@@ -1609,7 +1812,7 @@ export function App() {
         dateFrom: runDateFrom,
         dateTo: runDateTo
       });
-      const runsResponse = await fetch(`${apiBase}/runs?${query}`);
+      const runsResponse = await apiFetch(`${apiBase}/runs?${query}`);
       const runsData = await parseApiResponse(runsResponse);
       if (!runsResponse.ok) {
         throw new Error(runsData.message || "Failed to load run history.");
@@ -1620,14 +1823,18 @@ export function App() {
     } finally {
       setRunsLoading(false);
     }
-  }, [runDateFrom, runDateTo, runOffset, runScriptFilter, runStatusFilter, runTenantFilter]);
+  }, [authUser, runDateFrom, runDateTo, runOffset, runScriptFilter, runStatusFilter, runTenantFilter]);
 
   useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
     const load = async () => {
       const [scriptsResponse, statusResponse, companiesResponse] = await Promise.all([
-        fetch(`${apiBase}/scripts`),
-        fetch(`${apiBase}/status`),
-        fetch(`${apiBase}/companies`)
+        apiFetch(`${apiBase}/scripts`),
+        apiFetch(`${apiBase}/status`),
+        apiFetch(`${apiBase}/companies`)
       ]);
 
       const scriptsData = await parseApiResponse(scriptsResponse);
@@ -1643,11 +1850,14 @@ export function App() {
     };
 
     load().catch((loadError) => setError(loadError.message));
-  }, []);
+  }, [authUser]);
 
   useEffect(() => {
+    if (!authUser) {
+      return;
+    }
     loadRuns(runOffset).catch((loadError) => setError(loadError.message));
-  }, [loadRuns, runOffset]);
+  }, [authUser, loadRuns, runOffset]);
 
   useEffect(() => {
     setRunOffset(0);
@@ -1716,7 +1926,7 @@ export function App() {
 
     const timer = window.setInterval(async () => {
       try {
-        const response = await fetch(`${apiBase}/runs/${activeRun.id}`);
+        const response = await apiFetch(`${apiBase}/runs/${activeRun.id}`);
         const data = await parseApiResponse(response);
         if (!response.ok) {
           throw new Error(data.message || "Failed to refresh the active run.");
@@ -1753,7 +1963,7 @@ export function App() {
 
     const loadArtifacts = async () => {
       try {
-        const response = await fetch(`${apiBase}/runs/${activeRun.id}/artifacts`);
+        const response = await apiFetch(`${apiBase}/runs/${activeRun.id}/artifacts`);
         const data = await parseApiResponse(response);
         if (!cancelled) {
           setArtifacts(data);
@@ -1838,6 +2048,10 @@ export function App() {
   }, [favoriteScriptIds]);
 
   const handleScriptSelect = (script) => {
+    if (!canRunScript(authUser, script)) {
+      setError("Restricted users cannot run remediation or high-impact scripts.");
+      return;
+    }
     setSettingsOpen(false);
     setSelectedScript(script);
     setFormValues(normalizeDefaults(script.fields));
@@ -1894,7 +2108,7 @@ export function App() {
     }
 
     try {
-      const response = await fetch(`${apiBase}/companies`, {
+      const response = await apiFetch(`${apiBase}/companies`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, tenant })
@@ -1913,7 +2127,7 @@ export function App() {
 
   const handleRemoveCompany = async (companyId) => {
     try {
-      const response = await fetch(`${apiBase}/companies/${encodeURIComponent(companyId)}`, {
+      const response = await apiFetch(`${apiBase}/companies/${encodeURIComponent(companyId)}`, {
         method: "DELETE"
       });
       if (!response.ok) {
@@ -1963,7 +2177,7 @@ export function App() {
     }
 
     try {
-      const response = await fetch(`${apiBase}/companies/${encodeURIComponent(companyId)}`, {
+      const response = await apiFetch(`${apiBase}/companies/${encodeURIComponent(companyId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, tenant })
@@ -2029,7 +2243,7 @@ export function App() {
 
         return next;
       })();
-      const response = await fetch(`${apiBase}/companies`, {
+      const response = await apiFetch(`${apiBase}/companies`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companies: nextCompanies })
@@ -2060,7 +2274,7 @@ export function App() {
       return;
     }
     try {
-      const response = await fetch(`${apiBase}/runs/${run.id}`);
+      const response = await apiFetch(`${apiBase}/runs/${run.id}`);
       const fullRun = await parseApiResponse(response);
       if (!response.ok) {
         throw new Error(fullRun.message || "Failed to load run details.");
@@ -2167,7 +2381,7 @@ export function App() {
     setSuccess("");
 
     try {
-      const response = await fetch(`${apiBase}/runs/${activeRun.id}/artifacts`, {
+      const response = await apiFetch(`${apiBase}/runs/${activeRun.id}/artifacts`, {
         method: "DELETE"
       });
       const data = await parseApiResponse(response);
@@ -2176,7 +2390,7 @@ export function App() {
       }
 
       setArtifacts([]);
-      const runResponse = await fetch(`${apiBase}/runs/${activeRun.id}`);
+      const runResponse = await apiFetch(`${apiBase}/runs/${activeRun.id}`);
       const runData = await parseApiResponse(runResponse);
       if (runResponse.ok) {
         setActiveRun(runData);
@@ -2192,6 +2406,10 @@ export function App() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!selectedScript) return;
+    if (!canRunScript(authUser, selectedScript)) {
+      setError("Restricted users cannot run remediation or high-impact scripts.");
+      return;
+    }
 
     const approvalConfirmed = !selectedScript.approvalRequired || window.confirm(
       `This script is marked as remediation and can change tenant state.\n\nDo you want to approve and launch "${selectedScript.name}"?`
@@ -2211,7 +2429,7 @@ export function App() {
         resolvedFormValues.tenantId = findCompanyTenant(formValues.tenantId, companies);
       }
 
-      const response = await fetch(`${apiBase}/scripts/${selectedScript.id}/run`, {
+      const response = await apiFetch(`${apiBase}/scripts/${selectedScript.id}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...resolvedFormValues, approvalConfirmed })
@@ -2242,7 +2460,7 @@ export function App() {
     setSuccess("");
 
     try {
-      const response = await fetch(`${apiBase}/runs/${activeRun.id}/cancel`, {
+      const response = await apiFetch(`${apiBase}/runs/${activeRun.id}/cancel`, {
         method: "POST"
       });
       const data = await parseApiResponse(response);
@@ -2271,6 +2489,10 @@ export function App() {
       setError("The original script is no longer available in the catalog.");
       return;
     }
+    if (!canRunScript(authUser, matchingScript)) {
+      setError("Restricted users cannot run remediation or high-impact scripts.");
+      return;
+    }
 
     const approvalConfirmed = !matchingScript.approvalRequired || window.confirm(
       `This script is marked as remediation and can change tenant state.\n\nDo you want to approve and launch "${matchingScript.name}" again with the previous inputs?`
@@ -2287,7 +2509,7 @@ export function App() {
     try {
       setSelectedScript(matchingScript);
       setFormValues(normalizeDefaults(matchingScript.fields));
-      const response = await fetch(`${apiBase}/scripts/${matchingScript.id}/run`, {
+      const response = await apiFetch(`${apiBase}/scripts/${matchingScript.id}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...(run.payload || {}), approvalConfirmed })
@@ -2380,6 +2602,9 @@ export function App() {
     ? parseUserList(formValues.userPrincipalName)
     : null;
   const filteredScripts = scripts.filter((script) => {
+    if (!canRunScript(authUser, script)) {
+      return false;
+    }
     const matchesSearch = !normalizedSearch || [
       script.name,
       script.category,
@@ -2475,6 +2700,7 @@ export function App() {
                 <tr>
                   <th>Script</th>
                   <th>Tenant</th>
+                  <th>User</th>
                   <th>Status</th>
                   <th>Requested</th>
                   <th>Action</th>
@@ -2487,6 +2713,7 @@ export function App() {
                     <tr key={run.id}>
                       <td>{run.scriptName}</td>
                       <td>{formatRunTenant(run)}</td>
+                      <td>{getRunUserLabel(run)}</td>
                       <td>
                         <span className={`pill ${run.status === "completed" ? "badge-ok" : run.status === "failed" || run.status === "canceled" || run.status === "interrupted" ? "badge-crit" : "badge-warn"}`}>
                           {run.status}
@@ -2537,6 +2764,31 @@ export function App() {
       </div>
     );
   };
+
+  if (authLoading) {
+    return (
+      <div className="login-page">
+        <div className="login-panel">
+          <div className="login-kicker">M365 Toolbox</div>
+          <h1>Loading</h1>
+          <p>Checking your session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <LoginPage
+        authConfig={authConfig}
+        authLoading={authLoading}
+        loginLoading={loginLoading}
+        error={loginError}
+        onLocalLogin={handleLocalLogin}
+        onMicrosoftLogin={handleMicrosoftLogin}
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -2592,6 +2844,10 @@ export function App() {
         </button>
         <div className="topbar-title">Web-based PowerShell operations for Microsoft 365</div>
         <div className="topbar-right">
+          <div className="user-chip">
+            <span>{authUser.displayName || authUser.username}</span>
+            <strong>{getRoleLabel(authUser.role)}</strong>
+          </div>
           <button
             type="button"
             className={`theme-switch${theme === "dark" ? " dark" : ""}`}
@@ -2615,6 +2871,9 @@ export function App() {
           </button>
           <div className="topbar-count">{scripts.length} script{scripts.length === 1 ? "" : "s"}</div>
           <div className="topbar-count">{runTotal} run{runTotal === 1 ? "" : "s"}</div>
+          <button type="button" className="filter-btn" onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </header>
 
@@ -2768,6 +3027,11 @@ export function App() {
         />
 
         <main className="main">
+          {authUser.mustChangePassword ? (
+            <div className="approval-banner">
+              You are signed in with the default local administrator password. Open Settings and change it before running production workflows.
+            </div>
+          ) : null}
           {activeRunBannerVisible ? (
             <div className={`run-banner ${activeRun?.status === "queued" ? "tone-warn" : activeRun?.status === "canceling" ? "tone-crit" : "tone-active"}`}>
               <div className="run-banner-head">
@@ -2811,6 +3075,10 @@ export function App() {
           ) : null}
           {settingsOpen ? (
             <SettingsPage
+              apiBase={apiBase}
+              apiFetch={apiFetch}
+              currentUser={authUser}
+              isAdministrator={adminUser}
               companies={companies}
               companyDraft={companyDraft}
               companyImportInputRef={companyImportInputRef}
@@ -2826,6 +3094,7 @@ export function App() {
               onStartEditCompany={handleStartEditCompany}
               setCompanyDraft={setCompanyDraft}
               setEditingCompanyDraft={setEditingCompanyDraft}
+              onSessionRefresh={refreshSession}
             />
           ) : selectedScript ? (
             <>
@@ -3221,7 +3490,7 @@ export function App() {
                       type="button"
                       className="filter-btn"
                       onClick={() =>
-                        fetch(`${apiBase}/status`)
+                        apiFetch(`${apiBase}/status`)
                           .then(parseApiResponse)
                           .then((data) => {
                             setStatus(data);
@@ -3276,3 +3545,4 @@ export function App() {
     </div>
   );
 }
+
