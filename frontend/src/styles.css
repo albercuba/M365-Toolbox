@@ -1643,6 +1643,7 @@ textarea {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.7rem;
+  margin-bottom: 1rem;
 }
 
 .quick-summary-item {
