@@ -218,6 +218,8 @@ Fabrikam,fabrikam.com
 Northwind,00000000-0000-0000-0000-000000000000
 ```
 
+The header row is optional but recommended. If a company name contains a comma, wrap it in quotes, for example `"Contoso, Ltd.",contoso.onmicrosoft.com`.
+
 ## Authentication and roles
 
 M365 Toolbox shows a login page before the app shell. The backend creates a local administrator on startup if it does not already exist:
@@ -238,20 +240,81 @@ Local users authenticate with the username and password stored in PostgreSQL. Mi
 
 ### Microsoft Entra login setup
 
-Administrators configure Microsoft login in Settings under `Microsoft App Registration Configuration`.
+Administrators configure Microsoft login in the Toolbox UI under Settings → `Microsoft App Registration Configuration`. Use the local `admin` account for the initial setup, then switch to Microsoft sign-in after the configuration and group mappings are saved.
 
-Create or use app registrations that allow SPA sign-in and API access:
+This integration uses a browser SPA sign-in flow with MSAL. Do not create or paste a client secret into Toolbox; the app only stores tenant/app IDs and validates Microsoft access tokens on the backend.
 
-1. Register a frontend SPA app and add the Toolbox frontend origin as the redirect URI, for example `https://toolbox.example.com`.
-2. Register or expose a backend/API application ID URI and a delegated scope named `access_as_user`.
-3. Grant the frontend app permission to request `api://<backend-api-client-id>/access_as_user`.
-4. Configure the API token to include group object ID claims, or group names only if your tenant emits them safely.
-5. In Toolbox Settings, set tenant ID, frontend client ID, backend API audience/client ID, optional authority URL, and enable Microsoft login.
-6. Add Entra group mappings to one of `administrator`, `privileged_user`, or `restricted_user`.
+#### Prerequisites
 
-Role resolution prefers configured group object IDs. Group-name matching is only used when a mapping has no object ID and the token contains safe group-name claims. If the token has group overage claims or no configured mapping matches, Microsoft login fails with a clear authorization error.
+- A Microsoft Entra tenant ID.
+- Permission to create or update Entra app registrations.
+- At least one Entra security group for Toolbox access. Use group object IDs whenever possible.
+- The public Toolbox frontend origin:
+  - local development: `http://localhost:5173`
+  - default production compose: `http://localhost:8080`
+  - hosted production example: `https://toolbox.example.com`
 
-The header row is optional but recommended. If a company name contains a comma, wrap it in quotes, for example `"Contoso, Ltd.",contoso.onmicrosoft.com`.
+The redirect URI must exactly match the origin shown in the Toolbox Settings page under `Redirect URI`.
+
+#### 1. Create the backend API app registration
+
+1. In Microsoft Entra admin center, open App registrations → New registration.
+2. Name it, for example `M365 Toolbox API`.
+3. Use `Accounts in this organizational directory only` unless you intentionally support another tenant model.
+4. After creation, copy the `Application (client) ID`. This is the Toolbox `Backend API Audience` value.
+5. Open `Expose an API`.
+6. Set the Application ID URI to `api://<backend-api-client-id>` if Entra has not already generated one.
+7. Add a delegated scope:
+   - Scope name: `access_as_user`
+   - Who can consent: `Admins and users` or `Admins only`, depending on tenant policy
+   - Admin consent display name: `Access M365 Toolbox`
+   - Admin consent description: `Allows the Toolbox frontend to call the Toolbox API as the signed-in user`
+   - State: enabled
+8. Open `Token configuration` and add a `groups` claim to access tokens. Prefer group object IDs. If your tenant emits group overage claims because the user belongs to many groups, Microsoft login will be rejected until the token contains usable group claims for this API.
+
+#### 2. Create the frontend SPA app registration
+
+1. In App registrations → New registration, create another app, for example `M365 Toolbox Frontend`.
+2. In `Authentication`, add a platform of type `Single-page application`.
+3. Add the Toolbox frontend origin as the redirect URI, for example `https://toolbox.example.com` or `http://localhost:5173` for local development.
+4. Keep implicit grant unchecked unless you have a separate reason to enable it. MSAL uses the authorization-code-with-PKCE flow for SPAs.
+5. Copy the `Application (client) ID`. This is the Toolbox `Frontend Client ID` value.
+6. In `API permissions`, add a permission → `My APIs` → select the backend API app → delegated permissions → `access_as_user`.
+7. Grant admin consent if your tenant requires it.
+
+#### 3. Configure Toolbox
+
+1. Sign in with the local administrator account.
+2. Open Settings → `Microsoft App Registration Configuration`.
+3. Fill in:
+   - `Tenant ID`: your Entra tenant ID.
+   - `Frontend Client ID`: the application/client ID of the frontend SPA app.
+   - `Backend API Audience`: the application/client ID of the backend API app. Toolbox derives the login scope as `api://<backend-api-client-id>/access_as_user`.
+   - `Authority URL`: optional. Leave blank to use `https://login.microsoftonline.com/<tenant-id>`, or set that exact tenant authority if needed.
+4. Check `Enable Microsoft login`.
+5. Save the Microsoft configuration.
+
+#### 4. Add Entra group role mappings
+
+Under `Entra Group Role Mappings`, add one or more mappings:
+
+- `Entra Group Name`: a human-readable group name for operators.
+- `Group Object ID`: the Entra group object ID. This is strongly recommended because token group names are not always emitted.
+- `Assigned Role`: one of:
+  - `administrator`: can run every script and manage settings.
+  - `privileged_user`: can run every script but cannot manage administrator-only settings.
+  - `restricted_user`: can run non-remediation scripts only.
+
+Role resolution prefers group object IDs. Group-name matching is only used when a mapping has no object ID and the token contains safe group-name claims. If no mapping matches, or if Microsoft sends group overage claims instead of actual groups, login fails with an authorization error.
+
+#### 5. Test Microsoft sign-in
+
+1. Sign out of Toolbox or open a private browser window.
+2. Select `Sign in with Microsoft` on the login page.
+3. Complete the Microsoft prompt.
+4. Confirm the Toolbox user menu shows your Microsoft identity and expected role.
+
+If sign-in fails, verify the redirect URI, tenant ID, frontend client ID, backend API audience, API permission, admin consent, group claims, and group object ID mapping.
 
 High-level flow:
 

@@ -83,6 +83,17 @@ When modifying frontend code:
 - Keep API calls centralized and consistent with the existing backend endpoints.
 - Run the frontend build before finishing UI changes.
 
+### Microsoft Entra authentication
+
+When changing Microsoft login behavior, app registration fields, token validation, role mapping, or setup UX:
+
+- Keep the README `Microsoft Entra login setup` section current and operator-ready.
+- Preserve the SPA/MSAL flow and backend JWT validation; do not add client secrets to the browser or repository.
+- Keep Toolbox configuration limited to tenant ID, frontend client ID, backend API audience/client ID, optional authority URL, enablement, and group role mappings unless a backend change validates new fields.
+- Prefer Entra group object ID mappings over group-name matching.
+- Keep `administrator`, `privileged_user`, and `restricted_user` role semantics aligned across backend, frontend, and docs.
+- Make Microsoft login failures clear without leaking tokens, tenant-sensitive claims, or secret values.
+
 ### PowerShell scripts
 
 PowerShell scripts live in `scripts/`.
