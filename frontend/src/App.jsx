@@ -1634,7 +1634,7 @@ function LoginPage({
             autoComplete="current-password"
           />
         </label>
-        <button type="submit" className="add-btn" disabled={loginLoading || authLoading}>
+        <button type="submit" className="add-btn login-local" disabled={loginLoading || authLoading}>
           {loginLoading ? "Signing in..." : "Login"}
         </button>
         <div className="login-separator"><span>or</span></div>
@@ -1644,7 +1644,13 @@ function LoginPage({
           onClick={onMicrosoftLogin}
           disabled={loginLoading || authLoading || !authConfig?.enabled}
         >
-          Login with Microsoft
+          <span className="microsoft-logo" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+          </span>
+          <span>Sign in with Microsoft</span>
         </button>
         {!authConfig?.enabled ? (
           <div className="empty-row compact">Microsoft login is not enabled yet. Sign in as an administrator to configure it.</div>
@@ -3561,4 +3567,3 @@ export function App() {
     </div>
   );
 }
-
