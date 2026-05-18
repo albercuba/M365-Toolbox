@@ -1717,7 +1717,7 @@ export function App() {
   const adminUser = isAdministrator(authUser);
   const settingsNavItems = [
     { id: "companies", label: "Companies", description: `${companies.length} configured` },
-    { id: "microsoft", label: "Microsoft App Registration Configuration", description: authConfig?.enabled ? "Microsoft login enabled" : "Microsoft login disabled" },
+    { id: "microsoft", label: "Microsoft Integration", description: authConfig?.enabled ? "Microsoft login enabled" : "Microsoft login disabled" },
     { id: "users", label: "Users", description: "Local users and roles" }
   ];
 
@@ -2929,9 +2929,7 @@ export function App() {
                   </div>
                 </div>
               </div>
-              <div className="tenant-list settings-menu-body">
-                <div className="empty-row">Select a settings area to manage configuration. User and Microsoft role changes are administrator-only.</div>
-              </div>
+              <div className="tenant-list settings-menu-body" />
             </>
           ) : (
             <>

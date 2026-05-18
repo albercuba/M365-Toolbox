@@ -53,7 +53,6 @@ export function SettingsPage({
   onSessionRefresh
 }) {
   const selectedSection = SETTINGS_SECTIONS.has(activeSettingsSection) ? activeSettingsSection : "companies";
-  const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "" });
   const [authConfig, setAuthConfig] = useState(null);
   const [mappings, setMappings] = useState([]);
   const [mappingDraft, setMappingDraft] = useState({ groupName: "", groupId: "", assignedRole: "restricted_user" });
@@ -93,26 +92,7 @@ export function SettingsPage({
     loadAuthSettings();
   }, [apiBase, apiFetch, isAdministrator]);
 
-  const handleChangePassword = async (event) => {
-    event.preventDefault();
-    setSettingsError("");
-    setSettingsSuccess("");
-    try {
-      const response = await apiFetch(`${apiBase}/auth/change-password`, {
-        method: "POST",
-        body: JSON.stringify(passwordDraft)
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to change password.");
-      }
-      setPasswordDraft({ currentPassword: "", newPassword: "" });
-      await onSessionRefresh?.();
-      setSettingsSuccess("Password changed.");
-    } catch (error) {
-      setSettingsError(error.message);
-    }
-  };
+
 
   const saveMicrosoftConfig = async (event) => {
     event.preventDefault();
@@ -267,52 +247,7 @@ export function SettingsPage({
     }
   };
 
-  const renderAccountCard = () => (
-    <div className="card">
-      <div className="card-header">
-        <span className="card-title">Account</span>
-        <span className="card-badge badge-neutral">{roleLabel(currentUser.role)}</span>
-      </div>
-      <div className="card-body">
-        {currentUser.mustChangePassword ? (
-          <div className="approval-banner">This account is still using the default password. Change it before continuing operational work.</div>
-        ) : null}
-        <div className="quick-summary-grid">
-          <div className="quick-summary-item">
-            <div className="method-label">User</div>
-            <div className="method-count">{currentUser.displayName || currentUser.username}</div>
-          </div>
-          <div className="quick-summary-item">
-            <div className="method-label">Provider</div>
-            <div className="method-count">{currentUser.authProvider}</div>
-          </div>
-        </div>
-        {currentUser.authProvider === "local" ? (
-          <form className="settings-row" onSubmit={handleChangePassword} style={{ marginTop: "1rem" }}>
-            <label className="form-field">
-              <span>Current Password</span>
-              <input
-                type="password"
-                value={passwordDraft.currentPassword}
-                onChange={(event) => setPasswordDraft((current) => ({ ...current, currentPassword: event.target.value }))}
-                autoComplete="current-password"
-              />
-            </label>
-            <label className="form-field">
-              <span>New Password</span>
-              <input
-                type="password"
-                value={passwordDraft.newPassword}
-                onChange={(event) => setPasswordDraft((current) => ({ ...current, newPassword: event.target.value }))}
-                autoComplete="new-password"
-              />
-            </label>
-            <button type="submit" className="add-btn">Change Password</button>
-          </form>
-        ) : null}
-      </div>
-    </div>
-  );
+
 
   const renderCompaniesSection = () => (
     <div className="card">
@@ -420,9 +355,10 @@ export function SettingsPage({
   );
 
   const renderMicrosoftSection = () => authConfig ? (
+    <>
     <div className="card">
       <div className="card-header">
-        <span className="card-title">Microsoft App Registration Configuration</span>
+        <span className="card-title">Microsoft Integration</span>
         <span className={`card-badge ${authConfig.enabled ? "badge-ok" : "badge-neutral"}`}>{authConfig.enabled ? "enabled" : "disabled"}</span>
       </div>
       <div className="card-body">
@@ -502,6 +438,42 @@ export function SettingsPage({
         </div>
       </div>
     </div>
+    <details className="card integration-help-card">
+      <summary className="card-header integration-help-summary">
+        <span className="card-title">Microsoft Integration Setup Instructions</span>
+        <span className="card-badge badge-neutral">setup guide</span>
+      </summary>
+      <div className="card-body integration-help-body">
+        <div className="manage-form-panel">
+          <h4>1. Create the backend API app registration</h4>
+          <ol className="settings-instruction-list">
+            <li>In Microsoft Entra admin center, create an app registration for the Toolbox backend API.</li>
+            <li>Expose an API and set the Application ID URI to `api://&lt;backend-api-client-id&gt;`.</li>
+            <li>Add a delegated scope named `access_as_user` for signed-in Toolbox operators.</li>
+            <li>Copy the backend API application/client ID into `Backend API Audience` in Toolbox.</li>
+          </ol>
+        </div>
+        <div className="manage-form-panel">
+          <h4>2. Create the frontend SPA app registration</h4>
+          <ol className="settings-instruction-list">
+            <li>Create a second app registration for the Toolbox frontend SPA.</li>
+            <li>Add a Single-page application redirect URI that matches the Toolbox browser origin shown above.</li>
+            <li>Grant the frontend permission to call the backend API scope.</li>
+            <li>Copy the frontend application/client ID into `Frontend Client ID` in Toolbox.</li>
+          </ol>
+        </div>
+        <div className="manage-form-panel">
+          <h4>3. Configure roles and enable sign-in</h4>
+          <ol className="settings-instruction-list">
+            <li>Copy your Entra tenant ID into `Tenant ID`.</li>
+            <li>Add Entra group role mappings in Toolbox. Prefer group object IDs over display names.</li>
+            <li>Assign operators to the Entra groups that map to `administrator`, `privileged_user`, or `restricted_user`.</li>
+            <li>Enable Microsoft login, save the configuration, and test sign-in with a non-break-glass account.</li>
+          </ol>
+        </div>
+      </div>
+    </details>
+    </>
   ) : null;
 
   const renderUsersSection = () => (
@@ -633,7 +605,6 @@ export function SettingsPage({
       <div className="sections">
         {settingsError ? <div className="flash flash-error soft">{settingsError}</div> : null}
         {settingsSuccess ? <div className="flash soft">{settingsSuccess}</div> : null}
-        {renderAccountCard()}
 
         {isAdministrator ? (
           <>

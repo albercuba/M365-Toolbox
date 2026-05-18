@@ -1223,7 +1223,7 @@ textarea {
   width: 100%;
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r2);
   color: var(--text);
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -1262,7 +1262,7 @@ textarea {
   gap: 0.75rem;
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r2);
   color: var(--text);
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -1300,7 +1300,7 @@ textarea {
   padding: 0.35rem;
   background: var(--bg2);
   border: 1px solid var(--border2);
-  border-radius: var(--r);
+  border-radius: var(--r2);
   box-shadow: var(--shadow);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1309,7 +1309,7 @@ textarea {
 .select-option {
   width: 100%;
   border: none;
-  border-radius: calc(var(--r) - 2px);
+  border-radius: var(--r);
   background: transparent;
   color: var(--text);
   font-family: var(--mono);
@@ -1626,7 +1626,7 @@ textarea {
   min-width: 165px;
   background-color: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r2);
   color: var(--text);
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -1648,6 +1648,54 @@ textarea {
 .company-actions select:focus {
   border-color: var(--accent2);
   box-shadow: 0 0 0 3px rgba(15, 134, 216, 0.12);
+}
+
+.form-field select:disabled,
+.company-actions select:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.integration-help-card summary {
+  list-style: none;
+}
+
+.integration-help-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.integration-help-summary {
+  cursor: pointer;
+}
+
+.integration-help-summary:hover {
+  background: var(--bg3);
+}
+
+.integration-help-card[open] .integration-help-summary {
+  border-bottom-color: var(--border2);
+}
+
+.integration-help-card[open] .integration-help-summary .card-badge {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.integration-help-body {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.settings-instruction-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text2);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.settings-instruction-list li + li {
+  margin-top: 0.35rem;
 }
 
 .info-tooltip {
