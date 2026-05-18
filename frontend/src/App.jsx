@@ -1755,6 +1755,11 @@ export function App() {
             if (!response.ok) {
               throw new Error(data.message || "Microsoft login failed.");
             }
+            setSettingsOpen(false);
+            setActiveSettingsSection("companies");
+            setSelectedScript(null);
+            setActiveRun(null);
+            setArtifacts([]);
             setAuthUser(data.user);
             return;
           }
@@ -1788,6 +1793,11 @@ export function App() {
       if (!response.ok) {
         throw new Error(data.message || "Login failed.");
       }
+      setSettingsOpen(false);
+      setActiveSettingsSection("companies");
+      setSelectedScript(null);
+      setActiveRun(null);
+      setArtifacts([]);
       setAuthUser(data.user);
     } catch (loginErrorValue) {
       setLoginError(loginErrorValue.message);
@@ -1820,6 +1830,8 @@ export function App() {
   const handleLogout = async () => {
     await apiFetch(`${apiBase}/auth/logout`, { method: "POST" }).catch(() => null);
     setAuthUser(null);
+    setSettingsOpen(false);
+    setActiveSettingsSection("companies");
     setSelectedScript(null);
     setActiveRun(null);
     setArtifacts([]);
@@ -1868,9 +1880,18 @@ export function App() {
       const scriptsData = await parseApiResponse(scriptsResponse);
       const statusData = await parseApiResponse(statusResponse);
       const companiesData = await parseApiResponse(companiesResponse);
-      setScripts(scriptsData);
+      if (!scriptsResponse.ok) {
+        throw new Error(scriptsData.message || "Failed to load script catalog.");
+      }
+      if (!statusResponse.ok) {
+        throw new Error(statusData.message || "Failed to load backend status.");
+      }
+      if (!companiesResponse.ok) {
+        throw new Error(companiesData.message || "Failed to load companies.");
+      }
+      setScripts(Array.isArray(scriptsData) ? scriptsData : []);
       setStatus(statusData);
-      setCompanies(companiesData);
+      setCompanies(Array.isArray(companiesData) ? companiesData : []);
       setStatusUpdatedAt(new Date().toISOString());
       setSelectedScript(null);
       setFormValues({});
@@ -3056,21 +3077,23 @@ export function App() {
                 </svg>
                 <span>GitHub</span>
               </a>
-              <button
-                type="button"
-                className={`sidebar-repo-link sidebar-settings-link${settingsOpen ? " active" : ""}`}
-                onClick={handleOpenSettings}
-                aria-label="Open settings"
-                title="Settings"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.05-1.6a.5.5 0 0 0 .12-.64l-1.94-3.36a.5.5 0 0 0-.61-.22l-2.42.98a7.2 7.2 0 0 0-1.7-.98L14.56 2.6A.5.5 0 0 0 14.07 2h-4.14a.5.5 0 0 0-.49.4L9.07 5a7.2 7.2 0 0 0-1.7.98L4.95 5a.5.5 0 0 0-.61.22L2.4 8.58a.5.5 0 0 0 .12.64l2.05 1.6c-.04.32-.07.65-.07.98s.02.66.07.98l-2.05 1.6a.5.5 0 0 0-.12.64l1.94 3.36a.5.5 0 0 0 .61.22l2.42-.98c.52.4 1.09.73 1.7.98l.37 2.6a.5.5 0 0 0 .49.4h4.14a.5.5 0 0 0 .49-.4l.37-2.6c.61-.25 1.18-.58 1.7-.98l2.42.98a.5.5 0 0 0 .61-.22l1.94-3.36a.5.5 0 0 0-.12-.64Zm-7.43 2.27A3.25 3.25 0 1 1 15.25 12 3.25 3.25 0 0 1 12 15.25Z"
-                    fill="currentColor"
-                  />
-                </svg>
-                <span>Settings</span>
-              </button>
+              {adminUser ? (
+                <button
+                  type="button"
+                  className={`sidebar-repo-link sidebar-settings-link${settingsOpen ? " active" : ""}`}
+                  onClick={handleOpenSettings}
+                  aria-label="Open settings"
+                  title="Settings"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.05-1.6a.5.5 0 0 0 .12-.64l-1.94-3.36a.5.5 0 0 0-.61-.22l-2.42.98a7.2 7.2 0 0 0-1.7-.98L14.56 2.6A.5.5 0 0 0 14.07 2h-4.14a.5.5 0 0 0-.49.4L9.07 5a7.2 7.2 0 0 0-1.7.98L4.95 5a.5.5 0 0 0-.61.22L2.4 8.58a.5.5 0 0 0 .12.64l2.05 1.6c-.04.32-.07.65-.07.98s.02.66.07.98l-2.05 1.6a.5.5 0 0 0-.12.64l1.94 3.36a.5.5 0 0 0 .61.22l2.42-.98c.52.4 1.09.73 1.7.98l.37 2.6a.5.5 0 0 0 .49.4h4.14a.5.5 0 0 0 .49-.4l.37-2.6c.61-.25 1.18-.58 1.7-.98l2.42.98a.5.5 0 0 0 .61-.22l1.94-3.36a.5.5 0 0 0-.12-.64Zm-7.43 2.27A3.25 3.25 0 1 1 15.25 12 3.25 3.25 0 0 1 12 15.25Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span>Settings</span>
+                </button>
+              ) : null}
             </div>
           </div>
         </aside>
@@ -3085,7 +3108,9 @@ export function App() {
         <main className="main">
           {authUser.mustChangePassword ? (
             <div className="approval-banner">
-              You are signed in with the default local administrator password. Open Settings and change it before running production workflows.
+              {adminUser
+                ? "This local account is marked for password change. Open Settings → Users to update the password before running production workflows."
+                : "This local account is marked for password change. Ask an administrator to update your password from Settings → Users."}
             </div>
           ) : null}
           {activeRunBannerVisible ? (
