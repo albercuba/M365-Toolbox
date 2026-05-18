@@ -251,6 +251,152 @@ function normalizeMapping(mapping) {
   };
 }
 
+function normalizeEmail(email) {
+  const value = String(email || "").trim();
+  if (!value) {
+    return null;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw createError("Email address is invalid.", 400);
+  }
+  return value;
+}
+
+function normalizeLocalUserInput(input = {}, { requirePassword = false } = {}) {
+  const username = String(input.username || "").trim();
+  const displayName = String(input.displayName || "").trim() || null;
+  const email = normalizeEmail(input.email);
+  const role = validateRole(input.role);
+  const password = String(input.password || "");
+
+  if (!username) {
+    throw createError("Username is required.", 400);
+  }
+  if (!/^[A-Za-z0-9._@-]{3,80}$/.test(username)) {
+    throw createError("Username must be 3-80 characters and can include letters, numbers, dots, underscores, at signs, and hyphens.", 400);
+  }
+  if ((requirePassword || password) && password.length < 8) {
+    throw createError("Password must be at least 8 characters long.", 400);
+  }
+
+  return { username, displayName, email, role, password };
+}
+
+async function ensureAnotherAdministratorExists(userId) {
+  const administratorCount = await prisma.user.count({
+    where: {
+      role: "administrator",
+      NOT: { id: userId }
+    }
+  });
+  if (administratorCount < 1) {
+    throw createError("At least one other administrator account is required.", 400);
+  }
+}
+
+export async function listUsers() {
+  const users = await prisma.user.findMany({
+    orderBy: [{ authProvider: "asc" }, { username: "asc" }]
+  });
+  return users.map(normalizeUser);
+}
+
+export async function createLocalUser(input) {
+  const data = normalizeLocalUserInput(input, { requirePassword: true });
+  const passwordHash = await bcrypt.hash(data.password, 12);
+  try {
+    const user = await prisma.user.create({
+      data: {
+        id: uuidv4(),
+        username: data.username,
+        passwordHash,
+        displayName: data.displayName,
+        email: data.email,
+        authProvider: "local",
+        role: data.role,
+        mustChangePassword: Boolean(input.mustChangePassword)
+      }
+    });
+    return normalizeUser(user);
+  } catch (error) {
+    if (error?.code === "P2002") {
+      throw createError("A user with that username, email, or Microsoft object ID already exists.", 409);
+    }
+    throw error;
+  }
+}
+
+export async function updateUser(id, input) {
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    throw createError("User not found.", 404);
+  }
+
+  const role = existing.authProvider === "local" ? validateRole(input.role || existing.role) : existing.role;
+  if (existing.role === "administrator" && role !== "administrator") {
+    await ensureAnotherAdministratorExists(existing.id);
+  }
+
+  const updateData = {
+    displayName: String(input.displayName || "").trim() || null,
+    email: normalizeEmail(input.email),
+    role
+  };
+
+  if (existing.authProvider === "local") {
+    const username = String(input.username || "").trim();
+    if (!username) {
+      throw createError("Username is required.", 400);
+    }
+    if (!/^[A-Za-z0-9._@-]{3,80}$/.test(username)) {
+      throw createError("Username must be 3-80 characters and can include letters, numbers, dots, underscores, at signs, and hyphens.", 400);
+    }
+    updateData.username = username;
+
+    updateData.mustChangePassword = Boolean(input.mustChangePassword);
+
+    const password = String(input.password || "");
+    if (password) {
+      if (password.length < 8) {
+        throw createError("Password must be at least 8 characters long.", 400);
+      }
+      updateData.passwordHash = await bcrypt.hash(password, 12);
+    }
+  }
+
+  try {
+    const user = await prisma.user.update({
+      where: { id },
+      data: updateData
+    });
+    return normalizeUser(user);
+  } catch (error) {
+    if (error?.code === "P2002") {
+      throw createError("A user with that username, email, or Microsoft object ID already exists.", 409);
+    }
+    if (error?.code === "P2025") {
+      throw createError("User not found.", 404);
+    }
+    throw error;
+  }
+}
+
+export async function deleteUser(id, currentUserId) {
+  if (id === currentUserId) {
+    throw createError("You cannot remove your own account while signed in.", 400);
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    throw createError("User not found.", 404);
+  }
+  if (existing.role === "administrator") {
+    await ensureAnotherAdministratorExists(existing.id);
+  }
+
+  await prisma.user.delete({ where: { id } });
+}
+
 function normalizeMappingInput(input = {}) {
   const groupName = String(input.groupName || "").trim();
   const groupId = String(input.groupId || "").trim() || null;

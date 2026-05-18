@@ -1692,6 +1692,7 @@ export function App() {
   const [favoriteScriptIds, setFavoriteScriptIds] = useState(() => getFavoriteScriptIds());
   const [companies, setCompanies] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeSettingsSection, setActiveSettingsSection] = useState("companies");
   const [companyDraft, setCompanyDraft] = useState({ name: "", tenant: "" });
   const [editingCompanyId, setEditingCompanyId] = useState("");
   const [editingCompanyDraft, setEditingCompanyDraft] = useState({ name: "", tenant: "" });
@@ -1714,6 +1715,11 @@ export function App() {
   const runPageSize = 12;
   const activeRunIsBusy = Boolean(activeRun && ["running", "queued", "canceling"].includes(activeRun.status));
   const adminUser = isAdministrator(authUser);
+  const settingsNavItems = [
+    { id: "companies", label: "Companies", description: `${companies.length} configured` },
+    { id: "microsoft", label: "Microsoft App Registration Configuration", description: authConfig?.enabled ? "Microsoft login enabled" : "Microsoft login disabled" },
+    { id: "users", label: "Users", description: "Local users and roles" }
+  ];
 
   const refreshSession = useCallback(async () => {
     const response = await apiFetch(`${apiBase}/auth/me`);
@@ -2099,6 +2105,7 @@ export function App() {
 
   const handleOpenSettings = () => {
     setSettingsOpen(true);
+    setActiveSettingsSection((current) => current || "companies");
     setSelectedScript(null);
     setFormValues({});
     setActiveRun(null);
@@ -2901,108 +2908,137 @@ export function App() {
 
       <div className="layout" style={{ "--sidebar-w": `${sidebarWidth}px` }}>
         <aside className="sidebar">
-          <div className="sidebar-header">
-            <div className="sidebar-label">Script Catalog</div>
-            <label className="sidebar-search">
-              <input
-                type="text"
-                placeholder="Search scripts..."
-                value={scriptSearch}
-                onChange={(event) => setScriptSearch(event.target.value)}
-              />
-              {scriptSearch ? (
-                <button type="button" className="sidebar-search-clear" onClick={() => setScriptSearch("")} aria-label="Clear script search">
-                  ×
-                </button>
-              ) : null}
-            </label>
-            <div className="sidebar-filter-group">
-              <div className="sidebar-filter-label">Filters</div>
-              <div className="chip-row">
-                <button
-                  type="button"
-                  className={favoritesOnly ? "filter-chip active" : "filter-chip"}
-                  onClick={() => setFavoritesOnly((current) => !current)}
-                >
-                  Favorites Only
-                </button>
-                <button type="button" className={modeFilter === "all" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("all")}>
-                  All Modes
-                </button>
-                <button type="button" className={modeFilter === "read-only" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("read-only")}>
-                  Read-only
-                </button>
-                <button type="button" className={modeFilter === "remediation" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("remediation")}>
-                  Remediation
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="tenant-list">
-            {sortedCategories.length === 0 ? (
-              <div className="empty-row">No scripts match your search.</div>
-            ) : null}
-            {sortedCategories.map((category) => {
-              const isExpanded = normalizedSearch ? true : Boolean(expandedCategories[category]);
-              return (
-                <div key={category} className="catalog-group">
-                  <button
-                    type="button"
-                    className={`catalog-group-header${isExpanded ? " expanded" : ""}`}
-                    onClick={() =>
-                      setExpandedCategories(isExpanded ? {} : { [category]: true })
-                    }
-                  >
-                    <span className="catalog-group-title">
-                      <CategoryIcon category={category} />
-                      <span>{category}</span>
-                    </span>
-                    <span className="catalog-group-count">{scriptGroups[category].length}</span>
-                    <span className="catalog-group-chevron">{isExpanded ? "▾" : "▸"}</span>
-                  </button>
-
-                  {isExpanded ? (
-                    <div className="catalog-group-items">
-                      {scriptGroups[category].map((script) => (
-                        <div
-                          key={script.id}
-                          className={selectedScript?.id === script.id ? "tenant-item active" : "tenant-item"}
-                          onClick={() => handleScriptSelect(script)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              handleScriptSelect(script);
-                            }
-                          }}
-                        >
-                          <div className="tenant-avatar">{script.name.slice(0, 2).toUpperCase()}</div>
-                          <div className="tenant-info">
-                            <div className="tenant-name">{script.name}</div>
-                            <div className="tenant-meta">{script.summary}</div>
-                            <div className="tenant-tags">
-                              <span className={`mini-pill ${script.mode === "remediation" ? "badge-crit" : "badge-ok"}`}>{script.mode}</span>
-                              <span className="mini-pill badge-neutral">{script.estimatedRuntimeMinutes} min</span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className={favoriteScriptIds.includes(script.id) ? "favorite-btn active" : "favorite-btn"}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleToggleFavorite(script.id);
-                            }}
-                          >
-                            Fav
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+          {settingsOpen ? (
+            <>
+              <div className="sidebar-header">
+                <div className="sidebar-label">Settings</div>
+                <div className="sidebar-filter-group">
+                  <div className="sidebar-filter-label">Configuration</div>
+                  <div className="settings-menu">
+                    {settingsNavItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={activeSettingsSection === item.id ? "settings-menu-item active" : "settings-menu-item"}
+                        onClick={() => setActiveSettingsSection(item.id)}
+                      >
+                        <span className="settings-menu-title">{item.label}</span>
+                        <span className="settings-menu-description">{item.description}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+              <div className="tenant-list settings-menu-body">
+                <div className="empty-row">Select a settings area to manage configuration. User and Microsoft role changes are administrator-only.</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="sidebar-header">
+                <div className="sidebar-label">Script Catalog</div>
+                <label className="sidebar-search">
+                  <input
+                    type="text"
+                    placeholder="Search scripts..."
+                    value={scriptSearch}
+                    onChange={(event) => setScriptSearch(event.target.value)}
+                  />
+                  {scriptSearch ? (
+                    <button type="button" className="sidebar-search-clear" onClick={() => setScriptSearch("")} aria-label="Clear script search">
+                      ×
+                    </button>
+                  ) : null}
+                </label>
+                <div className="sidebar-filter-group">
+                  <div className="sidebar-filter-label">Filters</div>
+                  <div className="chip-row">
+                    <button
+                      type="button"
+                      className={favoritesOnly ? "filter-chip active" : "filter-chip"}
+                      onClick={() => setFavoritesOnly((current) => !current)}
+                    >
+                      Favorites Only
+                    </button>
+                    <button type="button" className={modeFilter === "all" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("all")}>
+                      All Modes
+                    </button>
+                    <button type="button" className={modeFilter === "read-only" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("read-only")}>
+                      Read-only
+                    </button>
+                    <button type="button" className={modeFilter === "remediation" ? "filter-chip active" : "filter-chip"} onClick={() => setModeFilter("remediation")}>
+                      Remediation
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="tenant-list">
+                {sortedCategories.length === 0 ? (
+                  <div className="empty-row">No scripts match your search.</div>
+                ) : null}
+                {sortedCategories.map((category) => {
+                  const isExpanded = normalizedSearch ? true : Boolean(expandedCategories[category]);
+                  return (
+                    <div key={category} className="catalog-group">
+                      <button
+                        type="button"
+                        className={`catalog-group-header${isExpanded ? " expanded" : ""}`}
+                        onClick={() =>
+                          setExpandedCategories(isExpanded ? {} : { [category]: true })
+                        }
+                      >
+                        <span className="catalog-group-title">
+                          <CategoryIcon category={category} />
+                          <span>{category}</span>
+                        </span>
+                        <span className="catalog-group-count">{scriptGroups[category].length}</span>
+                        <span className="catalog-group-chevron">{isExpanded ? "▾" : "▸"}</span>
+                      </button>
+
+                      {isExpanded ? (
+                        <div className="catalog-group-items">
+                          {scriptGroups[category].map((script) => (
+                            <div
+                              key={script.id}
+                              className={selectedScript?.id === script.id ? "tenant-item active" : "tenant-item"}
+                              onClick={() => handleScriptSelect(script)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  handleScriptSelect(script);
+                                }
+                              }}
+                            >
+                              <div className="tenant-avatar">{script.name.slice(0, 2).toUpperCase()}</div>
+                              <div className="tenant-info">
+                                <div className="tenant-name">{script.name}</div>
+                                <div className="tenant-meta">{script.summary}</div>
+                                <div className="tenant-tags">
+                                  <span className={`mini-pill ${script.mode === "remediation" ? "badge-crit" : "badge-ok"}`}>{script.mode}</span>
+                                  <span className="mini-pill badge-neutral">{script.estimatedRuntimeMinutes} min</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className={favoriteScriptIds.includes(script.id) ? "favorite-btn active" : "favorite-btn"}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleToggleFavorite(script.id);
+                                }}
+                              >
+                                Fav
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           <div className="sidebar-footer">
             <div>{runTotal === 0 ? "No runs yet." : `${runTotal} tracked run${runTotal === 1 ? "" : "s"}`}</div>
@@ -3101,6 +3137,7 @@ export function App() {
               apiFetch={apiFetch}
               currentUser={authUser}
               isAdministrator={adminUser}
+              activeSettingsSection={activeSettingsSection}
               companies={companies}
               companyDraft={companyDraft}
               companyImportInputRef={companyImportInputRef}

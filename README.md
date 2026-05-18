@@ -232,11 +232,11 @@ The password is stored as a bcrypt hash, and the default account is marked for p
 
 Roles are enforced by the backend:
 
-- `administrator`: can run every script, edit company mappings, edit authentication settings, and manage Microsoft group role mappings.
+- `administrator`: can run every script, edit company mappings, edit authentication settings, manage local users, assign user roles, and manage Microsoft group role mappings.
 - `privileged_user`: can run every script, but cannot edit administrator-only settings.
 - `restricted_user`: can run only non-remediation scripts. Remediation and high-impact workflows are blocked with `403` even if called directly through the API.
 
-Local users authenticate with the username and password stored in PostgreSQL. Microsoft users authenticate in the SPA through MSAL, then the backend validates the Microsoft access token against Entra OpenID/JWKS metadata and creates a Toolbox session cookie.
+Local users authenticate with the username and password stored in PostgreSQL. Administrators can manage local users from Settings → `Users`, including creating users, editing profile details, assigning roles, resetting local passwords, and removing users. The app prevents administrators from removing their own signed-in account or leaving the toolbox without another administrator. Microsoft users authenticate in the SPA through MSAL, then the backend validates the Microsoft access token against Entra OpenID/JWKS metadata and creates a Toolbox session cookie. Microsoft user roles are assigned from Entra group role mappings when the user signs in.
 
 ### Microsoft Entra login setup
 
