@@ -2151,6 +2151,14 @@ tr:last-child td {
   flex-wrap: wrap;
 }
 
+.users-table-toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.users-search-field {
+  width: min(480px, 100%);
+}
+
 .users-table-scroll {
   margin-top: 0.75rem;
 }

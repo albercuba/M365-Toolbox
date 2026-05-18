@@ -58,10 +58,20 @@ export function SettingsPage({
   const [mappingDraft, setMappingDraft] = useState({ groupName: "", groupId: "", assignedRole: "restricted_user" });
   const [users, setUsers] = useState([]);
   const [userDraft, setUserDraft] = useState(emptyUserDraft);
+  const [userSearch, setUserSearch] = useState("");
   const [editingUserId, setEditingUserId] = useState("");
   const [editingUserDraft, setEditingUserDraft] = useState(emptyUserDraft);
   const [settingsError, setSettingsError] = useState("");
   const [settingsSuccess, setSettingsSuccess] = useState("");
+
+  useEffect(() => {
+    if (!settingsSuccess) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setSettingsSuccess(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [settingsSuccess]);
 
   useEffect(() => {
     if (!isAdministrator) {
@@ -476,6 +486,17 @@ export function SettingsPage({
     </>
   ) : null;
 
+  const normalizedUserSearch = userSearch.trim().toLowerCase();
+  const visibleUsers = normalizedUserSearch
+    ? users.filter((user) => [
+      user.displayName,
+      user.username,
+      user.email,
+      user.authProvider,
+      roleLabel(user.role)
+    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedUserSearch)))
+    : users;
+
   const renderUsersSection = () => (
     <div className="card">
       <div className="card-header">
@@ -483,6 +504,9 @@ export function SettingsPage({
         <span className="card-badge badge-neutral">{users.length} users</span>
       </div>
       <div className="card-body">
+        {settingsError ? <div className="flash flash-error soft">{settingsError}</div> : null}
+        {settingsSuccess ? <div className="flash flash-success soft">{settingsSuccess}</div> : null}
+
         <div className="manage-form-panel">
           <h4>Create Local User</h4>
           <form className="user-form" onSubmit={addUser}>
@@ -520,7 +544,14 @@ export function SettingsPage({
           </form>
         </div>
 
-        {users.length ? (
+        <div className="panel-toolbar users-table-toolbar">
+          <label className="form-field users-search-field">
+            <span>Search Users</span>
+            <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Search name, username, email, authentication, or role" />
+          </label>
+        </div>
+
+        {visibleUsers.length ? (
           <div className="table-scroll users-table-scroll">
             <table className="users-table">
               <thead>
@@ -536,7 +567,7 @@ export function SettingsPage({
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => {
+                {visibleUsers.map((user) => {
                   const isEditing = editingUserId === user.id;
                   const isLocal = user.authProvider === "local";
                   const displayLabel = user.displayName || user.username;
@@ -626,7 +657,7 @@ export function SettingsPage({
               </tbody>
             </table>
           </div>
-        ) : <div className="empty-row">No users are configured yet.</div>}
+        ) : <div className="empty-row">{users.length ? "No users match your search." : "No users are configured yet."}</div>}
       </div>
     </div>
   );
@@ -634,8 +665,8 @@ export function SettingsPage({
   return (
     <div className="dash-page settings-page">
       <div className="sections">
-        {settingsError ? <div className="flash flash-error soft">{settingsError}</div> : null}
-        {settingsSuccess ? <div className="flash soft">{settingsSuccess}</div> : null}
+        {selectedSection !== "users" && settingsError ? <div className="flash flash-error soft">{settingsError}</div> : null}
+        {selectedSection !== "users" && settingsSuccess ? <div className="flash flash-success soft">{settingsSuccess}</div> : null}
 
         {isAdministrator ? (
           <>
