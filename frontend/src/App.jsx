@@ -1757,6 +1757,10 @@ export function App() {
             }
             setSettingsOpen(false);
             setActiveSettingsSection("companies");
+            setScriptSearch("");
+            setFavoritesOnly(false);
+            setModeFilter("all");
+            setExpandedCategories({});
             setSelectedScript(null);
             setActiveRun(null);
             setArtifacts([]);
@@ -1795,6 +1799,10 @@ export function App() {
       }
       setSettingsOpen(false);
       setActiveSettingsSection("companies");
+      setScriptSearch("");
+      setFavoritesOnly(false);
+      setModeFilter("all");
+      setExpandedCategories({});
       setSelectedScript(null);
       setActiveRun(null);
       setArtifacts([]);
@@ -1832,6 +1840,10 @@ export function App() {
     setAuthUser(null);
     setSettingsOpen(false);
     setActiveSettingsSection("companies");
+    setScriptSearch("");
+    setFavoritesOnly(false);
+    setModeFilter("all");
+    setExpandedCategories({});
     setSelectedScript(null);
     setActiveRun(null);
     setArtifacts([]);
@@ -2993,7 +3005,7 @@ export function App() {
               </div>
               <div className="tenant-list">
                 {sortedCategories.length === 0 ? (
-                  <div className="empty-row">No scripts match your search.</div>
+                  <div className="empty-row">No scripts match your current filters for the {getRoleLabel(authUser.role)} role.</div>
                 ) : null}
                 {sortedCategories.map((category) => {
                   const isExpanded = normalizedSearch ? true : Boolean(expandedCategories[category]);
