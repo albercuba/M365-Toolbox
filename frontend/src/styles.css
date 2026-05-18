@@ -1855,7 +1855,7 @@ textarea {
 }
 
 .approval-banner {
-  margin-bottom: 0.85rem;
+  margin: 0.80rem;
   padding: 0.65rem 0.8rem;
   border: 1px solid rgba(215, 138, 28, 0.25);
   border-radius: var(--r);
