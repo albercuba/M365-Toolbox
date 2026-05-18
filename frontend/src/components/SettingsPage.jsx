@@ -520,82 +520,101 @@ export function SettingsPage({
           </form>
         </div>
 
-        <div className="company-list">
-          {users.map((user) => {
-            const isEditing = editingUserId === user.id;
-            const isLocal = user.authProvider === "local";
-            return (
-              <div key={user.id} className={`company-item user-item${isEditing ? " editing" : ""}`}>
-                <div className="tenant-avatar">{(user.displayName || user.username).slice(0, 2).toUpperCase()}</div>
-                {isEditing ? (
-                  <div className="user-edit-grid">
-                    <label className="form-field">
-                      <span>Username</span>
-                      <input
-                        value={editingUserDraft.username}
-                        disabled={!isLocal}
-                        onChange={(event) => setEditingUserDraft((current) => ({ ...current, username: event.target.value }))}
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Display Name</span>
-                      <input value={editingUserDraft.displayName} onChange={(event) => setEditingUserDraft((current) => ({ ...current, displayName: event.target.value }))} />
-                    </label>
-                    <label className="form-field">
-                      <span>Email</span>
-                      <input type="email" value={editingUserDraft.email} onChange={(event) => setEditingUserDraft((current) => ({ ...current, email: event.target.value }))} />
-                    </label>
-                    <label className="form-field">
-                      <span>Role</span>
-                      <select disabled={!isLocal} value={editingUserDraft.role} onChange={(event) => setEditingUserDraft((current) => ({ ...current, role: event.target.value }))}>
-                        {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
-                      </select>
-                    </label>
-                    {isLocal ? (
-                      <>
-                        <label className="form-field">
-                          <span>New Password</span>
-                          <input type="password" value={editingUserDraft.password} onChange={(event) => setEditingUserDraft((current) => ({ ...current, password: event.target.value }))} placeholder="Leave blank to keep current" autoComplete="new-password" />
-                        </label>
-                        <label className="checkbox-field user-form-checkbox">
+        {users.length ? (
+          <div className="table-scroll users-table-scroll">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>Display name</th>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Authentication</th>
+                  <th>Local role</th>
+                  <th>Microsoft role</th>
+                  <th>Password change required</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => {
+                  const isEditing = editingUserId === user.id;
+                  const isLocal = user.authProvider === "local";
+                  const displayLabel = user.displayName || user.username;
+
+                  return (
+                    <tr key={user.id}>
+                      <td>
+                        {isEditing ? (
+                          <input className="table-input" value={editingUserDraft.displayName} onChange={(event) => setEditingUserDraft((current) => ({ ...current, displayName: event.target.value }))} />
+                        ) : displayLabel}
+                      </td>
+                      <td>
+                        {isEditing ? (
                           <input
-                            type="checkbox"
-                            checked={editingUserDraft.mustChangePassword}
-                            onChange={(event) => setEditingUserDraft((current) => ({ ...current, mustChangePassword: event.target.checked }))}
+                            className="table-input"
+                            value={editingUserDraft.username}
+                            disabled={!isLocal}
+                            onChange={(event) => setEditingUserDraft((current) => ({ ...current, username: event.target.value }))}
                           />
-                          <span>Require password change</span>
-                        </label>
-                      </>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="tenant-info">
-                    <div className="tenant-name">{user.displayName || user.username}</div>
-                    <div className="tenant-meta">{user.username}{user.email ? ` • ${user.email}` : ""}</div>
-                    <div className="tenant-tags">
-                      <span className="mini-pill badge-neutral">{user.authProvider}</span>
-                      <span className="mini-pill badge-ok">{roleLabel(user.role)}</span>
-                      {user.mustChangePassword ? <span className="mini-pill badge-warn">password change required</span> : null}
-                      {user.authProvider === "microsoft" ? <span className="mini-pill badge-neutral">role from Entra mapping</span> : null}
-                    </div>
-                  </div>
-                )}
-                <div className="company-actions">
-                  {isEditing ? (
-                    <>
-                      <button type="button" className="filter-btn active-all" onClick={() => saveUser(user.id)}>Save</button>
-                      <button type="button" className="filter-btn" onClick={cancelEditUser}>Cancel</button>
-                    </>
-                  ) : (
-                    <button type="button" className="filter-btn" onClick={() => startEditUser(user)}>Edit</button>
-                  )}
-                  <button type="button" className="filter-btn destructive" disabled={user.id === currentUser.id} onClick={() => removeUser(user.id)}>Remove</button>
-                </div>
-              </div>
-            );
-          })}
-          {!users.length ? <div className="empty-row">No users are configured yet.</div> : null}
-        </div>
+                        ) : user.username}
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <input className="table-input" type="email" value={editingUserDraft.email} onChange={(event) => setEditingUserDraft((current) => ({ ...current, email: event.target.value }))} />
+                        ) : user.email || "—"}
+                      </td>
+                      <td><span className="mini-pill badge-neutral">{user.authProvider}</span></td>
+                      <td>
+                        {isEditing && isLocal ? (
+                          <select className="table-select" value={editingUserDraft.role} onChange={(event) => setEditingUserDraft((current) => ({ ...current, role: event.target.value }))}>
+                            {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
+                          </select>
+                        ) : isLocal ? <span className="mini-pill badge-ok">{roleLabel(user.role)}</span> : "—"}
+                      </td>
+                      <td>{user.authProvider === "microsoft" ? <span className="mini-pill badge-ok">{roleLabel(user.role)}</span> : "—"}</td>
+                      <td>
+                        {isEditing && isLocal ? (
+                          <label className="table-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={editingUserDraft.mustChangePassword}
+                              onChange={(event) => setEditingUserDraft((current) => ({ ...current, mustChangePassword: event.target.checked }))}
+                            />
+                            <span>{editingUserDraft.mustChangePassword ? "Yes" : "No"}</span>
+                          </label>
+                        ) : user.mustChangePassword ? <span className="mini-pill badge-warn">Yes</span> : "No"}
+                        {isEditing && isLocal ? (
+                          <input className="table-input table-password-input" type="password" value={editingUserDraft.password} onChange={(event) => setEditingUserDraft((current) => ({ ...current, password: event.target.value }))} placeholder="New password" autoComplete="new-password" />
+                        ) : null}
+                      </td>
+                      <td>
+                        <div className="table-actions icon-actions">
+                          {isEditing ? (
+                            <>
+                              <button type="button" className="icon-action-btn success" onClick={() => saveUser(user.id)} aria-label={`Save ${displayLabel}`} title="Save">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.55 17.2 4.8 12.45l1.4-1.4 3.35 3.35 8.25-8.25 1.4 1.4Z" fill="currentColor" /></svg>
+                              </button>
+                              <button type="button" className="icon-action-btn" onClick={cancelEditUser} aria-label={`Cancel editing ${displayLabel}`} title="Cancel">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 19-1.4-1.4 5.6-5.6L5 6.4 6.4 5l5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6Z" fill="currentColor" /></svg>
+                              </button>
+                            </>
+                          ) : (
+                            <button type="button" className="icon-action-btn" onClick={() => startEditUser(user)} aria-label={`Edit ${displayLabel}`} title="Edit">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h1.4l9.85-9.85-1.4-1.4L5 17.6Zm-2 2v-4.25L16.25 3.5a2.12 2.12 0 0 1 3 0l1.25 1.25a2.12 2.12 0 0 1 0 3L7.25 21Zm14.65-13.25 1.25-1.25-1.4-1.4-1.25 1.25Z" fill="currentColor" /></svg>
+                            </button>
+                          )}
+                          <button type="button" className="icon-action-btn destructive" disabled={user.id === currentUser.id} onClick={() => removeUser(user.id)} aria-label={`Remove ${displayLabel}`} title="Remove">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21q-.82 0-1.41-.59A1.92 1.92 0 0 1 5 19V7H4V5h5V4h6v1h5v2h-1v12q0 .82-.59 1.41A1.92 1.92 0 0 1 17 21Zm2-4h2V9H9Zm4 0h2V9h-2Z" fill="currentColor" /></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : <div className="empty-row">No users are configured yet.</div>}
       </div>
     </div>
   );
