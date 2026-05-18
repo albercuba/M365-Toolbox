@@ -636,7 +636,7 @@ export function SettingsPage({
             <li>Enter `Frontend Client ID` using the frontend SPA application client ID.</li>
             <li>Enter `Backend API Audience` using the backend API application client ID.</li>
             <li>Leave `Authority URL` blank unless a custom authority is required.</li>
-            <li>When `Authority URL` is blank, Toolbox uses `https://login.microsoftonline.com/{tenantId}`.</li>
+            <li>When `Authority URL` is blank, Toolbox uses {"`https://login.microsoftonline.com/{tenantId}`"}.</li>
             <li>Add at least one Entra Group Role Mapping before enabling Microsoft login.</li>
             <li>Prefer entering the group object ID.</li>
             <li>Map each group to one of `administrator`, `privileged_user`, or `restricted_user`.</li>
