@@ -3126,7 +3126,7 @@ export function App() {
             <div className="approval-banner">
               {adminUser
                 ? "This local account is marked for password change. Open Settings → Users to update the password before running production workflows."
-                : "This local account is marked for password change. Ask an administrator to update your password from Settings → Users."}
+                : "This local account is marked for password change. Open Settings → Account Security to update your password."}
             </div>
           ) : null}
           {activeRunBannerVisible ? (
