@@ -477,6 +477,74 @@ Available compose files:
 - `docker-compose.coolify.yml`
   Platform-friendly variant that uses a named Docker volume for report output and keeps the backend internal
 
+### Environment file setup
+
+For production or server deployments, provide a `.env` file for Docker Compose. Docker Compose uses it for substitutions such as `${ARTIFACT_TOKEN_SECRET}`, `${AUTH_SESSION_SECRET}`, `${FRONTEND_ORIGIN}`, and `${FRONTEND_PORT}`.
+
+The `.env` file is not created automatically. Create it once per deployment environment and include the values below.
+
+Paste this template into `.env` and replace the example values:
+
+```dotenv
+FRONTEND_ORIGIN=https://toolbox.example.com
+FRONTEND_PORT=8080
+ARTIFACT_TOKEN_SECRET=replace-with-a-long-random-secret
+AUTH_SESSION_SECRET=replace-with-another-long-random-secret
+# DATABASE_URL=postgresql://m365:m365password@postgres:5432/m365_toolbox
+```
+
+Minimum required values for `docker-compose.prod.yml` and `docker-compose.coolify.yml`:
+
+- `ARTIFACT_TOKEN_SECRET`
+- `AUTH_SESSION_SECRET`
+
+Recommended production values:
+
+- `FRONTEND_ORIGIN`
+- `FRONTEND_PORT`
+- `ARTIFACT_TOKEN_SECRET`
+- `AUTH_SESSION_SECRET`
+
+Leave `DATABASE_URL` commented unless you are using an external PostgreSQL database. The bundled PostgreSQL service works with the default connection string already defined in the compose files.
+
+Generate strong secrets with OpenSSL. Run this command twice and use a different value for each secret:
+
+```bash
+openssl rand -base64 48
+```
+
+Example production `.env` after replacing placeholders:
+
+```dotenv
+FRONTEND_ORIGIN=https://m365toolbox.example.com
+FRONTEND_PORT=8080
+ARTIFACT_TOKEN_SECRET=generated-artifact-secret-goes-here
+AUTH_SESSION_SECRET=generated-session-secret-goes-here
+```
+
+Variable notes:
+
+- `FRONTEND_ORIGIN`
+  Public URL used by backend CORS validation. Set this to the exact browser-facing origin, for example `https://toolbox.example.com`. Do not include a path.
+- `FRONTEND_PORT`
+  Host port mapped to the frontend container. Defaults to `8080` in production compose files when omitted.
+- `ARTIFACT_TOKEN_SECRET`
+  Required in production. Use a long random value. It signs artifact, HTML preview, and ZIP bundle links.
+- `AUTH_SESSION_SECRET`
+  Required in production. Use a different long random value for HTTP-only login sessions.
+- `DATABASE_URL`
+  Optional. Leave commented when using the bundled PostgreSQL service. Set it only when using an external or platform-managed database.
+
+Verify Docker Compose can read the file:
+
+```bash
+docker compose -f docker-compose.prod.yml config
+```
+
+If the command prints the fully rendered Compose configuration without `Set ARTIFACT_TOKEN_SECRET` or `Set AUTH_SESSION_SECRET` errors, the `.env` file is being loaded correctly.
+
+Keep `.env` private. Do not commit it, paste it into tickets, or share it in logs.
+
 Default deployment steps:
 
 ```powershell

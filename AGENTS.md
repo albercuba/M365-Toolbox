@@ -30,7 +30,8 @@ Frontend
 - Treat this as an admin/security operations tool. Be conservative with remediation workflows, tenant data, credentials, device-code auth, and generated reports.
 - Favor read-only/reporting behavior unless a workflow is explicitly designed as remediation and requires approval.
 - Update documentation when changing behavior, environment variables, ports, script catalog metadata, deployment steps, or operator-facing UX.
-- When asked for a commit comment/message, use Conventional Commits style and include the type prefix, such as `fix:`, `feat:`, `docs:`, `test:`, `refactor:`, `chore:`, or `ci:`.
+- Always include a suggested commit comment/message after making code or documentation changes.
+- Use Conventional Commits style for commit comments/messages and include the type prefix, such as `fix:`, `feat:`, `docs:`, `test:`, `refactor:`, `chore:`, or `ci:`.
 
 ## Repository structure
 
