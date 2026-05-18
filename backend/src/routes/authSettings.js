@@ -15,7 +15,7 @@ import {
 
 export const authSettingsRouter = Router();
 
-authSettingsRouter.use(requireRole("administrator"));
+authSettingsRouter.use("/settings", requireRole("administrator"));
 
 authSettingsRouter.get("/settings/auth/microsoft", async (_req, res, next) => {
   try {
