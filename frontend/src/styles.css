@@ -2212,8 +2212,21 @@ tr:last-child td {
   padding-right: 2rem;
 }
 
-.table-password-input {
-  margin-top: 0.4rem;
+.user-edit-details-row td {
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+}
+
+.user-edit-details-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) minmax(240px, 1fr);
+  gap: 0.8rem;
+  align-items: end;
+  padding: 0.35rem 0;
+}
+
+.user-password-reset-field {
+  max-width: 360px;
 }
 
 .table-checkbox {

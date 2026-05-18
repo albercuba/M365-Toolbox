@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 const ROLE_OPTIONS = ["administrator", "privileged_user", "restricted_user"];
 const SETTINGS_SECTIONS = new Set(["companies", "microsoft", "users"]);
@@ -542,7 +542,8 @@ export function SettingsPage({
                   const displayLabel = user.displayName || user.username;
 
                   return (
-                    <tr key={user.id}>
+                    <Fragment key={user.id}>
+                    <tr>
                       <td>
                         {isEditing ? (
                           <input className="table-input" value={editingUserDraft.displayName} onChange={(event) => setEditingUserDraft((current) => ({ ...current, displayName: event.target.value }))} />
@@ -583,9 +584,6 @@ export function SettingsPage({
                             <span>{editingUserDraft.mustChangePassword ? "Yes" : "No"}</span>
                           </label>
                         ) : user.mustChangePassword ? <span className="mini-pill badge-warn">Yes</span> : "No"}
-                        {isEditing && isLocal ? (
-                          <input className="table-input table-password-input" type="password" value={editingUserDraft.password} onChange={(event) => setEditingUserDraft((current) => ({ ...current, password: event.target.value }))} placeholder="New password" autoComplete="new-password" />
-                        ) : null}
                       </td>
                       <td>
                         <div className="table-actions icon-actions">
@@ -609,6 +607,20 @@ export function SettingsPage({
                         </div>
                       </td>
                     </tr>
+                    {isEditing && isLocal ? (
+                      <tr className="user-edit-details-row">
+                        <td colSpan={8}>
+                          <div className="user-edit-details-panel">
+                            <label className="form-field user-password-reset-field">
+                              <span>New Password</span>
+                              <input className="table-input" type="password" value={editingUserDraft.password} onChange={(event) => setEditingUserDraft((current) => ({ ...current, password: event.target.value }))} placeholder="Leave blank to keep current password" autoComplete="new-password" />
+                            </label>
+                            <div className="empty-row compact">Password reset is optional. Leave this field blank when you only want to update profile details or role.</div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>
