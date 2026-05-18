@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 
 const ROLE_OPTIONS = ["administrator", "privileged_user", "restricted_user"];
-const SETTINGS_SECTIONS = new Set(["companies", "microsoft", "users"]);
+const SETTINGS_SECTIONS = new Set(["account", "companies", "microsoft", "users"]);
 
 function roleLabel(role) {
   return role.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
@@ -52,7 +52,8 @@ export function SettingsPage({
   setEditingCompanyDraft,
   onSessionRefresh
 }) {
-  const selectedSection = SETTINGS_SECTIONS.has(activeSettingsSection) ? activeSettingsSection : "companies";
+  const selectedSection = SETTINGS_SECTIONS.has(activeSettingsSection) ? activeSettingsSection : isAdministrator ? "companies" : "account";
+  const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "" });
   const [authConfig, setAuthConfig] = useState(null);
   const [mappings, setMappings] = useState([]);
   const [mappingDraft, setMappingDraft] = useState({ groupName: "", groupId: "", assignedRole: "restricted_user" });
@@ -102,7 +103,74 @@ export function SettingsPage({
     loadAuthSettings();
   }, [apiBase, apiFetch, isAdministrator]);
 
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+    setSettingsError("");
+    setSettingsSuccess("");
+    try {
+      const response = await apiFetch(`${apiBase}/auth/change-password`, {
+        method: "POST",
+        body: JSON.stringify(passwordDraft)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to change password.");
+      }
+      setPasswordDraft({ currentPassword: "", newPassword: "" });
+      await onSessionRefresh?.();
+      setSettingsSuccess("Password changed.");
+    } catch (error) {
+      setSettingsError(error.message);
+    }
+  };
 
+  const renderAccountSection = () => (
+    <div className="card">
+      <div className="card-header">
+        <span className="card-title">Account Security</span>
+        <span className="card-badge badge-neutral">{roleLabel(currentUser.role)}</span>
+      </div>
+      <div className="card-body">
+        {settingsError ? <div className="flash flash-error soft">{settingsError}</div> : null}
+        {settingsSuccess ? <div className="flash flash-success soft">{settingsSuccess}</div> : null}
+        {currentUser.authProvider === "local" ? (
+          <form className="settings-row" onSubmit={handleChangePassword}>
+            <div className="quick-summary-grid">
+              <div className="quick-summary-item">
+                <div className="method-label">User</div>
+                <div className="method-count">{currentUser.displayName || currentUser.username}</div>
+              </div>
+              <div className="quick-summary-item">
+                <div className="method-label">Authentication</div>
+                <div className="method-count">{currentUser.authProvider}</div>
+              </div>
+            </div>
+            <label className="form-field">
+              <span>Current Password</span>
+              <input
+                type="password"
+                value={passwordDraft.currentPassword}
+                onChange={(event) => setPasswordDraft((current) => ({ ...current, currentPassword: event.target.value }))}
+                autoComplete="current-password"
+              />
+            </label>
+            <label className="form-field">
+              <span>New Password</span>
+              <input
+                type="password"
+                value={passwordDraft.newPassword}
+                onChange={(event) => setPasswordDraft((current) => ({ ...current, newPassword: event.target.value }))}
+                autoComplete="new-password"
+              />
+            </label>
+            <button type="submit" className="add-btn">Change Password</button>
+          </form>
+        ) : (
+          <div className="empty-row">Password changes for Microsoft users are managed in Microsoft Entra.</div>
+        )}
+      </div>
+    </div>
+  );
 
   const saveMicrosoftConfig = async (event) => {
     event.preventDefault();
@@ -665,16 +733,17 @@ export function SettingsPage({
   return (
     <div className="dash-page settings-page">
       <div className="sections">
-        {selectedSection !== "users" && settingsError ? <div className="flash flash-error soft">{settingsError}</div> : null}
-        {selectedSection !== "users" && settingsSuccess ? <div className="flash flash-success soft">{settingsSuccess}</div> : null}
+        {selectedSection !== "users" && selectedSection !== "account" && settingsError ? <div className="flash flash-error soft">{settingsError}</div> : null}
+        {selectedSection !== "users" && selectedSection !== "account" && settingsSuccess ? <div className="flash flash-success soft">{settingsSuccess}</div> : null}
 
+        {selectedSection === "account" ? renderAccountSection() : null}
         {isAdministrator ? (
           <>
             {selectedSection === "companies" ? renderCompaniesSection() : null}
             {selectedSection === "microsoft" ? renderMicrosoftSection() : null}
             {selectedSection === "users" ? renderUsersSection() : null}
           </>
-        ) : (
+        ) : selectedSection !== "account" ? (
           <div className="card">
             <div className="card-header">
               <span className="card-title">Settings</span>
@@ -684,7 +753,7 @@ export function SettingsPage({
               <div className="empty-row">Administrator-only settings are hidden for this role.</div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

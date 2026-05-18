@@ -1715,11 +1715,15 @@ export function App() {
   const runPageSize = 12;
   const activeRunIsBusy = Boolean(activeRun && ["running", "queued", "canceling"].includes(activeRun.status));
   const adminUser = isAdministrator(authUser);
-  const settingsNavItems = [
-    { id: "companies", label: "Companies", description: `${companies.length} configured` },
-    { id: "microsoft", label: "Microsoft Integration", description: authConfig?.enabled ? "Microsoft login enabled" : "Microsoft login disabled" },
-    { id: "users", label: "Users", description: "Local users and roles" }
-  ];
+  const settingsNavItems = adminUser
+    ? [
+      { id: "companies", label: "Companies", description: `${companies.length} configured` },
+      { id: "microsoft", label: "Microsoft Integration", description: authConfig?.enabled ? "Microsoft login enabled" : "Microsoft login disabled" },
+      { id: "users", label: "Users", description: "Local users and roles" }
+    ]
+    : authUser?.authProvider === "local"
+      ? [{ id: "account", label: "Account Security", description: "Change your password" }]
+      : [];
 
   const refreshSession = useCallback(async () => {
     const response = await apiFetch(`${apiBase}/auth/me`);
@@ -2138,7 +2142,7 @@ export function App() {
 
   const handleOpenSettings = () => {
     setSettingsOpen(true);
-    setActiveSettingsSection((current) => current || "companies");
+    setActiveSettingsSection((current) => settingsNavItems.some((item) => item.id === current) ? current : settingsNavItems[0]?.id || "companies");
     setSelectedScript(null);
     setFormValues({});
     setActiveRun(null);
@@ -3089,7 +3093,7 @@ export function App() {
                 </svg>
                 <span>GitHub</span>
               </a>
-              {adminUser ? (
+              {settingsNavItems.length ? (
                 <button
                   type="button"
                   className={`sidebar-repo-link sidebar-settings-link${settingsOpen ? " active" : ""}`}
