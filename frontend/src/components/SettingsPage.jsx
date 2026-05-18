@@ -525,28 +525,105 @@ export function SettingsPage({
         <div className="manage-form-panel">
           <h4>1. Create the backend API app registration</h4>
           <ol className="settings-instruction-list">
-            <li>In Microsoft Entra admin center, create an app registration for the Toolbox backend API.</li>
-            <li>Expose an API and set the Application ID URI to `api://&lt;backend-api-client-id&gt;`.</li>
-            <li>Add a delegated scope named `access_as_user` for signed-in Toolbox operators.</li>
-            <li>Copy the backend API application/client ID into `Backend API Audience` in Toolbox.</li>
+            <li>Go to Microsoft Entra admin center.</li>
+            <li>Open App registrations.</li>
+            <li>Create a new registration for the Toolbox backend API.</li>
+            <li>Use single-tenant unless this deployment intentionally supports multiple tenants.</li>
+            <li>Do not configure a redirect URI for this backend API registration.</li>
+            <li>Copy the Application client ID. This value is used later in Toolbox as `Backend API Audience`.</li>
+            <li>Copy the Directory tenant ID. This value is used later in Toolbox as `Tenant ID`.</li>
           </ol>
         </div>
         <div className="manage-form-panel">
-          <h4>2. Create the frontend SPA app registration</h4>
+          <h4>2. Expose the backend API scope</h4>
           <ol className="settings-instruction-list">
-            <li>Create a second app registration for the Toolbox frontend SPA.</li>
-            <li>Add a Single-page application redirect URI that matches the Toolbox browser origin shown above.</li>
-            <li>Grant the frontend permission to call the backend API scope.</li>
-            <li>Copy the frontend application/client ID into `Frontend Client ID` in Toolbox.</li>
+            <li>Open the backend API app registration.</li>
+            <li>Go to Expose an API.</li>
+            <li>Set the Application ID URI to `api://&lt;backend-api-client-id&gt;`.</li>
+            <li>Add a delegated scope named `access_as_user`.</li>
+            <li>Toolbox expects the frontend to request `api://&lt;backend-api-client-id&gt;/access_as_user`.</li>
+            <li>Save the scope.</li>
           </ol>
         </div>
         <div className="manage-form-panel">
-          <h4>3. Configure roles and enable sign-in</h4>
+          <h4>3. Configure group claims</h4>
           <ol className="settings-instruction-list">
-            <li>Copy your Entra tenant ID into `Tenant ID`.</li>
-            <li>Add Entra group role mappings in Toolbox. Prefer group object IDs over display names.</li>
-            <li>Assign operators to the Entra groups that map to `administrator`, `privileged_user`, or `restricted_user`.</li>
-            <li>Enable Microsoft login, save the configuration, and test sign-in with a non-break-glass account.</li>
+            <li>Open the backend API app registration.</li>
+            <li>Go to Token configuration.</li>
+            <li>Add a groups claim.</li>
+            <li>Include the groups claim in access tokens.</li>
+            <li>Prefer group object IDs instead of display names.</li>
+            <li>Use security groups or groups assigned to the application where possible.</li>
+            <li>Users in too many groups can trigger group overage claims. The Toolbox backend rejects tokens with group overage because it cannot safely map those tokens to a Toolbox role.</li>
+          </ol>
+        </div>
+        <div className="manage-form-panel">
+          <h4>4. Create the frontend SPA app registration</h4>
+          <ol className="settings-instruction-list">
+            <li>Create a second app registration for the Toolbox frontend.</li>
+            <li>Use the same tenant as the backend API app registration.</li>
+            <li>Copy the Application client ID. This value is used later in Toolbox as `Frontend Client ID`.</li>
+            <li>Go to Authentication.</li>
+            <li>Add a Single-page application platform.</li>
+            <li>Add the redirect URI that exactly matches the Toolbox browser origin shown in this Microsoft Integration page.</li>
+            <li>Example production origin: `https://toolbox.example.com`.</li>
+            <li>Example local development origin: `http://localhost:5173`, if that is the local browser origin.</li>
+            <li>Do not append `/api`, `/auth`, or another path unless the actual browser origin includes it.</li>
+            <li>Do not create a client secret for the SPA registration. This integration uses SPA redirect login through MSAL.</li>
+          </ol>
+        </div>
+        <div className="manage-form-panel">
+          <h4>5. Grant frontend permission to call the backend API</h4>
+          <ol className="settings-instruction-list">
+            <li>Open the frontend SPA app registration.</li>
+            <li>Go to API permissions.</li>
+            <li>Add a permission.</li>
+            <li>Choose My APIs.</li>
+            <li>Select the Toolbox backend API app registration.</li>
+            <li>Select the delegated permission `access_as_user`.</li>
+            <li>Add the permission.</li>
+            <li>Grant admin consent if the tenant requires it.</li>
+          </ol>
+        </div>
+        <div className="manage-form-panel">
+          <h4>6. Configure Toolbox</h4>
+          <ol className="settings-instruction-list">
+            <li>Sign in to Toolbox as a local administrator.</li>
+            <li>Open Settings.</li>
+            <li>Open Microsoft Integration.</li>
+            <li>Enter `Tenant ID` using the Directory tenant ID.</li>
+            <li>Enter `Frontend Client ID` using the frontend SPA application client ID.</li>
+            <li>Enter `Backend API Audience` using the backend API application client ID.</li>
+            <li>Leave `Authority URL` blank unless a custom authority is required.</li>
+            <li>When `Authority URL` is blank, Toolbox uses `https://login.microsoftonline.com/{tenantId}`.</li>
+            <li>Add at least one Entra Group Role Mapping before enabling Microsoft login.</li>
+            <li>Prefer entering the group object ID.</li>
+            <li>Map each group to one of `administrator`, `privileged_user`, or `restricted_user`.</li>
+            <li>Make sure each Microsoft user is a member of at least one mapped Entra group.</li>
+            <li>Enable Microsoft login.</li>
+            <li>Save the Microsoft configuration.</li>
+          </ol>
+        </div>
+        <div className="manage-form-panel">
+          <h4>7. Test sign-in</h4>
+          <ol className="settings-instruction-list">
+            <li>Sign out of Toolbox.</li>
+            <li>Click `Sign in with Microsoft`.</li>
+            <li>Complete the Microsoft login flow.</li>
+            <li>Confirm the user lands back in Toolbox.</li>
+            <li>Confirm the assigned Toolbox role matches the Entra group mapping.</li>
+            <li>Test first with a non-break-glass account.</li>
+          </ol>
+        </div>
+        <div className="manage-form-panel">
+          <h4>8. Troubleshooting</h4>
+          <ol className="settings-instruction-list">
+            <li>If the Microsoft button is disabled, verify Microsoft login is enabled and the required IDs are saved.</li>
+            <li>If the app says Microsoft login is not fully configured, verify `Tenant ID`, `Frontend Client ID`, and `Backend API Audience`.</li>
+            <li>If token validation fails, verify the backend API client ID matches `Backend API Audience`, the exposed scope is `access_as_user`, and the frontend app has permission to that scope.</li>
+            <li>If login succeeds but access is denied, verify the user belongs to a mapped Entra group and the group object ID matches the mapping.</li>
+            <li>If group overage appears, reduce emitted groups by assigning groups to the application or by using a smaller security group set.</li>
+            <li>If redirect fails, verify the SPA redirect URI exactly matches `window.location.origin` for the deployed Toolbox URL.</li>
           </ol>
         </div>
       </div>
