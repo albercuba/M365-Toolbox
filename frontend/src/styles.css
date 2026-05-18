@@ -271,6 +271,10 @@ textarea {
   font-family: var(--sans);
 }
 
+.login-heading {
+  text-align: center;
+}
+
 .login-panel h1 {
   margin: 0.2rem 0 0;
   font-family: var(--mono);

@@ -1615,7 +1615,7 @@ function LoginPage({
           onLocalLogin(username, password);
         }}
       >
-        <div>
+        <div className="login-heading">
           <div className="login-kicker">M365 Toolbox</div>
           <h1>Sign in</h1>
           <p>Use a local Toolbox account or Microsoft Entra ID to continue.</p>
