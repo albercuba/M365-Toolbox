@@ -80,23 +80,49 @@ export function SettingsPage({
     }
 
     const loadAuthSettings = async () => {
-      try {
-        const [configResponse, mappingsResponse, usersResponse] = await Promise.all([
-          apiFetch(`${apiBase}/settings/auth/microsoft`),
-          apiFetch(`${apiBase}/settings/auth/group-role-mappings`),
-          apiFetch(`${apiBase}/settings/users`)
-        ]);
-        const configData = await configResponse.json();
-        const mappingsData = await mappingsResponse.json();
-        const usersData = await usersResponse.json();
-        if (!configResponse.ok) throw new Error(configData.message || "Failed to load Microsoft configuration.");
-        if (!mappingsResponse.ok) throw new Error(mappingsData.message || "Failed to load group mappings.");
-        if (!usersResponse.ok) throw new Error(usersData.message || "Failed to load users.");
-        setAuthConfig(configData);
-        setMappings(mappingsData);
-        setUsers(usersData);
-      } catch (error) {
-        setSettingsError(error.message);
+      const errors = [];
+
+      const [configResult, mappingsResult, usersResult] = await Promise.allSettled([
+        apiFetch(`${apiBase}/settings/auth/microsoft`),
+        apiFetch(`${apiBase}/settings/auth/group-role-mappings`),
+        apiFetch(`${apiBase}/settings/users`)
+      ]);
+
+      if (configResult.status === "fulfilled") {
+        const configData = await configResult.value.json();
+        if (configResult.value.ok) {
+          setAuthConfig(configData);
+        } else {
+          errors.push(configData.message || "Failed to load Microsoft configuration.");
+        }
+      } else {
+        errors.push(configResult.reason?.message || "Failed to load Microsoft configuration.");
+      }
+
+      if (mappingsResult.status === "fulfilled") {
+        const mappingsData = await mappingsResult.value.json();
+        if (mappingsResult.value.ok) {
+          setMappings(mappingsData);
+        } else {
+          errors.push(mappingsData.message || "Failed to load group mappings.");
+        }
+      } else {
+        errors.push(mappingsResult.reason?.message || "Failed to load group mappings.");
+      }
+
+      if (usersResult.status === "fulfilled") {
+        const usersData = await usersResult.value.json();
+        if (usersResult.value.ok) {
+          setUsers(usersData);
+        } else {
+          errors.push(usersData.message || "Failed to load users.");
+        }
+      } else {
+        errors.push(usersResult.reason?.message || "Failed to load users.");
+      }
+
+      if (errors.length) {
+        setSettingsError(errors.join(" "));
       }
     };
 
@@ -432,7 +458,22 @@ export function SettingsPage({
     </div>
   );
 
-  const renderMicrosoftSection = () => authConfig ? (
+  const renderMicrosoftSection = () => {
+    if (!authConfig) {
+      return (
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Microsoft Integration</span>
+            <span className="card-badge badge-neutral">loading</span>
+          </div>
+          <div className="card-body">
+            <div className="empty-row">Loading Microsoft integration settings...</div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
     <>
     <div className="card">
       <div className="card-header">
@@ -629,7 +670,8 @@ export function SettingsPage({
       </div>
     </details>
     </>
-  ) : null;
+    );
+  };
 
   const normalizedUserSearch = userSearch.trim().toLowerCase();
   const visibleUsers = normalizedUserSearch
