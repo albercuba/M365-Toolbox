@@ -547,8 +547,9 @@ Keep `.env` private. Do not commit it, paste it into tickets, or share it in log
 
 Default deployment steps:
 
-```powershell
-cd C:\VSCode\M365-Toolbox
+From the repository root:
+
+```bash
 docker compose build
 docker compose up -d
 ```
@@ -572,8 +573,9 @@ docker compose down
 
 Deploy with the production compose file:
 
-```powershell
-cd C:\VSCode\M365-Toolbox
+From the repository root:
+
+```bash
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -659,10 +661,9 @@ Notes for deployment:
 
 ## Run locally for development
 
-Install workspace dependencies:
+Install workspace dependencies from the repository root:
 
-```powershell
-cd C:\VSCode\M365-Toolbox
+```bash
 npm install
 ```
 
