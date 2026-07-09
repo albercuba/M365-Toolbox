@@ -16,6 +16,16 @@ async function parseSettingsApiResponse(response) {
 
   const text = await response.text();
   const compactText = text.replace(/\s+/g, " ").trim();
+  const looksLikeHtml = /<html\b|<body\b|<!doctype\s+html/i.test(compactText);
+
+  if (response.status >= 500) {
+    throw new Error("Toolbox server returned an internal error. Please try again in a few seconds.");
+  }
+
+  if (looksLikeHtml) {
+    throw new Error(`Toolbox server returned an unexpected non-JSON response (${response.status} ${response.statusText}).`);
+  }
+
   throw new Error(
     `API returned ${response.status} ${response.statusText}: ${compactText.slice(0, 180) || "Empty response"}`
   );
