@@ -82,6 +82,13 @@ function isRetryableStartupApiError(error) {
   );
 }
 
+function toUserFacingApiError(error) {
+  if (isRetryableStartupApiError(error)) {
+    return "Toolbox is still starting. Please wait a few seconds and try again.";
+  }
+  return error?.message || "Unexpected server error.";
+}
+
 function getRoleLabel(role) {
   return String(role || "")
     .split("_")
@@ -1815,7 +1822,7 @@ export function App() {
       }
 
       if (!cancelled && lastError) {
-        setLoginError(lastError.message);
+        setLoginError(toUserFacingApiError(lastError));
       }
     };
 
@@ -1834,26 +1841,41 @@ export function App() {
     setLoginLoading(true);
     setLoginError("");
     try {
-      const response = await apiFetch(`${apiBase}/auth/login`, {
-        method: "POST",
-        body: JSON.stringify({ username, password })
-      });
-      const data = await parseApiResponse(response);
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed.");
+      let lastError = null;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        try {
+          const response = await apiFetch(`${apiBase}/auth/login`, {
+            method: "POST",
+            body: JSON.stringify({ username, password })
+          });
+          const data = await parseApiResponse(response);
+          if (!response.ok) {
+            throw new Error(data.message || "Login failed.");
+          }
+          setSettingsOpen(false);
+          setActiveSettingsSection("companies");
+          setScriptSearch("");
+          setFavoritesOnly(false);
+          setModeFilter("all");
+          setExpandedCategories({});
+          setSelectedScript(null);
+          setActiveRun(null);
+          setArtifacts([]);
+          setAuthUser(data.user);
+          return;
+        } catch (loginErrorValue) {
+          lastError = loginErrorValue;
+          if (!isRetryableStartupApiError(loginErrorValue) || attempt === 9) {
+            throw loginErrorValue;
+          }
+          await sleep(2000);
+        }
       }
-      setSettingsOpen(false);
-      setActiveSettingsSection("companies");
-      setScriptSearch("");
-      setFavoritesOnly(false);
-      setModeFilter("all");
-      setExpandedCategories({});
-      setSelectedScript(null);
-      setActiveRun(null);
-      setArtifacts([]);
-      setAuthUser(data.user);
+      if (lastError) {
+        throw lastError;
+      }
     } catch (loginErrorValue) {
-      setLoginError(loginErrorValue.message);
+      setLoginError(toUserFacingApiError(loginErrorValue));
     } finally {
       setLoginLoading(false);
     }
@@ -1873,7 +1895,7 @@ export function App() {
         scopes: [authConfig.scope]
       });
     } catch (loginErrorValue) {
-      setLoginError(loginErrorValue.message);
+      setLoginError(toUserFacingApiError(loginErrorValue));
       setLoginLoading(false);
     } finally {
       // Redirect flow navigates away on success, so keep the button busy until then.
@@ -1972,7 +1994,7 @@ export function App() {
       }
 
       if (!cancelled && lastError) {
-        setError(lastError.message);
+        setError(toUserFacingApiError(lastError));
       }
     };
 
