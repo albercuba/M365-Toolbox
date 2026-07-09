@@ -69,6 +69,19 @@ function apiFetch(url, options = {}) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function isRetryableStartupApiError(error) {
+  const message = String(error?.message || "");
+  return (
+    /API returned (500|502|503|504)\b/i.test(message) ||
+    /failed to fetch/i.test(message) ||
+    /networkerror/i.test(message)
+  );
+}
+
 function getRoleLabel(role) {
   return String(role || "")
     .split("_")
@@ -1736,57 +1749,85 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadAuth = async () => {
       setAuthLoading(true);
-      try {
-        const [configResponse, meResponse] = await Promise.all([
-          apiFetch(`${apiBase}/auth/config`),
-          apiFetch(`${apiBase}/auth/me`)
-        ]);
-        const configData = await parseApiResponse(configResponse);
-        setAuthConfig(configData);
-
-        if (configData.enabled && configData.clientId && configData.tenantId && configData.scope) {
-          const msal = createMsalClient(configData);
-          await msal.initialize();
-          const redirectResult = await msal.handleRedirectPromise();
-          if (redirectResult?.accessToken) {
-            const response = await apiFetch(`${apiBase}/auth/microsoft`, {
-              method: "POST",
-              body: JSON.stringify({ token: redirectResult.accessToken })
-            });
-            const data = await parseApiResponse(response);
-            if (!response.ok) {
-              throw new Error(data.message || "Microsoft login failed.");
-            }
-            setSettingsOpen(false);
-            setActiveSettingsSection("companies");
-            setScriptSearch("");
-            setFavoritesOnly(false);
-            setModeFilter("all");
-            setExpandedCategories({});
-            setSelectedScript(null);
-            setActiveRun(null);
-            setArtifacts([]);
-            setAuthUser(data.user);
+      let lastError = null;
+      for (let attempt = 0; attempt < 10 && !cancelled; attempt += 1) {
+        try {
+          const [configResponse, meResponse] = await Promise.all([
+            apiFetch(`${apiBase}/auth/config`),
+            apiFetch(`${apiBase}/auth/me`)
+          ]);
+          const configData = await parseApiResponse(configResponse);
+          if (cancelled) {
             return;
           }
-        }
+          setAuthConfig(configData);
 
-        if (meResponse.ok) {
-          const meData = await parseApiResponse(meResponse);
-          setAuthUser(meData.user);
-        } else {
-          setAuthUser(null);
+          if (configData.enabled && configData.clientId && configData.tenantId && configData.scope) {
+            const msal = createMsalClient(configData);
+            await msal.initialize();
+            const redirectResult = await msal.handleRedirectPromise();
+            if (redirectResult?.accessToken) {
+              const response = await apiFetch(`${apiBase}/auth/microsoft`, {
+                method: "POST",
+                body: JSON.stringify({ token: redirectResult.accessToken })
+              });
+              const data = await parseApiResponse(response);
+              if (!response.ok) {
+                throw new Error(data.message || "Microsoft login failed.");
+              }
+              if (cancelled) {
+                return;
+              }
+              setSettingsOpen(false);
+              setActiveSettingsSection("companies");
+              setScriptSearch("");
+              setFavoritesOnly(false);
+              setModeFilter("all");
+              setExpandedCategories({});
+              setSelectedScript(null);
+              setActiveRun(null);
+              setArtifacts([]);
+              setAuthUser(data.user);
+              return;
+            }
+          }
+
+          if (meResponse.ok) {
+            const meData = await parseApiResponse(meResponse);
+            if (!cancelled) {
+              setAuthUser(meData.user);
+            }
+          } else if (!cancelled) {
+            setAuthUser(null);
+          }
+          return;
+        } catch (loadAuthError) {
+          lastError = loadAuthError;
+          if (!isRetryableStartupApiError(loadAuthError) || attempt === 9) {
+            break;
+          }
+          await sleep(2000);
         }
-      } catch (loadAuthError) {
-        setLoginError(loadAuthError.message);
-      } finally {
-        setAuthLoading(false);
+      }
+
+      if (!cancelled && lastError) {
+        setLoginError(lastError.message);
       }
     };
 
-    loadAuth();
+    loadAuth().finally(() => {
+      if (!cancelled) {
+        setAuthLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleLocalLogin = async (username, password) => {
@@ -1886,35 +1927,60 @@ export function App() {
       return;
     }
 
-    const load = async () => {
-      const [scriptsResponse, statusResponse, companiesResponse] = await Promise.all([
-        apiFetch(`${apiBase}/scripts`),
-        apiFetch(`${apiBase}/status`),
-        apiFetch(`${apiBase}/companies`)
-      ]);
+    let cancelled = false;
 
-      const scriptsData = await parseApiResponse(scriptsResponse);
-      const statusData = await parseApiResponse(statusResponse);
-      const companiesData = await parseApiResponse(companiesResponse);
-      if (!scriptsResponse.ok) {
-        throw new Error(scriptsData.message || "Failed to load script catalog.");
+    const load = async () => {
+      let lastError = null;
+      for (let attempt = 0; attempt < 10 && !cancelled; attempt += 1) {
+        try {
+          const [scriptsResponse, statusResponse, companiesResponse] = await Promise.all([
+            apiFetch(`${apiBase}/scripts`),
+            apiFetch(`${apiBase}/status`),
+            apiFetch(`${apiBase}/companies`)
+          ]);
+
+          const scriptsData = await parseApiResponse(scriptsResponse);
+          const statusData = await parseApiResponse(statusResponse);
+          const companiesData = await parseApiResponse(companiesResponse);
+          if (!scriptsResponse.ok) {
+            throw new Error(scriptsData.message || "Failed to load script catalog.");
+          }
+          if (!statusResponse.ok) {
+            throw new Error(statusData.message || "Failed to load backend status.");
+          }
+          if (!companiesResponse.ok) {
+            throw new Error(companiesData.message || "Failed to load companies.");
+          }
+          if (cancelled) {
+            return;
+          }
+          setScripts(Array.isArray(scriptsData) ? scriptsData : []);
+          setStatus(statusData);
+          setCompanies(Array.isArray(companiesData) ? companiesData : []);
+          setStatusUpdatedAt(new Date().toISOString());
+          setSelectedScript(null);
+          setFormValues({});
+          setExpandedCategories({});
+          return;
+        } catch (loadError) {
+          lastError = loadError;
+          if (!isRetryableStartupApiError(loadError) || attempt === 9) {
+            break;
+          }
+          await sleep(2000);
+        }
       }
-      if (!statusResponse.ok) {
-        throw new Error(statusData.message || "Failed to load backend status.");
+
+      if (!cancelled && lastError) {
+        setError(lastError.message);
       }
-      if (!companiesResponse.ok) {
-        throw new Error(companiesData.message || "Failed to load companies.");
-      }
-      setScripts(Array.isArray(scriptsData) ? scriptsData : []);
-      setStatus(statusData);
-      setCompanies(Array.isArray(companiesData) ? companiesData : []);
-      setStatusUpdatedAt(new Date().toISOString());
-      setSelectedScript(null);
-      setFormValues({});
-      setExpandedCategories({});
     };
 
-    load().catch((loadError) => setError(loadError.message));
+    load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [authUser]);
 
   useEffect(() => {
