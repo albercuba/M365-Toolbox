@@ -10,6 +10,7 @@ import { ensureDefaultAdmin } from "./services/auth.js";
 import { ensureDatabaseReady } from "./services/db.js";
 
 const app = express();
+app.set("etag", false);
 const port = Number(process.env.PORT || 3001);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "";
 
@@ -88,6 +89,14 @@ app.use(
 app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/")) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  }
+  next();
+});
 app.use(attachUser);
 
 app.get("/api/health", (_req, res) => {

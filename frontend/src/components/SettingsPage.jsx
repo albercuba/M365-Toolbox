@@ -3,6 +3,33 @@ import { Fragment, useEffect, useState } from "react";
 const ROLE_OPTIONS = ["administrator", "privileged_user", "restricted_user"];
 const SETTINGS_SECTIONS = new Set(["account", "companies", "microsoft", "users"]);
 
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function parseSettingsApiResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  const compactText = text.replace(/\s+/g, " ").trim();
+  throw new Error(
+    `API returned ${response.status} ${response.statusText}: ${compactText.slice(0, 180) || "Empty response"}`
+  );
+}
+
+function isRetryableSettingsApiError(error) {
+  const message = String(error?.message || "");
+  return (
+    /API returned (500|502|503|504)\b/i.test(message) ||
+    /failed to fetch/i.test(message) ||
+    /networkerror/i.test(message)
+  );
+}
+
 function roleLabel(role) {
   return role.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
@@ -76,57 +103,61 @@ export function SettingsPage({
 
   useEffect(() => {
     if (!isAdministrator) {
-      return;
+      return undefined;
     }
 
-    const loadAuthSettings = async () => {
-      const errors = [];
+    let cancelled = false;
 
-      const [configResult, mappingsResult, usersResult] = await Promise.allSettled([
-        apiFetch(`${apiBase}/settings/auth/microsoft`),
-        apiFetch(`${apiBase}/settings/auth/group-role-mappings`),
-        apiFetch(`${apiBase}/settings/users`)
+    const loadSingleSetting = async (url, applyData, fallbackMessage) => {
+      let lastError = null;
+
+      for (let attempt = 0; attempt < 10 && !cancelled; attempt += 1) {
+        try {
+          const response = await apiFetch(url);
+          const data = await parseSettingsApiResponse(response);
+          if (!response.ok) {
+            throw new Error(data.message || fallbackMessage);
+          }
+          if (!cancelled) {
+            applyData(data);
+          }
+          return null;
+        } catch (error) {
+          lastError = error;
+          if (!isRetryableSettingsApiError(error) || attempt === 9) {
+            break;
+          }
+          await sleep(2000);
+        }
+      }
+
+      return lastError?.message || fallbackMessage;
+    };
+
+    const loadAuthSettings = async () => {
+      setSettingsError("");
+
+      const results = await Promise.all([
+        loadSingleSetting(`${apiBase}/settings/auth/microsoft`, setAuthConfig, "Failed to load Microsoft configuration."),
+        loadSingleSetting(`${apiBase}/settings/auth/group-role-mappings`, setMappings, "Failed to load group mappings."),
+        loadSingleSetting(`${apiBase}/settings/users`, setUsers, "Failed to load users.")
       ]);
 
-      if (configResult.status === "fulfilled") {
-        const configData = await configResult.value.json();
-        if (configResult.value.ok) {
-          setAuthConfig(configData);
-        } else {
-          errors.push(configData.message || "Failed to load Microsoft configuration.");
-        }
-      } else {
-        errors.push(configResult.reason?.message || "Failed to load Microsoft configuration.");
+      if (cancelled) {
+        return;
       }
 
-      if (mappingsResult.status === "fulfilled") {
-        const mappingsData = await mappingsResult.value.json();
-        if (mappingsResult.value.ok) {
-          setMappings(mappingsData);
-        } else {
-          errors.push(mappingsData.message || "Failed to load group mappings.");
-        }
-      } else {
-        errors.push(mappingsResult.reason?.message || "Failed to load group mappings.");
-      }
-
-      if (usersResult.status === "fulfilled") {
-        const usersData = await usersResult.value.json();
-        if (usersResult.value.ok) {
-          setUsers(usersData);
-        } else {
-          errors.push(usersData.message || "Failed to load users.");
-        }
-      } else {
-        errors.push(usersResult.reason?.message || "Failed to load users.");
-      }
-
+      const errors = results.filter(Boolean);
       if (errors.length) {
         setSettingsError(errors.join(" "));
       }
     };
 
     loadAuthSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, [apiBase, apiFetch, isAdministrator]);
 
   const handleChangePassword = async (event) => {
