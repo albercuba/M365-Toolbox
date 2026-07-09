@@ -28,11 +28,9 @@ The current catalog includes 59 toolbox-native scripts across categories such as
 - `output/`
   Generated report artifacts written by backend runs
 - `docker-compose.yml`
-  Starts PostgreSQL, Redis, the backend, the PowerShell worker, and the frontend together
-- `docker-compose.prod.yml`
-  Production-oriented Docker Compose deployment for self-hosting
-- `docker-compose.coolify.yml`
-  Compose variant aimed at Coolify or Portainer-style deployments
+  Single Docker Compose deployment for local and self-hosted use, including PostgreSQL, Redis, a one-shot migration job, the backend, the PowerShell worker, and the frontend
+- `.env.example`
+  Example environment file for self-hosted deployments
 
 ## Current capabilities
 
@@ -468,44 +466,45 @@ What Compose exposes:
 - `http://localhost:5173` for the frontend
 - `http://localhost:3001` for the backend API
 
-Available compose files:
+Compose setup:
 
 - `docker-compose.yml`
-  Local default compose file that publishes the frontend on port `5173`
-- `docker-compose.prod.yml`
-  Production-oriented self-hosted deployment that publishes the frontend on port `8080` by default
-- `docker-compose.coolify.yml`
-  Platform-friendly variant that uses a named Docker volume for report output and keeps the backend internal
+  Single Compose file for both local and self-hosted deployments
+- `.env.example`
+  Copy this to `.env` and set production values before deploying on a server
 
 ### Environment file setup
 
-For production or server deployments, provide a `.env` file for Docker Compose. Docker Compose uses it for substitutions such as `${ARTIFACT_TOKEN_SECRET}`, `${AUTH_SESSION_SECRET}`, `${FRONTEND_ORIGIN}`, and `${FRONTEND_PORT}`.
+For server deployments, provide a `.env` file for Docker Compose. Docker Compose uses it for substitutions such as `${ARTIFACT_TOKEN_SECRET}`, `${AUTH_SESSION_SECRET}`, `${FRONTEND_ORIGIN}`, and `${FRONTEND_PORT}`.
 
 The `.env` file is not created automatically. Create it once per deployment environment and include the values below.
 
-Paste this template into `.env` and replace the example values:
+Copy `.env.example` to `.env` and replace the example values:
 
 ```dotenv
 FRONTEND_ORIGIN=https://toolbox.example.com
-FRONTEND_PORT=8080
+FRONTEND_PORT=5173
 ARTIFACT_TOKEN_SECRET=replace-with-a-long-random-secret
 AUTH_SESSION_SECRET=replace-with-another-long-random-secret
 # DATABASE_URL=postgresql://m365:m365password@postgres:5432/m365_toolbox
 ```
 
-Minimum required values for `docker-compose.prod.yml` and `docker-compose.coolify.yml`:
-
-- `ARTIFACT_TOKEN_SECRET`
-- `AUTH_SESSION_SECRET`
-
-Recommended production values:
+Minimum recommended production values:
 
 - `FRONTEND_ORIGIN`
-- `FRONTEND_PORT`
 - `ARTIFACT_TOKEN_SECRET`
 - `AUTH_SESSION_SECRET`
 
-Leave `DATABASE_URL` commented unless you are using an external PostgreSQL database. The bundled PostgreSQL service works with the default connection string already defined in the compose files.
+Optional values:
+
+- `FRONTEND_PORT`
+- `DATABASE_URL`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `REDIS_URL`
+
+Leave `DATABASE_URL` commented unless you are using an external PostgreSQL database. The bundled PostgreSQL service works with the default connection string already defined in `docker-compose.yml`.
 
 Generate strong secrets with OpenSSL. Run this command twice and use a different value for each secret:
 
@@ -517,7 +516,7 @@ Example production `.env` after replacing placeholders:
 
 ```dotenv
 FRONTEND_ORIGIN=https://m365toolbox.example.com
-FRONTEND_PORT=8080
+FRONTEND_PORT=5173
 ARTIFACT_TOKEN_SECRET=generated-artifact-secret-goes-here
 AUTH_SESSION_SECRET=generated-session-secret-goes-here
 ```
@@ -527,7 +526,7 @@ Variable notes:
 - `FRONTEND_ORIGIN`
   Public URL used by backend CORS validation. Set this to the exact browser-facing origin, for example `https://toolbox.example.com`. Do not include a path.
 - `FRONTEND_PORT`
-  Host port mapped to the frontend container. Defaults to `8080` in production compose files when omitted.
+  Host port mapped to the frontend container. Defaults to `5173` when omitted.
 - `ARTIFACT_TOKEN_SECRET`
   Required in production. Use a long random value. It signs artifact, HTML preview, and ZIP bundle links.
 - `AUTH_SESSION_SECRET`
@@ -538,10 +537,10 @@ Variable notes:
 Verify Docker Compose can read the file:
 
 ```bash
-docker compose -f docker-compose.prod.yml config
+docker compose config
 ```
 
-If the command prints the fully rendered Compose configuration without `Set ARTIFACT_TOKEN_SECRET` or `Set AUTH_SESSION_SECRET` errors, the `.env` file is being loaded correctly.
+If the command prints the fully rendered Compose configuration, the `.env` file is being loaded correctly.
 
 Keep `.env` private. Do not commit it, paste it into tickets, or share it in logs.
 
@@ -550,14 +549,21 @@ Default deployment steps:
 From the repository root:
 
 ```bash
-docker compose build
-docker compose up -d
+docker compose up -d --build
 ```
+
+The stack runs in this order:
+
+1. `postgres` and `redis` start
+2. `migrate` runs Prisma migrations once
+3. `backend` starts and becomes healthy
+4. `worker` starts
+5. `frontend` starts after the backend health check passes
 
 After deployment:
 
-- Frontend: `http://localhost:5173`
-- Backend health: `http://localhost:3001/api/health`
+- Frontend: `http://localhost:5173` unless overridden by `FRONTEND_PORT`
+- Backend health from inside Docker: `http://backend:3001/api/health`
 
 Useful Docker Compose commands:
 
@@ -571,31 +577,26 @@ docker compose logs -f frontend
 docker compose down
 ```
 
-Deploy with the production compose file:
+Self-hosted deployment:
 
 From the repository root:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
 
-Default production ports:
-
-- Frontend: `http://localhost:8080`
-- Backend health: internal only at `http://backend:3001/api/health` from the Docker network
-
-The production compose file supports these environment overrides:
+Recommended production overrides:
 
 - `FRONTEND_ORIGIN`
   Public frontend URL used by backend CORS validation, for example `https://m365toolbox.domain.com`
 - `FRONTEND_PORT`
-  Host port mapped to the frontend container, default `8080`
+  Host port mapped to the frontend container when you do not want the default `5173`
 - `DATABASE_URL`
   Optional PostgreSQL connection string override if you are not using the bundled `postgres` service defaults
 - `ARTIFACT_TOKEN_SECRET`
-  Required HMAC secret used for signed artifact and report preview links
+  Strong secret used for signed artifact and report preview links
 - `AUTH_SESSION_SECRET`
-  Required secret used for HTTP-only login sessions
+  Strong secret used for HTTP-only login sessions
 
 Example:
 
@@ -604,20 +605,8 @@ $env:FRONTEND_ORIGIN="https://toolbox.example.com"
 $env:FRONTEND_PORT="80"
 $env:ARTIFACT_TOKEN_SECRET="replace-with-a-long-random-secret"
 $env:AUTH_SESSION_SECRET="replace-with-another-long-random-secret"
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
-
-Deploy with the Coolify or Portainer-friendly compose file:
-
-```powershell
-docker compose -f docker-compose.coolify.yml up -d --build
-```
-
-Why this variant is different:
-
-- the backend uses `expose` instead of a public host port
-- the worker and Redis stay internal to the Compose network
-- report output is stored in a named Docker volume called `toolbox_output`
 - runtime values are expected to be supplied by the platform UI
 
 Recommended variables for Coolify or Portainer:

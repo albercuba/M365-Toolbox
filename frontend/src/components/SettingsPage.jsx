@@ -169,7 +169,7 @@ export function SettingsPage({
         method: "POST",
         body: JSON.stringify(passwordDraft)
       });
-      const data = await response.json();
+      const data = await parseSettingsApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to change password.");
       }
@@ -238,7 +238,7 @@ export function SettingsPage({
         method: "PUT",
         body: JSON.stringify(authConfig)
       });
-      const data = await response.json();
+      const data = await parseSettingsApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to save Microsoft configuration.");
       }
@@ -258,7 +258,7 @@ export function SettingsPage({
         method: "POST",
         body: JSON.stringify(mappingDraft)
       });
-      const data = await response.json();
+      const data = await parseSettingsApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to add group mapping.");
       }
@@ -279,7 +279,7 @@ export function SettingsPage({
         method: "PUT",
         body: JSON.stringify(next)
       });
-      const data = await response.json();
+      const data = await parseSettingsApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to update group mapping.");
       }
@@ -297,7 +297,7 @@ export function SettingsPage({
         method: "DELETE"
       });
       if (!response.ok) {
-        const data = await response.json();
+        const data = await parseSettingsApiResponse(response);
         throw new Error(data.message || "Failed to delete group mapping.");
       }
       setMappings((current) => current.filter((entry) => entry.id !== mappingId));
@@ -316,7 +316,7 @@ export function SettingsPage({
         method: "POST",
         body: JSON.stringify(userDraft)
       });
-      const data = await response.json();
+      const data = await parseSettingsApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to create user.");
       }
@@ -346,7 +346,7 @@ export function SettingsPage({
         method: "PUT",
         body: JSON.stringify(editingUserDraft)
       });
-      const data = await response.json();
+      const data = await parseSettingsApiResponse(response);
       if (!response.ok) {
         throw new Error(data.message || "Failed to update user.");
       }
@@ -369,7 +369,7 @@ export function SettingsPage({
         method: "DELETE"
       });
       if (!response.ok) {
-        const data = await response.json();
+        const data = await parseSettingsApiResponse(response);
         throw new Error(data.message || "Failed to remove user.");
       }
       setUsers((current) => current.filter((entry) => entry.id !== userId));

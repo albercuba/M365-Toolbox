@@ -1763,17 +1763,26 @@ export function App() {
       let lastError = null;
       for (let attempt = 0; attempt < 10 && !cancelled; attempt += 1) {
         try {
-          const [configResponse, meResponse] = await Promise.all([
+          const [configResult, meResult] = await Promise.allSettled([
             apiFetch(`${apiBase}/auth/config`),
             apiFetch(`${apiBase}/auth/me`)
           ]);
-          const configData = await parseApiResponse(configResponse);
-          if (cancelled) {
-            return;
-          }
-          setAuthConfig(configData);
 
-          if (configData.enabled && configData.clientId && configData.tenantId && configData.scope) {
+          let configData = null;
+          if (configResult.status === "fulfilled") {
+            configData = await parseApiResponse(configResult.value);
+            if (cancelled) {
+              return;
+            }
+            if (!configResult.value.ok) {
+              throw new Error(configData.message || "Failed to load authentication configuration.");
+            }
+            setAuthConfig(configData);
+          } else if (!cancelled) {
+            setAuthConfig({ enabled: false, tenantId: "", clientId: "", apiClientId: "", authorityUrl: "", scope: "" });
+          }
+
+          if (configData?.enabled && configData.clientId && configData.tenantId && configData.scope) {
             const msal = createMsalClient(configData);
             await msal.initialize();
             const redirectResult = await msal.handleRedirectPromise();
@@ -1803,13 +1812,17 @@ export function App() {
             }
           }
 
-          if (meResponse.ok) {
-            const meData = await parseApiResponse(meResponse);
-            if (!cancelled) {
-              setAuthUser(meData.user);
+          if (meResult.status === "fulfilled") {
+            if (meResult.value.ok) {
+              const meData = await parseApiResponse(meResult.value);
+              if (!cancelled) {
+                setAuthUser(meData.user);
+              }
+            } else if (!cancelled) {
+              setAuthUser(null);
             }
           } else if (!cancelled) {
-            setAuthUser(null);
+            throw meResult.reason;
           }
           return;
         } catch (loadAuthError) {
@@ -1955,35 +1968,69 @@ export function App() {
       let lastError = null;
       for (let attempt = 0; attempt < 10 && !cancelled; attempt += 1) {
         try {
-          const [scriptsResponse, statusResponse, companiesResponse] = await Promise.all([
+          const [scriptsResult, statusResult, companiesResult] = await Promise.allSettled([
             apiFetch(`${apiBase}/scripts`),
             apiFetch(`${apiBase}/status`),
             apiFetch(`${apiBase}/companies`)
           ]);
 
-          const scriptsData = await parseApiResponse(scriptsResponse);
-          const statusData = await parseApiResponse(statusResponse);
-          const companiesData = await parseApiResponse(companiesResponse);
-          if (!scriptsResponse.ok) {
-            throw new Error(scriptsData.message || "Failed to load script catalog.");
+          let scriptsLoaded = false;
+          let statusLoaded = false;
+          let companiesLoaded = false;
+          const errors = [];
+
+          if (scriptsResult.status === "fulfilled") {
+            const scriptsData = await parseApiResponse(scriptsResult.value);
+            if (!scriptsResult.value.ok) {
+              errors.push(new Error(scriptsData.message || "Failed to load script catalog."));
+            } else if (!cancelled) {
+              setScripts(Array.isArray(scriptsData) ? scriptsData : []);
+              scriptsLoaded = true;
+            }
+          } else {
+            errors.push(scriptsResult.reason);
           }
-          if (!statusResponse.ok) {
-            throw new Error(statusData.message || "Failed to load backend status.");
+
+          if (statusResult.status === "fulfilled") {
+            const statusData = await parseApiResponse(statusResult.value);
+            if (!statusResult.value.ok) {
+              errors.push(new Error(statusData.message || "Failed to load backend status."));
+            } else if (!cancelled) {
+              setStatus(statusData);
+              setStatusUpdatedAt(new Date().toISOString());
+              statusLoaded = true;
+            }
+          } else {
+            errors.push(statusResult.reason);
           }
-          if (!companiesResponse.ok) {
-            throw new Error(companiesData.message || "Failed to load companies.");
+
+          if (companiesResult.status === "fulfilled") {
+            const companiesData = await parseApiResponse(companiesResult.value);
+            if (!companiesResult.value.ok) {
+              errors.push(new Error(companiesData.message || "Failed to load companies."));
+            } else if (!cancelled) {
+              setCompanies(Array.isArray(companiesData) ? companiesData : []);
+              companiesLoaded = true;
+            }
+          } else {
+            errors.push(companiesResult.reason);
           }
+
           if (cancelled) {
             return;
           }
-          setScripts(Array.isArray(scriptsData) ? scriptsData : []);
-          setStatus(statusData);
-          setCompanies(Array.isArray(companiesData) ? companiesData : []);
-          setStatusUpdatedAt(new Date().toISOString());
-          setSelectedScript(null);
-          setFormValues({});
-          setExpandedCategories({});
-          return;
+
+          if (scriptsLoaded) {
+            setSelectedScript(null);
+            setFormValues({});
+            setExpandedCategories({});
+          }
+
+          if (scriptsLoaded || statusLoaded || companiesLoaded) {
+            return;
+          }
+
+          throw errors[0] || new Error("Failed to load dashboard data.");
         } catch (loadError) {
           lastError = loadError;
           if (!isRetryableStartupApiError(loadError) || attempt === 9) {

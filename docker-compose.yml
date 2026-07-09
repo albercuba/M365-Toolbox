@@ -1,15 +1,24 @@
+x-backend-env: &backend-env
+  OUTPUT_DIR: /app/output
+  TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://m365:m365password@postgres:5432/m365_toolbox}
+  ARTIFACT_TOKEN_SECRET: ${ARTIFACT_TOKEN_SECRET:-dev-artifact-token-secret}
+  AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-dev-auth-session-secret}
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: m365-toolbox-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: m365_toolbox
-      POSTGRES_USER: m365
-      POSTGRES_PASSWORD: m365password
+      POSTGRES_DB: ${POSTGRES_DB:-m365_toolbox}
+      POSTGRES_USER: ${POSTGRES_USER:-m365}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-m365password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U m365 -d m365_toolbox"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-m365} -d ${POSTGRES_DB:-m365_toolbox}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -17,31 +26,50 @@ services:
   redis:
     image: redis:7-alpine
     container_name: m365-toolbox-redis
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: m365-toolbox-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: "no"
+    command: ["npm", "run", "db:migrate"]
+    environment:
+      <<: *backend-env
+      PORT: 3001
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+    volumes:
+      - ./output:/app/output
+      - ./scripts:/toolbox-scripts:ro
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     container_name: m365-toolbox-backend
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     environment:
+      <<: *backend-env
       PORT: 3001
-      OUTPUT_DIR: /app/output
-      TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://m365:m365password@postgres:5432/m365_toolbox
-      ARTIFACT_TOKEN_SECRET: dev-artifact-token-secret
-      AUTH_SESSION_SECRET: dev-auth-session-secret
-      FRONTEND_ORIGIN: http://localhost:5173
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
     volumes:
       - ./output:/app/output
       - ./scripts:/toolbox-scripts:ro
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health >/dev/null || exit 1"]
       interval: 10s
@@ -55,18 +83,16 @@ services:
       dockerfile: Dockerfile.backend
     container_name: m365-toolbox-worker
     command: ["npm", "run", "start:worker"]
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     environment:
-      OUTPUT_DIR: /app/output
-      TOOLBOX_SCRIPT_MOUNT_ROOT: /toolbox-scripts
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://m365:m365password@postgres:5432/m365_toolbox
-      ARTIFACT_TOKEN_SECRET: dev-artifact-token-secret
-      AUTH_SESSION_SECRET: dev-auth-session-secret
+      <<: *backend-env
     volumes:
       - ./output:/app/output
       - ./scripts:/toolbox-scripts:ro
@@ -76,11 +102,12 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: m365-toolbox-frontend
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT:-5173}:80"
 
 volumes:
   postgres_data:

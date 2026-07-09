@@ -58,7 +58,8 @@ jobs:
       - name: Build compose services
         env:
           ARTIFACT_TOKEN_SECRET: ci-artifact-token-secret
-        run: docker compose -f docker-compose.prod.yml build backend worker frontend
+          AUTH_SESSION_SECRET: ci-auth-session-secret
+        run: docker compose build backend worker frontend
 
   secret-scan:
     runs-on: ubuntu-latest
