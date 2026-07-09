@@ -1780,16 +1780,18 @@ export function App() {
 
           let configData = null;
           if (configResult.status === "fulfilled") {
-            configData = await parseApiResponse(configResult.value);
-            if (cancelled) {
-              return;
+            try {
+              const parsedConfig = await parseApiResponse(configResult.value);
+              if (configResult.value.ok) {
+                configData = parsedConfig;
+              }
+            } catch {
+              configData = null;
             }
-            if (!configResult.value.ok) {
-              throw new Error(configData.message || "Failed to load authentication configuration.");
-            }
-            setAuthConfig(configData);
-          } else if (!cancelled) {
-            setAuthConfig({ enabled: false, tenantId: "", clientId: "", apiClientId: "", authorityUrl: "", scope: "" });
+          }
+
+          if (!cancelled) {
+            setAuthConfig(configData || { enabled: false, tenantId: "", clientId: "", apiClientId: "", authorityUrl: "", scope: "" });
           }
 
           if (configData?.enabled && configData.clientId && configData.tenantId && configData.scope) {
