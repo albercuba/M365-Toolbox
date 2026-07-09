@@ -120,8 +120,17 @@ export async function getUserFromRequest(req) {
     return null;
   }
 
-  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
-  return normalizeUser(user);
+  const userId = typeof payload?.sub === "string" ? payload.sub.trim() : "";
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    return normalizeUser(user);
+  } catch {
+    return null;
+  }
 }
 
 export async function ensureDefaultAdmin() {
