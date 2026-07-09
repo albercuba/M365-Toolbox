@@ -45,6 +45,12 @@ services:
       - ./scripts:/toolbox-scripts:ro
     expose:
       - "3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 
   worker:
     build:
@@ -76,7 +82,8 @@ services:
     container_name: m365-toolbox-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-8080}:80"
 
