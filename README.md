@@ -486,6 +486,7 @@ FRONTEND_ORIGIN=https://toolbox.example.com
 FRONTEND_PORT=5173
 ARTIFACT_TOKEN_SECRET=replace-with-a-long-random-secret
 AUTH_SESSION_SECRET=replace-with-another-long-random-secret
+# CORS_ALLOW_PRIVATE_NETWORK=true
 # DATABASE_URL=postgresql://m365:m365password@postgres:5432/m365_toolbox
 ```
 
@@ -503,6 +504,7 @@ Optional values:
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `REDIS_URL`
+- `CORS_ALLOW_PRIVATE_NETWORK`
 
 Leave `DATABASE_URL` commented unless you are using an external PostgreSQL database. The bundled PostgreSQL service works with the default connection string already defined in `docker-compose.yml`.
 
@@ -519,6 +521,7 @@ FRONTEND_ORIGIN=https://m365toolbox.example.com
 FRONTEND_PORT=5173
 ARTIFACT_TOKEN_SECRET=generated-artifact-secret-goes-here
 AUTH_SESSION_SECRET=generated-session-secret-goes-here
+# CORS_ALLOW_PRIVATE_NETWORK=true
 ```
 
 Variable notes:
@@ -530,7 +533,9 @@ Variable notes:
 - `ARTIFACT_TOKEN_SECRET`
   Required in production. Use a long random value. It signs artifact, HTML preview, and ZIP bundle links.
 - `AUTH_SESSION_SECRET`
-  Required in production. Use a different long random value for HTTP-only login sessions.
+  Required in production. Use a different long random value for HTTP-only login sessions. M365 Toolbox now fails fast at startup in production if this variable is missing.
+- `CORS_ALLOW_PRIVATE_NETWORK`
+  Optional. Defaults to disabled. Set `true` only when you intentionally want to allow browser origins on private IPv4 networks like `10.x`, `192.168.x`, or `172.16-31.x` in addition to `FRONTEND_ORIGIN` and localhost.
 - `DATABASE_URL`
   Optional. Leave commented when using the bundled PostgreSQL service. Set it only when using an external or platform-managed database.
 

@@ -33,6 +33,26 @@ export function requireRole(...roles) {
   };
 }
 
+const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([
+  "/api/auth/me",
+  "/api/auth/logout",
+  "/api/auth/change-password"
+]);
+
+export function enforcePasswordChange(req, res, next) {
+  if (!req.user?.mustChangePassword || req.method === "OPTIONS") {
+    next();
+    return;
+  }
+
+  if (PASSWORD_CHANGE_ALLOWED_PATHS.has(req.path)) {
+    next();
+    return;
+  }
+
+  res.status(403).json({ message: "You must change your password before using other Toolbox features." });
+}
+
 export function requireCanRunScript(req, res, next) {
   if (!req.user) {
     res.status(401).json({ message: "Authentication is required." });

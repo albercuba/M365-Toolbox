@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth, requireCanRunScript, requireRole } from "../middleware/auth.js";
+import { createError } from "../services/validation.js";
 import {
   buildArtifactArchive,
   cancelRun,
@@ -26,13 +27,43 @@ import {
 
 export const scriptsRouter = Router();
 
+function canAccessAnyRun(user) {
+  return user?.role === "administrator" || user?.role === "privileged_user";
+}
+
+function assertRunAccess(user, run) {
+  if (canAccessAnyRun(user)) {
+    return;
+  }
+
+  if (run?.createdByUserId && run.createdByUserId === user?.id) {
+    return;
+  }
+
+  throw createError("You are not allowed to access this run.", 403);
+}
+
+async function loadAuthorizedRun(req, _res, next) {
+  try {
+    const run = await getRun(req.params.id);
+    if (!run) {
+      throw createError("Run not found.", 404);
+    }
+    assertRunAccess(req.user, run);
+    req.run = run;
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
 scriptsRouter.use(requireAuth);
 
 scriptsRouter.get("/scripts", (_req, res) => {
   res.json(listScripts());
 });
 
-scriptsRouter.get("/companies", async (_req, res, next) => {
+scriptsRouter.get("/companies", requireRole("administrator", "privileged_user"), async (_req, res, next) => {
   try {
     res.json(await listCompanies());
   } catch (error) {
@@ -102,6 +133,7 @@ scriptsRouter.get("/runs", async (req, res) => {
       scriptId: req.query.scriptId,
       tenantId: req.query.tenantId,
       requestedBy: req.query.requestedBy,
+      createdByUserId: req.user.role === "restricted_user" ? req.user.id : undefined,
       dateFrom: req.query.dateFrom,
       dateTo: req.query.dateTo,
       limit: req.query.limit,
@@ -110,17 +142,11 @@ scriptsRouter.get("/runs", async (req, res) => {
   );
 });
 
-scriptsRouter.get("/runs/:id", async (req, res) => {
-  const run = await getRun(req.params.id);
-  if (!run) {
-    res.status(404).json({ message: "Run not found." });
-    return;
-  }
-
-  res.json(run);
+scriptsRouter.get("/runs/:id", loadAuthorizedRun, async (req, res) => {
+  res.json(req.run);
 });
 
-scriptsRouter.post("/runs/:id/cancel", async (req, res) => {
+scriptsRouter.post("/runs/:id/cancel", loadAuthorizedRun, async (req, res) => {
   try {
     res.json(await cancelRun(req.params.id));
   } catch (error) {
@@ -128,7 +154,7 @@ scriptsRouter.post("/runs/:id/cancel", async (req, res) => {
   }
 });
 
-scriptsRouter.get("/runs/:id/artifacts", async (req, res) => {
+scriptsRouter.get("/runs/:id/artifacts", loadAuthorizedRun, async (req, res) => {
   try {
     res.json(await getRunArtifacts(req.params.id));
   } catch (error) {
@@ -144,7 +170,7 @@ scriptsRouter.delete("/runs/:id/artifacts", requireRole("administrator"), async 
   }
 });
 
-scriptsRouter.get("/runs/:id/artifacts/:artifactId", async (req, res) => {
+scriptsRouter.get("/runs/:id/artifacts/:artifactId", loadAuthorizedRun, async (req, res) => {
   try {
     if (
       !verifyArtifactToken(req.query.token, {
@@ -163,7 +189,7 @@ scriptsRouter.get("/runs/:id/artifacts/:artifactId", async (req, res) => {
   }
 });
 
-scriptsRouter.get("/runs/:id/package.zip", async (req, res) => {
+scriptsRouter.get("/runs/:id/package.zip", loadAuthorizedRun, async (req, res) => {
   try {
     if (
       !verifyArtifactToken(req.query.token, {
@@ -183,7 +209,7 @@ scriptsRouter.get("/runs/:id/package.zip", async (req, res) => {
   }
 });
 
-scriptsRouter.get("/runs/:id/html", async (req, res) => {
+scriptsRouter.get("/runs/:id/html", loadAuthorizedRun, async (req, res) => {
   try {
     if (
       !verifyArtifactToken(req.query.token, {
@@ -203,7 +229,7 @@ scriptsRouter.get("/runs/:id/html", async (req, res) => {
 
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https: http:; sandbox allow-same-origin allow-scripts;"
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https: http:; sandbox allow-scripts;"
     );
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.type("html").send(htmlReport.content);

@@ -16,12 +16,22 @@ const ROLE_RANK = {
 };
 const VALID_ROLES = new Set(Object.keys(ROLE_RANK));
 
+export function assertSessionSecretConfiguration() {
+  if (process.env.NODE_ENV === "production" && !process.env.AUTH_SESSION_SECRET) {
+    throw new Error("AUTH_SESSION_SECRET must be set in production. Set a strong random value before starting M365 Toolbox.");
+  }
+}
+
 function getSessionSecret() {
-  return (
-    process.env.AUTH_SESSION_SECRET ||
-    process.env.ARTIFACT_TOKEN_SECRET ||
-    "m365-toolbox-development-session-secret"
-  );
+  if (process.env.AUTH_SESSION_SECRET) {
+    return process.env.AUTH_SESSION_SECRET;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return process.env.ARTIFACT_TOKEN_SECRET || "m365-toolbox-development-session-secret";
+  }
+
+  return undefined;
 }
 
 function normalizeUser(user) {

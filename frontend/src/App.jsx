@@ -1745,8 +1745,10 @@ export function App() {
   const runPageSize = 12;
   const activeRunIsBusy = Boolean(activeRun && ["running", "queued", "canceling"].includes(activeRun.status));
   const adminUser = isAdministrator(authUser);
+  const mustChangeLocalPassword = authUser?.authProvider === "local" && authUser?.mustChangePassword;
   const settingsNavItems = adminUser
     ? [
+      ...(mustChangeLocalPassword ? [{ id: "account", label: "Account Security", description: "Change your password" }] : []),
       { id: "companies", label: "Companies", description: `${companies.length} configured` },
       { id: "microsoft", label: "Microsoft Integration", description: authConfig?.enabled ? "Microsoft login enabled" : "Microsoft login disabled" },
       { id: "users", label: "Users", description: "Local users and roles" }
@@ -3271,9 +3273,7 @@ export function App() {
         <main className="main">
           {authUser.mustChangePassword ? (
             <div className="approval-banner">
-              {adminUser
-                ? "This local account is marked for password change. Open Settings → Users to update the password before running production workflows."
-                : "This local account is marked for password change. Open Settings → Account Security to update your password."}
+              This local account is marked for password change. Open Settings → Account Security to update your password.
             </div>
           ) : null}
           {activeRunBannerVisible ? (

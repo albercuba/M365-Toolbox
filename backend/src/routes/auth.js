@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import {
   changeLocalPassword,
   clearSessionCookie,
@@ -11,6 +12,14 @@ import { requireAuth } from "../middleware/auth.js";
 
 export const authRouter = Router();
 
+const authLoginRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many authentication attempts from this IP. Please wait 15 minutes and try again." }
+});
+
 authRouter.get("/auth/config", async (_req, res, next) => {
   try {
     res.json(await getPublicMicrosoftAuthConfig());
@@ -19,7 +28,7 @@ authRouter.get("/auth/config", async (_req, res, next) => {
   }
 });
 
-authRouter.post("/auth/login", async (req, res) => {
+authRouter.post("/auth/login", authLoginRateLimit, async (req, res) => {
   try {
     const user = await loginLocal(req.body?.username, req.body?.password);
     setSessionCookie(res, user);
@@ -29,7 +38,7 @@ authRouter.post("/auth/login", async (req, res) => {
   }
 });
 
-authRouter.post("/auth/microsoft", async (req, res) => {
+authRouter.post("/auth/microsoft", authLoginRateLimit, async (req, res) => {
   try {
     const user = await loginMicrosoft(req.body?.token);
     setSessionCookie(res, user);

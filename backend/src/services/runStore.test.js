@@ -50,6 +50,9 @@ function createFakePrisma() {
     if (where.requestedBy && run.requestedBy !== where.requestedBy) {
       return false;
     }
+    if (where.createdByUserId && run.createdByUserId !== where.createdByUserId) {
+      return false;
+    }
 
     if (where.OR?.length) {
       const matched = where.OR.some((condition) => {
@@ -334,6 +337,7 @@ test("listRuns supports filters and pagination", withFakePrisma(async () => {
     scriptName: "Script A",
     status: "completed",
     requestedBy: "alice",
+    createdByUserId: "user-a",
     parameters: { tenantId: "contoso.onmicrosoft.com" },
     requestedAt: "2026-04-28T10:00:00.000Z"
   });
@@ -343,6 +347,7 @@ test("listRuns supports filters and pagination", withFakePrisma(async () => {
     scriptName: "Script B",
     status: "failed",
     requestedBy: "bob",
+    createdByUserId: "user-b",
     parameters: { tenantId: "fabrikam.onmicrosoft.com" },
     requestedAt: "2026-04-28T11:00:00.000Z"
   });
@@ -352,6 +357,7 @@ test("listRuns supports filters and pagination", withFakePrisma(async () => {
     scriptName: "Script A",
     status: "completed",
     requestedBy: "alice",
+    createdByUserId: "user-a",
     parameters: { tenantId: "contoso.onmicrosoft.com" },
     requestedAt: "2026-04-28T12:00:00.000Z"
   });
@@ -369,6 +375,33 @@ test("listRuns supports filters and pagination", withFakePrisma(async () => {
   assert.equal(filtered.items.length, 1);
   assert.equal(filtered.items[0].scriptId, "script-a");
   assert.equal(filtered.items[0].status, "completed");
+}));
+
+test("listRuns can restrict results to the creating user", withFakePrisma(async () => {
+  await createRun({
+    id: "00000000-0000-0000-0000-000000000021",
+    scriptId: "script-a",
+    scriptName: "Script A",
+    status: "completed",
+    createdByUserId: "user-a",
+    requestedAt: "2026-04-28T10:00:00.000Z"
+  });
+  await createRun({
+    id: "00000000-0000-0000-0000-000000000022",
+    scriptId: "script-b",
+    scriptName: "Script B",
+    status: "completed",
+    createdByUserId: "user-b",
+    requestedAt: "2026-04-28T11:00:00.000Z"
+  });
+
+  const filtered = await listRuns({
+    createdByUserId: "user-a"
+  });
+
+  assert.equal(filtered.total, 1);
+  assert.equal(filtered.items.length, 1);
+  assert.equal(filtered.items[0].createdByUserId, "user-a");
 }));
 
 test("deleteRun removes stored run history", withFakePrisma(async () => {

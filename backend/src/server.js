@@ -5,14 +5,17 @@ import morgan from "morgan";
 import { authRouter } from "./routes/auth.js";
 import { authSettingsRouter } from "./routes/authSettings.js";
 import { scriptsRouter } from "./routes/scripts.js";
-import { attachUser } from "./middleware/auth.js";
-import { ensureDefaultAdmin } from "./services/auth.js";
+import { attachUser, enforcePasswordChange } from "./middleware/auth.js";
+import { assertSessionSecretConfiguration, ensureDefaultAdmin } from "./services/auth.js";
 import { ensureDatabaseReady } from "./services/db.js";
+
+assertSessionSecretConfiguration();
 
 const app = express();
 app.set("etag", false);
 const port = Number(process.env.PORT || 3001);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "";
+const allowPrivateNetworkOrigins = process.env.CORS_ALLOW_PRIVATE_NETWORK === "true";
 
 function normalizeConfiguredOrigin(origin) {
   const trimmedOrigin = origin.trim();
@@ -67,7 +70,7 @@ function isAllowedToolboxOrigin(origin) {
       /^192\.168\./.test(host) ||
       /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
 
-    return isLocalHost || isPrivateIpv4;
+    return isLocalHost || (allowPrivateNetworkOrigins && isPrivateIpv4);
   } catch {
     return false;
   }
@@ -98,6 +101,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(attachUser);
+app.use(enforcePasswordChange);
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -117,7 +121,7 @@ app.use("/api", (_req, res) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  res.status(500).json({ message: error.message || "Unexpected server error." });
+  res.status(error.statusCode || 500).json({ message: error.message || "Unexpected server error." });
 });
 
 await ensureDatabaseReady();

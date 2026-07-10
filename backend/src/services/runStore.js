@@ -177,6 +177,10 @@ function buildRunWhere(filters = {}) {
     where.requestedBy = filters.requestedBy;
   }
 
+  if (filters.createdByUserId) {
+    where.createdByUserId = filters.createdByUserId;
+  }
+
   if (filters.tenantId) {
     where.OR = [
       validateUuid(filters.tenantId)
